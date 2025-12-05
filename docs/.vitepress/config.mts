@@ -3,7 +3,8 @@ import { defineConfig } from 'vitepress'
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
     title: "NIS2 Checker",
-    description: "Automated NIS2 Compliance & Governance Tool",
+    description: "Enterprise NIS2 Compliance & Audit Platform",
+    base: "/nis2-checker/",
     themeConfig: {
         // https://vitepress.dev/reference/default-theme-config
         nav: [
