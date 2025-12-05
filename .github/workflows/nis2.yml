@@ -1,8 +1,10 @@
-name: NIS2 Compliance Check
+name: NIS2 Compliance Scan
+
+# ⚠️ WARNING: Do not run Nmap scans from public GitHub Runners.
+# It violates GitHub's AUP. Use Self-Hosted Runners or a VPN.
+# This workflow is configured for manual trigger only for safety.
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Run daily at midnight
   workflow_dispatch: # Allow manual trigger
 
 jobs:
