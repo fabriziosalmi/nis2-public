@@ -86,15 +86,23 @@ def generate_html_report(results, output_file="report.html"):
 def generate_pdf_report(results: List[TargetScanResult], output_file="report.pdf"):
     try:
         from weasyprint import HTML
+        from sqlmodel import Session, select
+        from nis2_checker.database import engine, GovernanceChecklist
         
         # Calculate Executive Summary Stats
         total_targets = len(results)
-        avg_score = sum(r.compliance_score for r in results) / total_targets if total_targets else 0
+        avg_tech_score = sum(r.compliance_score for r in results) / total_targets if total_targets else 0
+        
+        # Fetch Governance Data
+        with Session(engine) as session:
+            gov_items = session.exec(select(GovernanceChecklist)).all()
+            
+        # Calculate Hybrid Score
+        from nis2_checker.models import calculate_hybrid_score
+        hybrid_score = calculate_hybrid_score(avg_tech_score, gov_items)
         
         # Separate Gaps
         technical_gaps = []
-        governance_gaps = [] # Placeholder for now, as governance is manual
-        
         for res in results:
             for check in res.results:
                 if check.status == "FAIL":
@@ -106,23 +114,20 @@ def generate_pdf_report(results: List[TargetScanResult], output_file="report.pdf
                         "article": check.nis2_article
                     }
                     technical_gaps.append(gap)
+                    
+        # Governance Gaps
+        governance_gaps = [item for item in gov_items if item.status != "Done"]
 
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
         env = Environment(loader=FileSystemLoader(template_dir))
-        
-        # We need a new template or update the existing one. 
-        # For this task, let's assume we update dashboard.html or create executive_report.html
-        # Let's create a new template content inline or assume it exists. 
-        # Since I can't create a file inside this function, I will use a string template or update the existing one separately.
-        # I'll update dashboard.html to be smarter.
-        
         template = env.get_template('dashboard.html')
 
         html_content = template.render(
             results=results,
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             total_targets=total_targets,
-            avg_score=round(avg_score, 2),
+            avg_score=round(hybrid_score, 2),
+            tech_score=round(avg_tech_score, 2),
             technical_gaps=technical_gaps,
             governance_gaps=governance_gaps,
             is_pdf=True 

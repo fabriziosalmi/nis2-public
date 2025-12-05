@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Governance Checklist - NIS2 Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 
 <body class="bg-gray-900 text-gray-100 font-sans antialiased">
@@ -25,53 +26,59 @@
         <div class="bg-gray-800 p-8 rounded-lg shadow-lg">
             <p class="mb-6 text-gray-300">
                 This checklist tracks the non-technical and organizational requirements of the NIS2 Directive.
-                Management bodies are required to approve and oversee these cybersecurity risk-management measures.
+                Changes are saved automatically.
             </p>
 
-            <!-- Placeholder for dynamic checklist content -->
-            <div class="space-y-6">
-                <div class="border-l-4 border-red-500 pl-4">
-                    <h3 class="text-xl font-semibold text-red-400">Critical Priorities</h3>
-                    <div class="mt-2 space-y-2">
-                        <label class="flex items-center space-x-3">
-                            <input type="checkbox"
-                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                            <span>1. Identify Critical Assets & Dependencies (Business Impact Analysis)</span>
-                        </label>
-                        <label class="flex items-center space-x-3">
-                            <input type="checkbox"
-                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                            <span>2. Define Incident Handling & Reporting Process (72h / 24h)</span>
-                        </label>
-                        <label class="flex items-center space-x-3">
-                            <input type="checkbox"
-                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                            <span>3. Implement Business Continuity & Crisis Management Plan</span>
-                        </label>
+            <div class="space-y-8">
+                {% for category, items in grouped_items.items() %}
+                {% if items %}
+                <div class="border-l-4 
+                    {% if category == 'Critical' %}border-red-500
+                    {% elif category == 'High' %}border-yellow-500
+                    {% else %}border-blue-500{% endif %} pl-4">
+
+                    <h3 class="text-xl font-semibold mb-4
+                        {% if category == 'Critical' %}text-red-400
+                        {% elif category == 'High' %}text-yellow-400
+                        {% else %}text-blue-400{% endif %}">
+                        {{ category }} Priorities
+                    </h3>
+
+                    <div class="space-y-4">
+                        {% for item in items %}
+                        <div class="bg-gray-750 p-4 rounded border border-gray-700 hover:border-gray-600 transition">
+                            <form hx-post="/governance/update/{{ item.id }}" hx-swap="innerHTML"
+                                hx-target="#status-{{ item.id }}"
+                                class="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                                <div class="flex-1">
+                                    <div class="text-gray-200 markdown-content">{{ item.description }}</div>
+                                </div>
+
+                                <div class="flex flex-col gap-2 min-w-[200px]">
+                                    <select name="status"
+                                        class="bg-gray-700 border border-gray-600 text-white text-sm rounded focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                                        hx-trigger="change" hx-post="/governance/update/{{ item.id }}"
+                                        hx-target="#status-{{ item.id }}">
+                                        <option value="Not Started" {% if item.status=='Not Started' %}selected{% endif
+                                            %}>Not Started</option>
+                                        <option value="In Progress" {% if item.status=='In Progress' %}selected{% endif
+                                            %}>In Progress</option>
+                                        <option value="Done" {% if item.status=='Done' %}selected{% endif %}>Done
+                                        </option>
+                                    </select>
+                                    <textarea name="notes" placeholder="Add notes..."
+                                        class="bg-gray-700 border border-gray-600 text-white text-xs rounded p-2 w-full h-16"
+                                        hx-trigger="blur" hx-post="/governance/update/{{ item.id }}"
+                                        hx-target="#status-{{ item.id }}">{{ item.notes or '' }}</textarea>
+                                    <div id="status-{{ item.id }}" class="text-xs text-right h-4"></div>
+                                </div>
+                            </form>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
-
-                <div class="border-l-4 border-yellow-500 pl-4">
-                    <h3 class="text-xl font-semibold text-yellow-400">High Priorities</h3>
-                    <div class="mt-2 space-y-2">
-                        <label class="flex items-center space-x-3">
-                            <input type="checkbox"
-                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                            <span>4. Supply Chain Security Policy</span>
-                        </label>
-                        <label class="flex items-center space-x-3">
-                            <input type="checkbox"
-                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                            <span>5. Vulnerability Handling & Disclosure Policy</span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-8 pt-6 border-t border-gray-700">
-                <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition">
-                    Save Progress
-                </button>
+                {% endif %}
+                {% endfor %}
             </div>
         </div>
     </div>

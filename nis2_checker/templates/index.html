@@ -59,7 +59,7 @@
                 <p class="text-3xl font-bold">
                     {% set criticals = namespace(value=0) %}
                     {% for scan in history %}
-                    {% for check in scan.results %}
+                    {% for check in scan.details.results %}
                     {% if check.severity == 'CRITICAL' and check.status == 'FAIL' %}
                     {% set criticals.value = criticals.value + 1 %}
                     {% endif %}
@@ -88,9 +88,9 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-700">
-                        {% for scan in history|reverse %}
+                        {% for scan in history %}
                         <tr class="hover:bg-gray-750">
-                            <td class="px-6 py-4 font-medium">{{ scan.name }}</td>
+                            <td class="px-6 py-4 font-medium">{{ scan.target.name if scan.target else 'Unknown' }}</td>
                             <td class="px-6 py-4 text-gray-400">{{ scan.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td class="px-6 py-4">
                                 <span class="px-2 py-1 rounded text-xs font-bold 
