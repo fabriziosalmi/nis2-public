@@ -29,9 +29,13 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 
 ## Installation
 
+[![CI](https://github.com/fabriziosalmi/nis2-checker/actions/workflows/nis2.yml/badge.svg)](https://github.com/fabriziosalmi/nis2-checker/actions/workflows/nis2.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/fabriziosalmi/nis2-checker)
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nis2-checker.git
+git clone https://github.com/fabriziosalmi/nis2-checker.git
 cd nis2-checker
 
 # Install dependencies

@@ -7,9 +7,12 @@ hero:
   tagline: "Verify connectivity, SSL, security headers, and infrastructure audit for NIS2 compliance."
   actions:
     - theme: brand
-      text: View on GitHub
+      text: GitHub Repository
       link: https://github.com/fabriziosalmi/nis2-checker
-      icon: github
+    - theme: alt
+      text: Get Started
+      link: /guide/getting-started
+      icon: right-arrow
     - theme: alt
       text: Governance Checklist
       link: /governance/checklist
