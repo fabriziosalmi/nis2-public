@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nis2-checker"
+version = "0.3.0"
+description = "Enterprise NIS2 Compliance Assessment Platform"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Fabrizio Salmi", email = "fabrizio.salmi@gmail.com" },
+]
+dependencies = [
+    "requests>=2.31.0",
+    "PyYAML>=6.0",
+    "urllib3>=2.0.0",
+    "colorama>=0.4.6",
+    "jinja2>=3.1.2",
+    "dnspython>=2.6.0",
+    "weasyprint>=60.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.6.0"
+]
+
+[project.scripts]
+nis2-check = "nis2_checker.main:main"
+nis2-web = "nis2_checker.server:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nis2_checker"]

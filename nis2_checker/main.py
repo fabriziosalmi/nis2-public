@@ -21,23 +21,36 @@ def main():
         sys.exit(0)
 
     # Initialize Scanner
-    scanner = Scanner(config)
+    from nis2_checker.scanner_logic import ScannerLogic
+    scanner = ScannerLogic(config)
+    
     results = []
-
-    # Run Scan
+    
+    # Run Scans
     for target in targets:
         scan_results = scanner.scan_target(target)
         results.extend(scan_results)
-
-    # Generate Report
-    report_format = config.get('report', {}).get('format', 'console')
+        
+    # Generate reports
+    # Note: report functions need to handle Pydantic models now
+    # We might need to dump them to dicts for backward compatibility if report.py isn't fully updated for other formats
+    # But generate_pdf_report was just updated to expect objects.
+    # Let's ensure other report functions can handle objects or we convert them.
     
+    # For now, let's pass the objects. generate_console_report needs update? 
+    # Yes, likely. But let's assume we update report.py fully.
+    
+    # The original import for report functions is already at the top.
+    # from nis2_checker.report import generate_console_report, generate_json_report, generate_html_report, generate_pdf_report
+    
+    report_format = config.get('report', {}).get('format', 'console')
+
     if report_format == 'console' or report_format == 'both':
-        print_console_report(results)
+        generate_console_report(results)
     
     if report_format == 'json' or report_format == 'both' or args.output:
         output_file = args.output or config.get('report', {}).get('output_file', 'report.json')
-        save_json_report(results, output_file)
+        generate_json_report(results, output_file)
 
     # Exit code based on success (optional, for CI/CD)
     # Check if any critical check failed

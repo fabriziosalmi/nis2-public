@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Governance Checklist - NIS2 Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-10 border-b border-gray-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-blue-500">Governance Checklist</h1>
+                <p class="text-gray-400">NIS2 Article 21 - Management Responsibilities</p>
+            </div>
+            <nav>
+                <a href="/" class="text-gray-300 hover:text-white mr-4">Dashboard</a>
+                <a href="/governance" class="text-blue-400 hover:text-white">Governance Checklist</a>
+            </nav>
+        </header>
+
+        <div class="bg-gray-800 p-8 rounded-lg shadow-lg">
+            <p class="mb-6 text-gray-300">
+                This checklist tracks the non-technical and organizational requirements of the NIS2 Directive.
+                Management bodies are required to approve and oversee these cybersecurity risk-management measures.
+            </p>
+
+            <!-- Placeholder for dynamic checklist content -->
+            <div class="space-y-6">
+                <div class="border-l-4 border-red-500 pl-4">
+                    <h3 class="text-xl font-semibold text-red-400">Critical Priorities</h3>
+                    <div class="mt-2 space-y-2">
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox"
+                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <span>1. Identify Critical Assets & Dependencies (Business Impact Analysis)</span>
+                        </label>
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox"
+                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <span>2. Define Incident Handling & Reporting Process (72h / 24h)</span>
+                        </label>
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox"
+                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <span>3. Implement Business Continuity & Crisis Management Plan</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="border-l-4 border-yellow-500 pl-4">
+                    <h3 class="text-xl font-semibold text-yellow-400">High Priorities</h3>
+                    <div class="mt-2 space-y-2">
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox"
+                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <span>4. Supply Chain Security Policy</span>
+                        </label>
+                        <label class="flex items-center space-x-3">
+                            <input type="checkbox"
+                                class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <span>5. Vulnerability Handling & Disclosure Policy</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-6 border-t border-gray-700">
+                <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition">
+                    Save Progress
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

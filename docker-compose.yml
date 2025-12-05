@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: uvicorn nis2_checker.server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./scan_history.json:/app/scan_history.json
+      - ./audit.log:/app/audit.log
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - nis2-net
+
+networks:
+  nis2-net:
+    driver: bridge

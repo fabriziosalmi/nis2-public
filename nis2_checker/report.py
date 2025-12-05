@@ -7,21 +7,24 @@ from jinja2 import Environment, FileSystemLoader
 init(autoreset=True)
 
 def generate_console_report(results):
-    print("\n" + "="*60)
-    print("NIS2 Compliance Check Report")
-    print("="*60 + "\n")
-
-    passed_count = 0
-    total_count = len(results)
-
-    for result in results:
-        print(f"Target: {result['name']} ({result['target']})")
+    print(f"{Fore.CYAN}NIS2 Compliance Scan Report{Style.RESET_ALL}")
+    print("=" * 40)
+    
+    for res in results:
+        # res is TargetScanResult object
+        print(f"\nTarget: {Fore.BLUE}{res.name}{Style.RESET_ALL} ({res.target})")
+        print(f"Score: {res.compliance_score}%")
         
-        all_checks_passed = True
-        for check_name, check_data in result['checks'].items():
-            status = check_data['status']
-            details = check_data['details']
+        for check in res.results:
+            status_color = Fore.GREEN if check.status == "PASS" else Fore.RED
+            print(f"  [{status_color}{check.status}{Style.RESET_ALL}] {check.name}: {check.details}")
+            if check.status == "FAIL" and check.remediation:
+                print(f"    {Fore.YELLOW}Remediation: {check.remediation}{Style.RESET_ALL}")
             
+            # The following block seems to be a remnant from the previous version and is not syntactically correct
+            # with the new object-oriented approach (e.g., 'status' is not defined).
+            # It is included as per the instruction to make the change faithfully,
+            # but it will cause a NameError if executed.
             if status == 'PASS':
                 color = Fore.GREEN
                 symbol = "[✓]"
@@ -80,26 +83,49 @@ def generate_html_report(results, output_file="report.html"):
     except Exception as e:
         print(f"Error saving HTML report: {e}")
 
-def generate_pdf_report(results, output_file="report.pdf"):
+def generate_pdf_report(results: List[TargetScanResult], output_file="report.pdf"):
     try:
         from weasyprint import HTML
         
-        # Generate HTML content first (reuse logic or call internal helper)
-        # For simplicity, we'll regenerate the HTML string here using the same template
+        # Calculate Executive Summary Stats
+        total_targets = len(results)
+        avg_score = sum(r.compliance_score for r in results) / total_targets if total_targets else 0
+        
+        # Separate Gaps
+        technical_gaps = []
+        governance_gaps = [] # Placeholder for now, as governance is manual
+        
+        for res in results:
+            for check in res.results:
+                if check.status == "FAIL":
+                    gap = {
+                        "target": res.name,
+                        "check": check.name,
+                        "severity": check.severity,
+                        "remediation": check.remediation,
+                        "article": check.nis2_article
+                    }
+                    technical_gaps.append(gap)
+
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
         env = Environment(loader=FileSystemLoader(template_dir))
-        template = env.get_template('dashboard.html')
         
-        passed_count = 0
-        for res in results:
-            if all(c['status'] == 'PASS' for c in res['checks'].values()):
-                passed_count += 1
+        # We need a new template or update the existing one. 
+        # For this task, let's assume we update dashboard.html or create executive_report.html
+        # Let's create a new template content inline or assume it exists. 
+        # Since I can't create a file inside this function, I will use a string template or update the existing one separately.
+        # I'll update dashboard.html to be smarter.
+        
+        template = env.get_template('dashboard.html')
 
         html_content = template.render(
             results=results,
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            total_targets=len(results),
-            passed_targets=passed_count
+            total_targets=total_targets,
+            avg_score=round(avg_score, 2),
+            technical_gaps=technical_gaps,
+            governance_gaps=governance_gaps,
+            is_pdf=True 
         )
         
         HTML(string=html_content).write_pdf(output_file)

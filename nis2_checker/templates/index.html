@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIS2 Enterprise Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+
+<body class="bg-gray-900 text-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-10 border-b border-gray-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-blue-500">NIS2 Enterprise Platform</h1>
+                <p class="text-gray-400">Compliance Assessment & Governance</p>
+            </div>
+            <nav>
+                <a href="/" class="text-gray-300 hover:text-white mr-4">Dashboard</a>
+                <a href="/governance" class="text-gray-300 hover:text-white">Governance Checklist</a>
+            </nav>
+        </header>
+
+        <!-- Scan Form -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-xl font-semibold mb-4">Start New Assessment</h2>
+            <form hx-post="/scan" hx-swap="afterend" class="flex gap-4">
+                <input type="text" name="target" placeholder="Enter URL (e.g., https://example.com) or IP"
+                    class="flex-1 bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-blue-500 text-white"
+                    required>
+                <button type="submit"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition">
+                    Scan Target
+                </button>
+            </form>
+            <div id="scan-message" class="mt-2 text-sm text-green-400"></div>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+                <h3 class="text-gray-400 text-sm uppercase">Total Scans</h3>
+                <p class="text-3xl font-bold">{{ history|length }}</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+                <h3 class="text-gray-400 text-sm uppercase">Avg Compliance</h3>
+                <p class="text-3xl font-bold">
+                    {% if history %}
+                    {{ (history | map(attribute='compliance_score') | sum / history|length) | round(1) }}%
+                    {% else %}
+                    0%
+                    {% endif %}
+                </p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-red-500">
+                <h3 class="text-gray-400 text-sm uppercase">Critical Gaps</h3>
+                <p class="text-3xl font-bold">
+                    {% set criticals = namespace(value=0) %}
+                    {% for scan in history %}
+                    {% for check in scan.results %}
+                    {% if check.severity == 'CRITICAL' and check.status == 'FAIL' %}
+                    {% set criticals.value = criticals.value + 1 %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                    {{ criticals.value }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Recent Scans Table -->
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-semibold">Recent Assessments</h2>
+                <button hx-get="/" hx-target="body" class="text-sm text-blue-400 hover:text-blue-300">Refresh</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-700 text-gray-300 uppercase text-xs">
+                        <tr>
+                            <th class="px-6 py-3">Target</th>
+                            <th class="px-6 py-3">Date</th>
+                            <th class="px-6 py-3">Score</th>
+                            <th class="px-6 py-3">Status</th>
+                            <th class="px-6 py-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        {% for scan in history|reverse %}
+                        <tr class="hover:bg-gray-750">
+                            <td class="px-6 py-4 font-medium">{{ scan.name }}</td>
+                            <td class="px-6 py-4 text-gray-400">{{ scan.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 rounded text-xs font-bold 
+                                    {% if scan.compliance_score >= 80 %}bg-green-900 text-green-300
+                                    {% elif scan.compliance_score >= 50 %}bg-yellow-900 text-yellow-300
+                                    {% else %}bg-red-900 text-red-300{% endif %}">
+                                    {{ scan.compliance_score }}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                {% if scan.compliance_score == 100 %}
+                                <span class="text-green-400">Compliant</span>
+                                {% else %}
+                                <span class="text-red-400">Non-Compliant</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                <button class="text-blue-400 hover:text-blue-300 text-sm">View Report</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not history %}
+                <div class="p-8 text-center text-gray-500">
+                    No scans performed yet. Start a new assessment above.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
