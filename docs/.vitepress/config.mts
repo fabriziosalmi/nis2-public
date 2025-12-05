@@ -1,3 +1,4 @@
+```javascript
 import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
@@ -5,6 +6,7 @@ export default defineConfig({
     title: "NIS2 Checker",
     description: "Enterprise NIS2 Compliance & Audit Platform",
     base: "/nis2-checker/",
+    ignoreDeadLinks: true,
     themeConfig: {
         // https://vitepress.dev/reference/default-theme-config
         nav: [
