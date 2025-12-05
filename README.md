@@ -159,7 +159,16 @@ Achieving NIS2 compliance is not just about technical scans; it requires robust 
 ## CI/CD
 
 ### GitHub Actions
-The `.github/workflows/nis2.yml` workflow runs daily. Add secrets to your repository settings to support authenticated scans.
+The `.github/workflows/nis2.yml` workflow is available but **should be used with caution**.
+
+> [!WARNING]
+> **Do not run Nmap scans from public GitHub Runners.**
+> Port scanning public targets from GitHub's infrastructure violates their Acceptable Use Policy and may get your account banned.
+>
+> **Recommendation**:
+> *   Use **Self-Hosted Runners** inside your network.
+> *   Run the tool via a VPN (e.g., **Tailscale**) or Proxy to reach internal targets safely.
+> *   The workflow in this repo is manually disabled by default for safety.
 
 ### GitLab CI
 The `.gitlab-ci.yml` pipeline runs on schedules. Configure CI/CD variables for secrets.

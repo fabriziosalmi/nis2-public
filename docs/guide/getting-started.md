@@ -14,6 +14,10 @@
 - **Reporting**: Console output and JSON reports.
 - **CI/CD Integration**: Ready-to-use GitHub Actions and GitLab CI pipelines.
 
+> [!IMPORTANT]
+> **Running Nmap on GitHub Actions**
+> Please note that running port scans (Nmap) from public GitHub runners is generally forbidden. You should use **Self-Hosted Runners** or connect via a VPN (like **Tailscale**) to scan your infrastructure legally and safely. The provided workflow is disabled by default to prevent accidental misuse.
+
 ## Installation
 
 We recommend using **Docker** for the easiest setup, as it includes all system dependencies (like Nmap and Pango for PDF generation).
