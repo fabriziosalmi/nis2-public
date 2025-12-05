@@ -1,5 +1,13 @@
 # NIS2 Governance Checklist: 30 Priorities
 
+## 📖 How to Use This Document
+This checklist is designed to be a living document for Compliance Officers, CISOs, and IT Managers.
+
+1.  **Assessment**: Go through each item and mark the current status.
+2.  **Assignment**: Assign an owner to each missing item (e.g., "IT Manager" for Backups, "Legal" for Contracts).
+3.  **Tracking**: Review this document monthly during board or management meetings.
+4.  **Evidence**: Store proofs of compliance (PDFs, screenshots, logs) in a secure repository referenced here.
+
 This checklist is ordered by "Survival and Legal Compliance" logic: first, the items that save you from immediate sanctions and operational halts, then structure, and finally optimization.
 
 ## 🔗 Official References

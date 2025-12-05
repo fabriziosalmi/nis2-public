@@ -73,6 +73,18 @@ To scan protected targets, define `auth_id` in `targets.yaml` and set correspond
   export INTERNAL_API_PASS="password"
   ```
 
+## 📜 Governance & Compliance (NIS2)
+
+Achieving NIS2 compliance is not just about technical scans; it requires robust organizational governance. We provide a **[Governance Checklist](governance_checklist.md)** to help you track non-technical requirements.
+
+### How to use the Governance Checklist
+1.  **Download/Clone**: Keep the `governance_checklist.md` in your repository or export it to your internal documentation system (Confluence, SharePoint).
+2.  **Prioritize**: Start with the **🔴 Critical Priority** items. These are "Must-Haves" to avoid immediate legal repercussions and ensure business continuity.
+3.  **Assign & Track**: Use the checklist to assign tasks to specific departments (Legal, HR, IT) and track progress during monthly compliance reviews.
+4.  **Audit Trail**: Use the checklist as a high-level index for your compliance evidence.
+
+> **Note**: This tool and checklist are aids for compliance but do not replace legal advice or official certification.
+
 ## CI/CD
 
 ### GitHub Actions
