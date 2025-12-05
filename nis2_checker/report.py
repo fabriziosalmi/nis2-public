@@ -79,3 +79,33 @@ def generate_html_report(results, output_file="report.html"):
         print(f"HTML report saved to {output_file}")
     except Exception as e:
         print(f"Error saving HTML report: {e}")
+
+def generate_pdf_report(results, output_file="report.pdf"):
+    try:
+        from weasyprint import HTML
+        
+        # Generate HTML content first (reuse logic or call internal helper)
+        # For simplicity, we'll regenerate the HTML string here using the same template
+        template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+        env = Environment(loader=FileSystemLoader(template_dir))
+        template = env.get_template('dashboard.html')
+        
+        passed_count = 0
+        for res in results:
+            if all(c['status'] == 'PASS' for c in res['checks'].values()):
+                passed_count += 1
+
+        html_content = template.render(
+            results=results,
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            total_targets=len(results),
+            passed_targets=passed_count
+        )
+        
+        HTML(string=html_content).write_pdf(output_file)
+        print(f"PDF report saved to {output_file}")
+        
+    except ImportError:
+        print("Error: 'weasyprint' not installed. Cannot generate PDF.")
+    except Exception as e:
+        print(f"Error generating PDF report: {e}")

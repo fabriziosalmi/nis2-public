@@ -1,5 +1,8 @@
 # NIS2 Compliance Checker
 
+![License](https://img.shields.io/github/license/fabriziosalmi/nis2-checker)
+![Issues](https://img.shields.io/github/issues/fabriziosalmi/nis2-checker)
+![Stars](https://img.shields.io/github/stars/fabriziosalmi/nis2-checker)
 A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs.
 
 ## Features
@@ -7,9 +10,22 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **Connectivity Checks**: Verifies target reachability.
 - **SSL/TLS Compliance**: Checks for minimum TLS version, certificate validity, and expiry.
 - **Security Headers**: Verifies presence of critical security headers (HSTS, X-Content-Type-Options, etc.).
-- **Infrastructure Audit**: Checks for SSH password auth, deprecated TLS, and open management ports using Nmap.
-- **Network Discovery**: Scans entire subnets (CIDR) with low-impact settings.
-- **Governance Checklist**: Includes a [manual checklist](governance_checklist.md) for NIS2 governance priorities.
+- **Infrastructure Audit**: Uses Nmap to check for:
+    - SSH Password Authentication (Compliance Violation)
+    - Deprecated TLS Versions (1.0/1.1)
+    - Open Management Ports (Cleartext HTTP)
+    - Windows RDP Encryption & SMB Signing
+- **Extended Compliance Checks**:
+    - **Email Security**: SPF and DMARC verification.
+    - **DNS Security**: DNSSEC validation.
+- **Advanced Reporting**:
+    - **Console**: Summary output.
+    - **JSON**: Detailed machine-readable report.
+    - **HTML**: Visual dashboard with pass/fail badges.
+    - **PDF**: Professional management report (via WeasyPrint).
+- **Governance Checklist**: Integrated manual checklist for non-technical NIS2 requirements.
+- **Dockerized**: Ready-to-run Docker image with all dependencies (Nmap, WeasyPrint).
+- **Secure**: No hardcoded secrets, runs as non-root user. priorities.
 - **Authentication Support**: Supports Basic Auth and Bearer Tokens via environment variables for secure scanning.
 - **Reporting**: Console output and JSON reports.
 - **CI/CD Integration**: Ready-to-use GitHub Actions and GitLab CI pipelines.

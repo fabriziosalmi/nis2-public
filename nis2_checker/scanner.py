@@ -6,6 +6,7 @@ import os
 from urllib.parse import urlparse
 import urllib3
 from nis2_checker.nmap_scanner import NmapScanner
+from nis2_checker.dns_scanner import DNSScanner
 
 # Disable warnings for self-signed certs if needed (though we want to check them)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -15,7 +16,8 @@ class Scanner:
         self.config = config
         self.timeout = config.get('timeout', 10)
         self.results = []
-        self.nmap_scanner = NmapScanner(config)
+        self.nmap_scanner = NmapScanner(config.get('nmap', {}))
+        self.dns_scanner = DNSScanner(config.get('dns', {}))
 
     def scan_target(self, target):
         """Run all enabled checks for a single target or CIDR."""
@@ -81,6 +83,14 @@ class Scanner:
         nmap_results = self.nmap_scanner.scan_target(target)
         if nmap_results:
             target_result['checks'].update(nmap_results)
+
+        # DNS Checks (Email Security, DNSSEC)
+        if self.config.get('checks', {}).get('dns_checks', False):
+             # Use URL or IP as target for DNS checks
+             target_val = target.get('url') or target.get('ip')
+             if target_val:
+                 dns_results = self.dns_scanner.scan_target(target_val)
+                 target_result['checks'].update(dns_results)
 
         results.append(target_result)
         return results

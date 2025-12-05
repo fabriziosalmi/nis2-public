@@ -17,6 +17,13 @@ To scan protected targets, define `auth_id` in `targets.yaml` and set correspond
   export INTERNAL_API_PASS="password"
   ```
 
+## View Reports
+After a scan, reports are generated:
+- Console output shows a summary.
+- `nis2_report.json`: Detailed machine-readable results.
+- `nis2_report.html`: Visual dashboard.
+- `report.pdf`: Professional PDF report for management.
+
 ## CI/CD Integration
 
 ### GitHub Actions

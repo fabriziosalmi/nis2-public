@@ -2,7 +2,7 @@ import argparse
 import sys
 from nis2_checker.config import load_config, load_targets
 from nis2_checker.scanner import Scanner
-from nis2_checker.report import generate_console_report, generate_json_report, generate_html_report
+from nis2_checker.report import generate_console_report, generate_json_report, generate_html_report, generate_pdf_report
 
 def main():
     parser = argparse.ArgumentParser(description="NIS2 Compliance Checker")

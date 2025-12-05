@@ -1,8 +1,14 @@
 FROM python:3.11-slim
 
-# Install system dependencies (Nmap is required)
+# Install system dependencies (Nmap and WeasyPrint dependencies)
 RUN apt-get update && apt-get install -y \
     nmap \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libcairo2 \
+    libffi-dev \
+    libjpeg-dev \
+    libopenjp2-7-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

@@ -5,6 +5,7 @@ timeout: 10
 report:
   json: true
   html: true
+  pdf: true
 
 # Compliance checks to enable
 checks:
@@ -43,6 +44,13 @@ nmap:
     http_cleartext: true
     windows_rdp: true
     windows_smb: true
+    dns_checks: true
+
+dns:
+  timeout: 5
+  checks:
+    email_security: true # SPF, DMARC
+    dns_security: true # DNSSEC
 
 # Reporting
 report:

@@ -36,7 +36,7 @@ export default defineConfig({
         ],
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/your-org/nis2-checker' }
+            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-checker' }
         ],
 
         footer: {

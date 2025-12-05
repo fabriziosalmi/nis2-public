@@ -14,6 +14,10 @@ checks:
   http_cleartext: true
   windows_rdp: true
   windows_smb: true
+report:
+  json: true   # Generate JSON report (nis2_report.json)
+  html: true   # Generate HTML dashboard (nis2_report.html)
+  pdf: true    # Generate PDF report (report.pdf)
 
 nmap:
   enabled: true
