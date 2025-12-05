@@ -34,7 +34,7 @@ We recommend using **Docker** for the easiest setup, as it includes all system d
     ```
 
 3.  **Access the Dashboard**:
-    Open [http://localhost:8000](http://localhost:8000) in your browser.
+    Open `http://localhost:8000` in your browser.
 
 ### 🐍 Option 2: Python (Manual)
 
