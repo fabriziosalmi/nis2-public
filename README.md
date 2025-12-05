@@ -73,6 +73,33 @@ To scan protected targets, define `auth_id` in `targets.yaml` and set correspond
   export INTERNAL_API_PASS="password"
   ```
 
+## 🐳 Docker Support
+Run the checker anywhere without installing dependencies manually.
+
+```bash
+# Build
+docker build -t nis2-checker .
+
+# Run (mount config and targets)
+docker run --rm \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  -v $(pwd)/targets.yaml:/app/targets.yaml \
+  nis2-checker
+```
+
+## 📊 Reporting
+The tool generates multiple report formats:
+- **Console**: Color-coded output.
+- **JSON**: For automated processing (`report.json`).
+- **HTML**: Professional dashboard (`report.html`).
+
+Enable them in `config.yaml`:
+```yaml
+report:
+  json: true
+  html: true
+```
+
 ## 📜 Governance & Compliance (NIS2)
 
 Achieving NIS2 compliance is not just about technical scans; it requires robust organizational governance. We provide a **[Governance Checklist](governance_checklist.md)** to help you track non-technical requirements.

@@ -2,6 +2,9 @@
 
 # Timeout for requests in seconds
 timeout: 10
+report:
+  json: true
+  html: true
 
 # Compliance checks to enable
 checks:
