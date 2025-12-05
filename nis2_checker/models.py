@@ -10,7 +10,7 @@ class Severity(str, Enum):
     LOW = "LOW"
     INFO = "INFO"
 
-class NIS2Article(BaseModel):
+class NIS2Article(SQLModel):
     article: str
     description: str
 
