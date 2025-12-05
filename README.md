@@ -1,8 +1,5 @@
 # NIS2 Compliance Checker
 
-![License](https://img.shields.io/github/license/fabriziosalmi/nis2-checker)
-![Issues](https://img.shields.io/github/issues/fabriziosalmi/nis2-checker)
-![Stars](https://img.shields.io/github/stars/fabriziosalmi/nis2-checker)
 A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs.
 
 ## Features
