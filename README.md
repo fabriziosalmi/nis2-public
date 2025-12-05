@@ -27,12 +27,36 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **Reporting**: Console output and JSON reports.
 - **CI/CD Integration**: Ready-to-use GitHub Actions and GitLab CI pipelines.
 
-## Installation
+## 🚀 Quick Start (Docker)
+The easiest way to run the platform is using Docker.
 
-[![CI](https://github.com/fabriziosalmi/nis2-checker/actions/workflows/nis2.yml/badge.svg)](https://github.com/fabriziosalmi/nis2-checker/actions/workflows/nis2.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/fabriziosalmi/nis2-checker)
+### Option 1: Docker Compose (Recommended)
+This starts the Web Dashboard and Database automatically.
+
+```bash
+# Clone the repository
+git clone https://github.com/fabriziosalmi/nis2-checker.git
+cd nis2-checker
+
+# Start the platform
+docker-compose up -d
+
+# Access the dashboard at http://localhost:8000
+```
+
+### Option 2: Docker CLI (One-off Scan)
+Run a single scan without the web interface.
+
+```bash
+docker run --rm \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  -v $(pwd)/targets.yaml:/app/targets.yaml \
+  fabriziosalmi/nis2-checker
+```
+
+## 🐍 Installation (Python)
+If you prefer running locally with Python:
+
 ```bash
 # Clone the repository
 git clone https://github.com/fabriziosalmi/nis2-checker.git
@@ -40,6 +64,9 @@ cd nis2-checker
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run Web Dashboard
+python -m nis2_checker.web
 ```
 
 ## Configuration

@@ -16,17 +16,51 @@
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/your-org/nis2-checker.git
-cd nis2-checker
+We recommend using **Docker** for the easiest setup, as it includes all system dependencies (like Nmap and Pango for PDF generation).
 
-# Install dependencies
-pip install -r requirements.txt
-# Install Nmap (required for infrastructure audit)
-# macOS: brew install nmap
-# Linux: sudo apt-get install nmap
-```
+### 🐳 Option 1: Docker (Recommended)
+
+**Prerequisites**: Docker and Docker Compose installed.
+
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/fabriziosalmi/nis2-checker.git
+    cd nis2-checker
+    ```
+
+2.  **Start the Platform**:
+    ```bash
+    docker-compose up -d
+    ```
+
+3.  **Access the Dashboard**:
+    Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+### 🐍 Option 2: Python (Manual)
+
+**Prerequisites**: Python 3.11+, Nmap installed (`apt install nmap` or `brew install nmap`).
+
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/fabriziosalmi/nis2-checker.git
+    cd nis2-checker
+    ```
+
+2.  **Create a Virtual Environment**:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Run the Web App**:
+    ```bash
+    python -m nis2_checker.web
+    ```
 
 ## Quick Start
 ```bash
