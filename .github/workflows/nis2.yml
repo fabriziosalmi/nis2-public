@@ -1,0 +1,41 @@
+name: NIS2 Compliance Check
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y nmap
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        run: |
+          python -m unittest discover tests
+
+      - name: Run NIS2 Checker
+        env:
+          # Map secrets to env vars if needed for auth
+          INTERNAL_API_CREDS: ${{ secrets.INTERNAL_API_CREDS }}
+        run: |
+          python -m nis2_checker.main --config config.yaml --targets targets.yaml
+      
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-report
+          path: report.json

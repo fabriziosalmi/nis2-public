@@ -1,0 +1,18 @@
+# List of targets to check
+targets:
+  - url: "https://mainstreaming.tv"
+    name: "MainStreaming TV"
+    type: "web"
+  
+  - url: "https://msmdn.net"
+    name: "MSMDN" 
+    type: "web"
+
+  # Examples of other types:
+  # - ip: "192.168.1.10"
+  #   name: "Legacy Server"
+  #   type: "ssh"
+  #
+  # - ip: "10.0.0.5"
+  #   name: "Windows DC"
+  #   type: "windows" 

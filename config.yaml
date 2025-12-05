@@ -1,0 +1,47 @@
+# NIS2 Checker Configuration
+
+# Timeout for requests in seconds
+timeout: 10
+
+# Compliance checks to enable
+checks:
+  ssl_tls: true
+  security_headers: true
+  connectivity: true
+
+# SSL/TLS Requirements
+ssl:
+  min_version: "TLSv1.2"
+  check_expiry: true
+  expiry_warning_days: 30
+
+# Required Security Headers
+headers:
+  required:
+    - "Strict-Transport-Security"
+    - "X-Content-Type-Options"
+    - "X-Frame-Options"
+    # - "Content-Security-Policy" # Optional, often hard to implement universally
+
+# Infrastructure Audit (Nmap)
+nmap:
+  enabled: true
+  timing: 3 # 0-5 (0=paranoid, 1=sneaky, 2=polite, 3=normal, 4=aggressive, 5=insane)
+  discovery: true # Enable ping scan for CIDR targets
+  ports:
+    ssh: 22
+    https: 443
+    http_mgmt: [80, 8080]
+    rdp: 3389
+    smb: 445
+  checks:
+    ssh_password: true
+    tls_deprecated: true
+    http_cleartext: true
+    windows_rdp: true
+    windows_smb: true
+
+# Reporting
+report:
+  format: "console" # console, json
+  output_file: "report.json" # used if format is json
