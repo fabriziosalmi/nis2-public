@@ -2,6 +2,7 @@ import argparse
 import sys
 import asyncio
 import json
+import os
 from nis2_checker.config import load_config, load_targets
 from nis2_checker.report import generate_console_report, generate_json_report, generate_html_report, generate_pdf_report
 from nis2_checker.database import create_db_and_tables, get_session, ScanResult
@@ -108,19 +109,74 @@ async def main_async():
         session.close()
 
     # Generate reports
-    report_format = config.get('report', {}).get('format', 'console')
-
-    if report_format == 'console' or report_format == 'both':
-        generate_console_report(results)
+    # Determine formats from config or CLI override (if we wanted to add --format flag, but user asked for --output logic improvement)
+    # The current CLI has --output which overrides the FILE path, but not the format.
+    # Config has 'format': 'console' or 'json' etc.
     
-    if report_format == 'json' or report_format == 'both' or args.output:
-        output_file = args.output or config.get('report', {}).get('output_file', 'report.json')
-        generate_json_report(results, output_file)
+    # Let's separate format and output file logic.
+    # If user wants multiple formats, they might expect multiple files.
+    # We will assume config['report']['formats'] is a list or comma-string.
+    
+    config_formats = config.get('report', {}).get('formats', ['console'])
+    if isinstance(config_formats, str):
+        config_formats = config_formats.split(',')
+        
+    # Backward compatibility for 'format' key
+    if 'format' in config.get('report', {}):
+        legacy_fmt = config['report']['format']
+        if legacy_fmt and legacy_fmt not in config_formats:
+            config_formats.append(legacy_fmt)
 
-    # PDF Report (Optional)
-    if report_format == 'pdf':
-         output_file = config.get('report', {}).get('output_file', 'report.pdf')
-         generate_pdf_report(results, output_file)
+    # CLI Output override: if --output is provided, we try to guess format from extension
+    # OR we just generate that specific file.
+    if args.output:
+        ext = os.path.splitext(args.output)[1].lower().strip('.')
+        if ext == 'json':
+            generate_json_report(results, args.output)
+        elif ext == 'pdf':
+            generate_pdf_report(results, args.output)
+        elif ext == 'html':
+            generate_html_report(results, args.output)
+        elif ext == 'md':
+            from nis2_checker.report import generate_markdown_report
+            generate_markdown_report(results, args.output)
+        elif ext == 'csv':
+             from nis2_checker.report import generate_csv_report
+             generate_csv_report(results, args.output)
+        elif ext == 'xml':
+             from nis2_checker.report import generate_junit_report
+             generate_junit_report(results, args.output)
+        else:
+             print(f"Unknown output extension '{ext}', defaulting to JSON.")
+             generate_json_report(results, args.output)
+             
+    # Generate configured formats (default behavior)
+    if 'console' in config_formats or 'both' in config_formats:
+        generate_console_report(results)
+        
+    base_filename = config.get('report', {}).get('output_file', 'report')
+    base_name, _ = os.path.splitext(base_filename)
+    
+    if 'json' in config_formats or 'both' in config_formats:
+        generate_json_report(results, base_name + '.json')
+        
+    if 'html' in config_formats:
+        generate_html_report(results, base_name + '.html')
+
+    if 'pdf' in config_formats:
+        generate_pdf_report(results, base_name + '.pdf')
+        
+    if 'md' in config_formats or 'markdown' in config_formats:
+        from nis2_checker.report import generate_markdown_report
+        generate_markdown_report(results, base_name + '.md')
+
+    if 'csv' in config_formats:
+        from nis2_checker.report import generate_csv_report
+        generate_csv_report(results, base_name + '.csv')
+
+    if 'junit' in config_formats or 'xml' in config_formats:
+        from nis2_checker.report import generate_junit_report
+        generate_junit_report(results, base_name + '.xml')
 
     # Exit code based on success
     failed = False

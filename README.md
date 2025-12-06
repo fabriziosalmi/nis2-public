@@ -154,16 +154,28 @@ docker run -it -v $(pwd):/app nis2-checker report-incident
 ```
 
 ## 📊 Reporting
-The tool generates multiple report formats:
-- **Console**: Color-coded output.
-- **JSON**: For automated processing (`report.json`).
-- **HTML**: Professional dashboard (`report.html`).
+The tool automatically generates reports in the following formats based on the `--output` extension or configuration:
 
-Enable them in `config.yaml`:
-```yaml
-report:
-  json: true
-  html: true
+- **Console**: Default summary in the terminal.
+- **JSON**: Detailed structure for programmatic processing.
+- **Markdown**: GitHub-flavored summary, ideal for CI/CD job summaries.
+- **CSV**: Spreadsheet-ready format for auditing tracking.
+- **JUnit XML**: Integration with CI/CD test dashboards (GitLab/Jenkins).
+- **PDF**: Executive summary with visual layout (requires `weasyprint`).
+
+### Examples
+```bash
+# JSON (Default)
+python3 -m nis2_checker.main scan --output report.json
+
+# Markdown
+python3 -m nis2_checker.main scan --output report.md
+
+# CSV
+python3 -m nis2_checker.main scan --output report.csv
+
+# JUnit XML
+python3 -m nis2_checker.main scan --output junit.xml
 ```
 
 ## 📜 Governance & Compliance (NIS2)

@@ -79,7 +79,7 @@ class IncidentReporter:
         report = {
             "meta": {
                 "generated_at": datetime.datetime.now().isoformat(),
-                "cisor_tool_version": "0.6.0"
+                "cisor_tool_version": "0.6.2"
             },
             "entity": {
                 "name": entity_name,

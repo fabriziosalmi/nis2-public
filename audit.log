@@ -68,3 +68,9 @@
 2025-12-06 11:48:36,904 - scanner_logic - INFO - ScannerLogic initialized with all modules
 2025-12-06 11:48:36,905 - scanner_logic - INFO - ScannerLogic initialized with all modules
 2025-12-06 11:48:36,906 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:52:11,285 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:52:11,285 - scanner_logic - INFO - Starting scan for target: Example Corp (https://example.com)
+2025-12-06 11:52:11,286 - scanner_logic - INFO - Starting scan for target: Google (Test) (https://google.com)
+2025-12-06 11:52:44,276 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:52:44,277 - scanner_logic - INFO - Starting scan for target: Example Corp (https://example.com)
+2025-12-06 11:52:44,277 - scanner_logic - INFO - Starting scan for target: Google (Test) (https://google.com)

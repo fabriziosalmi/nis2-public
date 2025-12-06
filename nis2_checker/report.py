@@ -1,8 +1,14 @@
 import json
 import sys
+import os
+import csv
+from datetime import datetime
+from typing import List
+from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree
 from colorama import Fore, Style, init
 
 from jinja2 import Environment, FileSystemLoader
+from nis2_checker.models import TargetScanResult
 
 init(autoreset=True)
 
@@ -137,3 +143,95 @@ def generate_pdf_report(results: List[TargetScanResult], output_file="report.pdf
         print("Error: 'weasyprint' not installed. Cannot generate PDF.")
     except Exception as e:
         print(f"Error generating PDF report: {e}")
+
+def generate_markdown_report(results: List[TargetScanResult], output_file="report.md"):
+    """Generates a GitHub-flavored Markdown report."""
+    with open(output_file, 'w') as f:
+        f.write("# NIS2 Compliance Scan Report\n\n")
+        f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"**Total Targets:** {len(results)}\n\n")
+        
+        # Summary Table
+        f.write("## Summary\n")
+        f.write("| Target | Score | Status | Critical Issues |\n")
+        f.write("|---|---|---|---|\n")
+        for res in results:
+            status = "✅ PASS" if res.compliance_score == 100 else ("⚠️ WARN" if res.compliance_score > 50 else "❌ FAIL")
+            crit_count = sum(1 for c in res.results if c.severity == 'CRITICAL' and c.status == 'FAIL')
+            f.write(f"| {res.name} | {res.compliance_score}% | {status} | {crit_count} |\n")
+        
+        f.write("\n## Detailed Results\n")
+        for res in results:
+            f.write(f"### {res.name} ({res.target})\n")
+            f.write(f"**Compliance Score:** {res.compliance_score}%\n\n")
+            
+            # Failures first
+            failures = [c for c in res.results if c.status == 'FAIL']
+            if failures:
+                f.write("#### ❌ Failures\n")
+                for c in failures:
+                    f.write(f"- **{c.name}** ({c.severity}): {c.details}\n")
+                    if c.remediation:
+                        f.write(f"  - *Remediation: {c.remediation}*\n")
+            
+            # Warnings
+            warnings = [c for c in res.results if c.status not in ['PASS', 'FAIL']]
+            if warnings:
+                f.write("\n#### ⚠️ Warnings\n")
+                for c in warnings:
+                    f.write(f"- **{c.name}**: {c.details}\n")
+            
+            f.write("\n---\n")
+            
+    print(f"Markdown report saved to {output_file}")
+
+def generate_csv_report(results: List[TargetScanResult], output_file="report.csv"):
+    """Generates a CSV report with one row per check."""
+    try:
+        with open(output_file, 'w', newline='') as csvfile:
+            fieldnames = ['target_name', 'target_url', 'check_name', 'status', 'severity', 'details', 'remediation', 'nis2_article']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for res in results:
+                for check in res.results:
+                    writer.writerow({
+                        'target_name': res.name,
+                        'target_url': res.target,
+                        'check_name': check.name,
+                        'status': check.status,
+                        'severity': check.severity,
+                        'details': check.details,
+                        'remediation': check.remediation or "",
+                        'nis2_article': check.nis2_article or ""
+                    })
+        print(f"CSV report saved to {output_file}")
+    except Exception as e:
+        print(f"Error saving CSV report: {e}")
+
+def generate_junit_report(results: List[TargetScanResult], output_file="junit_report.xml"):
+    """Generates a JUnit XML report for CI integration."""
+    testsuites = Element('testsuites')
+    
+    for res in results:
+        testsuite = SubElement(testsuites, 'testsuite', name=res.name, tests=str(len(res.results)))
+        
+        for check in res.results:
+            testcase = SubElement(testsuite, 'testcase', name=check.name, classname=res.name)
+            
+            if check.status == 'FAIL':
+                failure = SubElement(testcase, 'failure', message=check.details, type=check.severity)
+                failure.text = f"Remediation: {check.remediation}\nDetails: {check.details}"
+            elif check.status == 'WARN':
+                # JUnit doesn't strictly have 'warn', mostly skipped or passed with stdout
+                # We'll treat as passed but add stdout? Or skipped? 
+                # Let's add system-out
+                system_out = SubElement(testcase, 'system-out')
+                system_out.text = f"WARNING: {check.details}"
+    
+    tree = ElementTree(testsuites)
+    try:
+        tree.write(output_file, encoding='utf-8', xml_declaration=True)
+        print(f"JUnit report saved to {output_file}")
+    except Exception as e:
+        print(f"Error saving JUnit report: {e}")
