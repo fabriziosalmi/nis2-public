@@ -13,12 +13,36 @@ async def scan_single_target(scanner, target):
 
 async def main_async():
     parser = argparse.ArgumentParser(description="NIS2 Compliance Checker")
-    parser.add_argument("--config", default="config.yaml", help="Path to configuration file")
-    parser.add_argument("--targets", default="targets.yaml", help="Path to targets file")
-    parser.add_argument("--output", help="Output file for JSON report (overrides config)")
-    
-    args = parser.parse_args()
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # Command: scan (default)
+    scan_parser = subparsers.add_parser("scan", help="Run compliance scan")
+    scan_parser.add_argument("--config", default="config.yaml", help="Path to configuration file")
+    scan_parser.add_argument("--targets", default="targets.yaml", help="Path to targets file")
+    scan_parser.add_argument("--output", help="Output file for JSON report (overrides config)")
+
+    # Command: report-incident
+    report_parser = subparsers.add_parser("report-incident", help="Interactive Incident Reporting Helper (Art. 23)")
+
+    # Workaround for default behavior (if no command, assume 'scan')
+    if len(sys.argv) == 1:
+        args = parser.parse_args(['scan'])
+    else:
+        # If user passed arguments but no command (e.g. --config), assume scan
+        # This is tricky with argparse, so we'll just check if the first arg is a known command
+        if sys.argv[1] not in ['scan', 'report-incident', '-h', '--help']:
+             # Insert 'scan' at index 1
+             sys.argv.insert(1, 'scan')
+        args = parser.parse_args()
+
+    # --- HANDLE INCIDENT REPORTING ---
+    if args.command == "report-incident":
+        from nis2_checker.incident_reporter import IncidentReporter
+        reporter = IncidentReporter()
+        reporter.run_interactive()
+        return
+
+    # --- HANDLE SCAN ---
     # Load configuration and targets
     config = load_config(args.config)
     targets = load_targets(args.targets)

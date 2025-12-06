@@ -2,7 +2,7 @@ import unittest
 import threading
 import time
 import requests
-from nis2_checker.scanner import Scanner
+from nis2_checker.scanner_logic import ScannerLogic
 from simulation_server import start_server, PORT
 import socket
 
@@ -22,34 +22,46 @@ class TestIntegration(unittest.TestCase):
             'checks': {
                 'connectivity': True,
                 'ssl_tls': False, # SSL not supported in simple http server mock
-                'security_headers': True
+                'security_headers': True,
+                'whois_check': False, # Disable external checks
+                'dns_checks': False     # Disable external checks
             },
             'ssl': {'min_version': 'TLSv1.2'},
             'headers': {
                 'required': ['Strict-Transport-Security', 'X-Content-Type-Options']
-            }
+            },
+            # Add required sections for ScannerLogic init
+            'nmap': {}, 
+            'dns': {}, 
+            'whois': {'enabled': False}, 
+            'content': {}
         }
-        self.scanner = Scanner(self.config)
+        self.scanner = ScannerLogic(self.config)
 
     def test_compliant_target(self):
         target = {'url': f"{self.base_url}/compliant"}
         results = self.scanner.scan_target(target)
         result = results[0]
         
-        if result['checks']['connectivity']['status'] != 'PASS':
-            print(f"Connectivity Check Failed: {result['checks']['connectivity']['details']}")
+        # Convert list of checks to dict for easier testing
+        checks = {c.check_id: c for c in result.results}
 
-        self.assertEqual(result['checks']['connectivity']['status'], 'PASS')
-        self.assertEqual(result['checks']['security_headers']['status'], 'PASS')
+        if checks['connectivity'].status != 'PASS':
+            print(f"Connectivity Check Failed: {checks['connectivity'].details}")
+
+        self.assertEqual(checks['connectivity'].status, 'PASS')
+        self.assertEqual(checks['security_headers'].status, 'PASS')
 
     def test_non_compliant_target(self):
         target = {'url': f"{self.base_url}/non-compliant"}
         results = self.scanner.scan_target(target)
         result = results[0]
         
-        self.assertEqual(result['checks']['connectivity']['status'], 'PASS')
-        self.assertEqual(result['checks']['security_headers']['status'], 'FAIL')
-        self.assertIn('Missing headers', result['checks']['security_headers']['details'])
+        checks = {c.check_id: c for c in result.results}
+        
+        self.assertEqual(checks['connectivity'].status, 'PASS')
+        self.assertEqual(checks['security_headers'].status, 'FAIL')
+        self.assertIn('Missing headers', checks['security_headers'].details)
 
 if __name__ == '__main__':
     unittest.main()

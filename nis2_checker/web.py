@@ -15,7 +15,7 @@ from nis2_checker.scanner_logic import ScannerLogic
 from nis2_checker.models import TargetScanResult, Target, ScanHistory, GovernanceChecklist, Severity
 from nis2_checker.database import create_db_and_tables, get_session, engine
 
-app = FastAPI(title="NIS2 Enterprise Platform")
+# App instantiation moved to lifespan definition below
 
 # Setup Templates
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,11 +69,18 @@ def init_governance_data(session: Session):
         session.commit()
         print(f"Initialized {len(items)} governance items.")
 
-@app.on_event("startup")
-def on_startup():
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     create_db_and_tables()
     with Session(engine) as session:
         init_governance_data(session)
+    yield
+    # Shutdown logic if needed
+
+app = FastAPI(title="NIS2 Enterprise Platform", lifespan=lifespan)
 
 def run_scan_task(target_url: str):
     """Background task to run the scan and save to DB."""
@@ -110,7 +117,7 @@ async def read_dashboard(request: Request, session: Session = Depends(get_sessio
     # Enrich history with target names (lazy loading or join)
     # For simplicity in template, we can access scan.target.name if relationship is loaded
     
-    return templates.TemplateResponse("index.html", {"request": request, "history": history})
+    return templates.TemplateResponse(request=request, name="index.html", context={"history": history})
 
 @app.post("/scan")
 async def trigger_scan(background_tasks: BackgroundTasks, target: str = Form(...)):
@@ -131,7 +138,7 @@ async def governance_page(request: Request, session: Session = Depends(get_sessi
             if "General" not in grouped: grouped["General"] = []
             grouped["General"].append(item)
             
-    return templates.TemplateResponse("governance.html", {"request": request, "grouped_items": grouped})
+    return templates.TemplateResponse(request=request, name="governance.html", context={"grouped_items": grouped})
 
 @app.post("/governance/update/{item_id}")
 async def update_governance_item(item_id: int, status: str = Form(...), notes: str = Form(None), session: Session = Depends(get_session)):

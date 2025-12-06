@@ -69,5 +69,36 @@ AUDIT_MAPPING = {
         "article": "Audit Trail",
         "severity_fail": Severity.INFO,
         "remediation": "None"
+    },
+    # EU/IT Strategic Compliance
+    "security_txt": {
+        "name": "Vulnerability Disclosure (RFC 9116)",
+        "article": "Art. 21.2.a (Incident Handling)",
+        "severity_fail": Severity.MEDIUM,
+        "remediation": "Publish /.well-known/security.txt with 'Contact' and 'Expires' fields."
+    },
+    "piva": {
+        "name": "Corporate Identity (P.IVA)",
+        "article": "Art. 21 (Legal Compliance)",
+        "severity_fail": Severity.HIGH,
+        "remediation": "Display Partita IVA/VAT ID on the homepage (Mandatory in Italy)."
+    },
+    "privacy_policy": {
+        "name": "Privacy Policy",
+        "article": "GDPR / Art. 21",
+        "severity_fail": Severity.HIGH,
+        "remediation": "Add a visible link to the Privacy Policy."
+    },
+    "cookie_banner": {
+        "name": "Cookie Compliance",
+        "article": "GDPR / ePrivacy",
+        "severity_fail": Severity.MEDIUM,
+        "remediation": "Implement a compliant CMP (e.g., Iubenda, Cookiebot)."
+    },
+    "waf_cdn": {
+        "name": "Resilience (WAF/CDN)",
+        "article": "Art. 21.2.d (Supply Chain / Resilience)",
+        "severity_fail": Severity.MEDIUM,
+        "remediation": "Protect the service with a WAF or CDN (Cloudflare, Akamai, AWS)."
     }
 }

@@ -10,13 +10,15 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **Security Headers**: Verifies HSTS, X-Content-Type-Options, X-Frame-Options, CSP.
 
 ### 🧠 Strategic Intelligence (New in v0.4.0)
-- **Domain Continuity (WHOIS)**: Alerts if domain expiration is < 30 days (Anti-Disaster).
-- **Secrets Detection**: Passive scan for leaked AWS keys, Private keys, and API tokens in HTML/JS.
-- **Supply Chain (Tech Stack)**: Fingerprints and alerts on obsolete Nginx/PHP/jQuery versions.
-- **Visual Evidence**: Captures real-time **Screenshots** of targets for audit trails.
-- **Holistic DNS**: Validates **SPF**, **DMARC**, and **DNSSEC** implementation.
-
-### ⚙️ Infrastructure Audit
+- **Strategic Compliance**:
+    - **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
+    - **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence.
+    - **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS).
+    - **Secrets Detection**: Scans for leaked AWS keys, private keys, and tokens.
+    - **WHOIS Monitoring**: Alerts on domain expiry (< 30 days).
+    - **Visual Evidence**: Captures automated screenshots of targets.
+- **Holistic DNS Security**: Checks SPF, DMARC, and DNSSEC.
+- **Reporting**: JSON, PDF, and HTML formats with compliance scoring.
 - **Nmap Vulnerability Scan**: integration with `vulners` script to detect **CVEs** on open ports.
 - **Service Hardening**: Detects SSH password auth, cleartext HTTP management ports, and insecure RDP/SMB.
 
@@ -129,18 +131,26 @@ To scan protected targets, define `auth_id` in `targets.yaml` and set correspond
   export INTERNAL_API_PASS="password"
   ```
 
-## 🐳 Docker Support
-Run the checker anywhere without installing dependencies manually.
+### Incident Reporting (Art. 23)
+Use the interactive wizard to generate an early warning report for CSIRTs:
+```bash
+python3 -m nis2_checker.main report-incident
+```
+This generates a JSON file following CSIRT Italia/ENISA taxonomy in your current directory.
 
+## 🐳 Docker Support
+Run the checker anywhere without installing dependencies.
+
+### Docker Usage
 ```bash
 # Build
 docker build -t nis2-checker .
 
-# Run (mount config and targets)
-docker run --rm \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -v $(pwd)/targets.yaml:/app/targets.yaml \
-  nis2-checker
+# Run Scan
+docker run -v $(pwd):/app nis2-checker scan --targets targets.yaml
+
+# Run Incident Reporter (Interactive)
+docker run -it -v $(pwd):/app nis2-checker report-incident
 ```
 
 ## 📊 Reporting

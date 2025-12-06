@@ -10,3 +10,61 @@
 2025-12-06 10:00:47,554 - scanner_logic - INFO - Starting scan for target: MainStreaming TV (https://mainstreaming.tv)
 2025-12-06 10:00:47,554 - scanner_logic - INFO - Starting scan for target: MSMDN (https://msmdn.net)
 2025-12-06 10:00:48,828 - scanner_logic - ERROR - Connectivity check failed for https://msmdn.net: HTTPSConnectionPool(host='msmdn.net', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x10b757770>: Failed to resolve 'msmdn.net' ([Errno 8] nodename nor servname provided, or not known)"))
+2025-12-06 11:38:22,707 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:38:22,708 - scanner_logic - INFO - Starting scan for target: Example Corp (https://example.com)
+2025-12-06 11:38:22,708 - scanner_logic - INFO - Starting scan for target: Google (Test) (https://google.com)
+2025-12-06 11:44:52,077 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:05,948 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:05,948 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/compliant (http://localhost:8888/compliant)
+2025-12-06 11:46:06,684 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,684 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/non-compliant (http://localhost:8888/non-compliant)
+2025-12-06 11:46:06,944 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,944 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,945 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,945 - scanner_logic - ERROR - Connectivity check failed for http://example.com: Connection error
+2025-12-06 11:46:06,946 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,947 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,948 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,949 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:06,950 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:07,005 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:39,471 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:39,471 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/compliant (http://localhost:8888/compliant)
+2025-12-06 11:46:39,824 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:39,824 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/non-compliant (http://localhost:8888/non-compliant)
+2025-12-06 11:46:40,072 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,073 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,074 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,074 - scanner_logic - ERROR - Connectivity check failed for http://example.com: Connection error
+2025-12-06 11:46:40,075 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,075 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,076 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,077 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,078 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:46:40,156 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:25,805 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:25,805 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/compliant (http://localhost:8888/compliant)
+2025-12-06 11:47:26,441 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,441 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/non-compliant (http://localhost:8888/non-compliant)
+2025-12-06 11:47:26,728 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,729 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,729 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,730 - scanner_logic - ERROR - Connectivity check failed for http://example.com: Connection error
+2025-12-06 11:47:26,731 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,732 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,733 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,734 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:47:26,734 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:35,805 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:35,806 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/compliant (http://localhost:8888/compliant)
+2025-12-06 11:48:36,608 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,608 - scanner_logic - INFO - Starting scan for target: http://localhost:8888/non-compliant (http://localhost:8888/non-compliant)
+2025-12-06 11:48:36,899 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,899 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,901 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,901 - scanner_logic - ERROR - Connectivity check failed for http://example.com: Connection error
+2025-12-06 11:48:36,902 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,903 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,904 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,905 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 11:48:36,906 - scanner_logic - INFO - ScannerLogic initialized with all modules

@@ -11,6 +11,7 @@ from nis2_checker.nmap_scanner import NmapScanner
 from nis2_checker.dns_scanner import DNSScanner
 from nis2_checker.whois_scanner import WhoisScanner
 from nis2_checker.content_scanner import ContentScanner
+from nis2_checker.compliance_scanner import ComplianceScanner
 from nis2_checker.evidence import EvidenceCollector
 from nis2_checker.models import CheckResult, TargetScanResult, Severity
 from nis2_checker.audit_mapping import AUDIT_MAPPING
@@ -31,6 +32,7 @@ class ScannerLogic:
         self.dns_scanner = DNSScanner(config.get('dns', {}))
         self.whois_scanner = WhoisScanner(config.get('whois', {}))
         self.content_scanner = ContentScanner(config.get('content', {}))
+        self.compliance_scanner = ComplianceScanner(config.get('compliance', {}))
         self.evidence_collector = EvidenceCollector()
         
         logger.info("ScannerLogic initialized with all modules")
@@ -132,6 +134,24 @@ class ScannerLogic:
                 t_res = content_res['tech_stack']
                 sev = Severity.HIGH if t_res['status'] == 'FAIL' else Severity.INFO
                 scan_result.results.append(self._map_result("tech_stack", t_res['status'], t_res['details'], severity_override=sev))
+
+        # 3b. EU/IT Compliance Checks
+        if host:
+            # security.txt (Needs URL)
+            if url:
+                 stxt_res = self.compliance_scanner.scan_security_txt(url)
+                 scan_result.results.append(self._map_result("security_txt", stxt_res['status'], stxt_res['details'], stxt_res.get('data')))
+            
+            # Body Checks (Reuse response_body)
+            if response_body:
+                 comp_res = self.compliance_scanner.scan_italian_compliance(response_body)
+                 for check_key, check_val in comp_res.items():
+                      scan_result.results.append(self._map_result(check_key, check_val['status'], check_val['details']))
+
+            # Header Checks (Reuse headers)
+            if response_headers:
+                 waf_res = self.compliance_scanner.detect_waf_cdn(response_headers)
+                 scan_result.results.append(self._map_result("waf_cdn", waf_res['status'], waf_res['details']))
 
         # 4. Web Checks
         if target_type in ['web', 'https', 'generic']:
