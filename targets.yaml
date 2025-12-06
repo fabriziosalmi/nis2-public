@@ -1,11 +1,10 @@
 # List of targets to check
 targets:
-  - url: "https://mainstreaming.tv"
-    name: "MainStreaming TV"
-    type: "web"
+  - url: "https://example.com"
+    name: "Example Corp"
   
-  - url: "https://msmdn.net"
-    name: "MSMDN" 
+  - url: "https://google.com"
+    name: "Google (Test)" 
     type: "web"
 
   # Examples of other types:
