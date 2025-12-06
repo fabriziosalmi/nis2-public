@@ -10,35 +10,22 @@ def generate_console_report(results):
     print(f"{Fore.CYAN}NIS2 Compliance Scan Report{Style.RESET_ALL}")
     print("=" * 40)
     
+    passed_count = 0
+    total_count = len(results)
+
     for res in results:
         # res is TargetScanResult object
         print(f"\nTarget: {Fore.BLUE}{res.name}{Style.RESET_ALL} ({res.target})")
         print(f"Score: {res.compliance_score}%")
         
+        all_checks_passed = True
         for check in res.results:
-            status_color = Fore.GREEN if check.status == "PASS" else Fore.RED
+            status_color = Fore.GREEN if check.status == "PASS" else (Fore.RED if check.status == "FAIL" else Fore.YELLOW)
             print(f"  [{status_color}{check.status}{Style.RESET_ALL}] {check.name}: {check.details}")
-            if check.status == "FAIL" and check.remediation:
-                print(f"    {Fore.YELLOW}Remediation: {check.remediation}{Style.RESET_ALL}")
-            
-            # The following block seems to be a remnant from the previous version and is not syntactically correct
-            # with the new object-oriented approach (e.g., 'status' is not defined).
-            # It is included as per the instruction to make the change faithfully,
-            # but it will cause a NameError if executed.
-            if status == 'PASS':
-                color = Fore.GREEN
-                symbol = "[✓]"
-            elif status == 'FAIL':
-                color = Fore.RED
-                symbol = "[✗]"
+            if check.status == "FAIL":
                 all_checks_passed = False
-            else:
-                color = Fore.YELLOW
-                symbol = "[-]"
-                all_checks_passed = False # Warn counts as not fully passed for strict summary? Or maybe just FAIL. Let's say FAIL only.
-                # Actually, let's keep it simple: only PASS is fully compliant.
-
-            print(f"  {color}{symbol} {check_name}: {details}{Style.RESET_ALL}")
+                if check.remediation:
+                    print(f"    {Fore.YELLOW}Remediation: {check.remediation}{Style.RESET_ALL}")
         
         if all_checks_passed:
             passed_count += 1
@@ -48,13 +35,16 @@ def generate_console_report(results):
     print(f"\nSummary: {passed_count}/{total_count} targets passed all checks.")
 
 def generate_json_report(results, output_file="report.json"):
+    # Convert SQLModel objects to dicts
+    results_dict = [res.model_dump() for res in results]
+    
     report = {
         "timestamp": datetime.now().isoformat(),
-        "results": results
+        "results": results_dict
     }
     try:
         with open(output_file, 'w') as f:
-            json.dump(report, f, indent=2)
+            json.dump(report, f, indent=2, default=str)
         print(f"JSON report saved to {output_file}")
     except Exception as e:
         print(f"Error saving JSON report: {e}")
@@ -66,7 +56,14 @@ def generate_html_report(results, output_file="report.html"):
     
     passed_count = 0
     for res in results:
-        if all(c['status'] == 'PASS' for c in res['checks'].values()):
+        # Check if all checks passed
+        all_passed = True
+        for check in res.results:
+            if check.status != 'PASS':
+                all_passed = False
+                break
+        
+        if all_passed:
             passed_count += 1
 
     html_content = template.render(

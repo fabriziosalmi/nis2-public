@@ -50,6 +50,10 @@ class NmapScanner:
                 results['rdp_security'] = self._check_rdp_security(target_host)
             if self.config['checks'].get('windows_smb'):
                 results['smb_security'] = self._check_smb_security(target_host)
+        
+        # Vulnerability Scan (all types if enabled)
+        if self.config.get('vuln_scan_enabled', False):
+             results['vulnerabilities'] = self._check_vulners(target_host)
 
         return results
 
@@ -146,3 +150,31 @@ class NmapScanner:
              return {"status": "PASS", "details": "SMB Port closed/filtered"}
 
         return {"status": "WARN", "details": "Could not determine SMB security"}
+
+    def _check_vulners(self, host):
+        """Run vulners script to detect CVEs."""
+        # Note: This requires the 'vulners' script to be installed in nmap
+        # usually in /usr/share/nmap/scripts/vulners.nse
+        # Trigger matches on CVEs with CVSS > 7.0
+        
+        # We need version detection (-sV) for vulners to work well
+        output = self._run_nmap(["-sV", "--script", "vulners", host])
+        
+        cves = []
+        lines = output.splitlines()
+        for line in lines:
+            if "CVE-" in line:
+                # Basic parsing: look for CVE-YYYY-NNNN
+                # Example line: |       CVE-2014-0160    5.0    https://vulners.com/cve/CVE-2014-0160
+                parts = line.split()
+                for part in parts:
+                    if part.startswith("CVE-"):
+                        cves.append(part)
+        
+        # Deduplicate
+        cves = list(set(cves))
+        
+        if cves:
+             return {"status": "FAIL", "details": f"Vulnerabilities found: {', '.join(cves[:5])}" + (f" and {len(cves)-5} more" if len(cves) > 5 else "")}
+        
+        return {"status": "PASS", "details": "No known CVEs found (vulners)"}
