@@ -7,11 +7,14 @@ report:
   html: true
   pdf: true
 
-# Compliance checks to enable
+# Compliance checks:
 checks:
+  connectivity: true
   ssl_tls: true
   security_headers: true
-  connectivity: true
+  dns_checks: true
+  whois_check: true
+  evidence: true
 
 # SSL/TLS Requirements
 ssl:

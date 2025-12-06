@@ -1,0 +1,12 @@
+2025-12-06 09:59:16,692 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 09:59:16,694 - scanner_logic - INFO - Starting scan for target: MainStreaming TV (https://mainstreaming.tv)
+2025-12-06 09:59:16,694 - scanner_logic - INFO - Starting scan for target: MSMDN (https://msmdn.net)
+2025-12-06 09:59:18,182 - scanner_logic - ERROR - Connectivity check failed for https://msmdn.net: HTTPSConnectionPool(host='msmdn.net', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x108fcbcb0>: Failed to resolve 'msmdn.net' ([Errno 8] nodename nor servname provided, or not known)"))
+2025-12-06 10:00:27,938 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 10:00:27,939 - scanner_logic - INFO - Starting scan for target: MainStreaming TV (https://mainstreaming.tv)
+2025-12-06 10:00:27,939 - scanner_logic - INFO - Starting scan for target: MSMDN (https://msmdn.net)
+2025-12-06 10:00:32,340 - scanner_logic - ERROR - Connectivity check failed for https://msmdn.net: HTTPSConnectionPool(host='msmdn.net', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x1089eb4d0>: Failed to resolve 'msmdn.net' ([Errno 8] nodename nor servname provided, or not known)"))
+2025-12-06 10:00:47,554 - scanner_logic - INFO - ScannerLogic initialized with all modules
+2025-12-06 10:00:47,554 - scanner_logic - INFO - Starting scan for target: MainStreaming TV (https://mainstreaming.tv)
+2025-12-06 10:00:47,554 - scanner_logic - INFO - Starting scan for target: MSMDN (https://msmdn.net)
+2025-12-06 10:00:48,828 - scanner_logic - ERROR - Connectivity check failed for https://msmdn.net: HTTPSConnectionPool(host='msmdn.net', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x10b757770>: Failed to resolve 'msmdn.net' ([Errno 8] nodename nor servname provided, or not known)"))
