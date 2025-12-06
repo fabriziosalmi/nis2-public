@@ -42,7 +42,12 @@ We recommend using **Docker** for the easiest setup, as it includes all system d
 
 ### 🐍 Option 2: Python (Manual)
 
-**Prerequisites**: Python 3.11+, Nmap installed (`apt install nmap` or `brew install nmap`).
+### Prerequisites
+- Python 3.11+
+- Nmap (must be installed on the system)
+- Chrome/Chromium (for screenshots)
+
+### Steps
 
 1.  **Clone the repository**:
     ```bash

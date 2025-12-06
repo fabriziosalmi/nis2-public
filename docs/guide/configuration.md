@@ -21,17 +21,34 @@ report:
 
 nmap:
   enabled: true
+  vuln_scan_enabled: true # NEW: Scan for CVEs using vulners script
   timing: 3 # 0-5 (0=paranoid, 3=normal, 5=insane)
   discovery: true # Enable ping scan for CIDR targets
   ports:
     ssh: 22
     https: 443
     http_mgmt: [80, 8080]
-    rdp: 3389
-    smb: 445
+  checks:
+    ssh_password: true
+    tls_deprecated: true
+    http_cleartext: true
 
-ssl:
-  min_version: "TLSv1.2"
+# DNS Security Checks
+dns:
+  timeout: 5
+  checks:
+    email_security: true # SPF, DMARC
+    dns_security: true   # DNSSEC
+
+# Alerting / Notifications
+notifications:
+  slack_webhook: "https://hooks.slack.com/services/YOUR/WEBHOOK"
+  alert_on: ["FAIL"] # Trigger alert only on critical failures
+
+# Reporting
+report:
+  format: "console" # console, json, pdf, html
+  output_file: "report.json"
 
 headers:
   required:

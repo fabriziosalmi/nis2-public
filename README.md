@@ -4,28 +4,34 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 
 ## Features
 
-- **Connectivity Checks**: Verifies target reachability.
-- **SSL/TLS Compliance**: Checks for minimum TLS version, certificate validity, and expiry.
-- **Security Headers**: Verifies presence of critical security headers (HSTS, X-Content-Type-Options, etc.).
-- **Infrastructure Audit**: Uses Nmap to check for:
-    - SSH Password Authentication (Compliance Violation)
-    - Deprecated TLS Versions (1.0/1.1)
-    - Open Management Ports (Cleartext HTTP)
-    - Windows RDP Encryption & SMB Signing
-- **Extended Compliance Checks**:
-    - **Email Security**: SPF and DMARC verification.
-    - **DNS Security**: DNSSEC validation.
-- **Advanced Reporting**:
-    - **Console**: Summary output.
-    - **JSON**: Detailed machine-readable report.
-    - **HTML**: Visual dashboard with pass/fail badges.
-    - **PDF**: Professional management report (via WeasyPrint).
-- **Governance Checklist**: Integrated manual checklist for non-technical NIS2 requirements.
-- **Dockerized**: Ready-to-run Docker image with all dependencies (Nmap, WeasyPrint).
-- **Secure**: No hardcoded secrets, runs as non-root user. priorities.
-- **Authentication Support**: Supports Basic Auth and Bearer Tokens via environment variables for secure scanning.
-- **Reporting**: Console output and JSON reports.
-- **CI/CD Integration**: Ready-to-use GitHub Actions and GitLab CI pipelines.
+### 🛡️ Core Compliance
+- **Connectivity Checks**: Verifies target reachability (IPv4/IPv6).
+- **SSL/TLS Compliance**: Checks for minimum TLS version (1.2/1.3), certificate validity, and expiry.
+- **Security Headers**: Verifies HSTS, X-Content-Type-Options, X-Frame-Options, CSP.
+
+### 🧠 Strategic Intelligence (New in v0.4.0)
+- **Domain Continuity (WHOIS)**: Alerts if domain expiration is < 30 days (Anti-Disaster).
+- **Secrets Detection**: Passive scan for leaked AWS keys, Private keys, and API tokens in HTML/JS.
+- **Supply Chain (Tech Stack)**: Fingerprints and alerts on obsolete Nginx/PHP/jQuery versions.
+- **Visual Evidence**: Captures real-time **Screenshots** of targets for audit trails.
+- **Holistic DNS**: Validates **SPF**, **DMARC**, and **DNSSEC** implementation.
+
+### ⚙️ Infrastructure Audit
+- **Nmap Vulnerability Scan**: integration with `vulners` script to detect **CVEs** on open ports.
+- **Service Hardening**: Detects SSH password auth, cleartext HTTP management ports, and insecure RDP/SMB.
+
+### 📈 Persistence & Alerting
+- **Database History**: All scans are saved to a local SQLite database (`nis2_platform.db`) for trend analysis.
+- **Real-time Alerts**: Sends **Slack/Webhook notifications** immediately upon detecting CRITICAL issues.
+
+### 🚀 Performance
+- **AsyncIO Core**: Parallel scanning engine capable of handling hundreds of targets concurrently.
+
+### 📊 Advanced Reporting
+- **Console**: Color-coded summary.
+- **JSON**: Machine-readable data for SIEM integration.
+- **PDF**: Executive reports with visual graphs and governance gaps.
+- **HTML**: Interactive dashboard.
 
 ## 🚀 Quick Start (Docker)
 The easiest way to run the platform is using Docker.
@@ -55,18 +61,24 @@ docker run --rm \
 ```
 
 ## 🐍 Installation (Python)
-If you prefer running locally with Python:
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/fabriziosalmi/nis2-checker.git
 cd nis2-checker
 
-# Install dependencies
+# 2. Setup Virtual Environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# Run Web Dashboard
-python -m nis2_checker.web
+# 4. Install Browsers (for Screenshots)
+playwright install chromium
+
+# 5. Run the Scan
+python3 -m nis2_checker.main
 ```
 
 ## Configuration
