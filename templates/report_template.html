@@ -259,16 +259,17 @@
                             title="Click to sort">
                             Severity <span id="sort-severity">⇅</span>
                         </th>
-                        <th width="35%">Finding & Technical Detail</th>
-                        <th width="35%">Remediation Plan</th>
-                        <th width="20%">Reference</th>
+                        <th width="15%">Target</th>
+                        <th width="30%">Finding & Technical Detail</th>
+                        <th width="30%">Remediation Plan</th>
+                        <th width="15%">Reference</th>
                     </tr>
                 </thead>
                 <tbody id="findingsTable">
                     {% for finding in report.findings %}
                     <tr class="finding-row" data-severity="{{ finding.severity }}"
                         data-cvss="{{ finding.cvss_base_score }}"
-                        data-searchable="{{ finding.message|lower }} {{ finding.rationale|lower }} {{ finding.technical_detail|lower }}">
+                        data-searchable="{{ finding.target|lower }} {{ finding.message|lower }} {{ finding.rationale|lower }} {{ finding.technical_detail|lower }}">
                         <td>
                             <span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span>
                             {% if finding.cvss_base_score > 0 %}
@@ -276,6 +277,9 @@
                                 <span class="cvss-score">CVSS {{ finding.cvss_base_score }}</span>
                             </div>
                             {% endif %}
+                        </td>
+                        <td>
+                            <div style="font-weight: 600; color: var(--primary);">{{ finding.target }}</div>
                         </td>
                         <td>
                             <div style="font-weight: 600; margin-bottom: 4px;">{{ finding.message }}</div>
