@@ -382,6 +382,62 @@ class ComplianceEngine:
                         )
                         host_findings.append(f)
 
+            # 5. Obsolete Software & Information Disclosure (Passive)
+            for port, http_data in host.http_info.items():
+                # Check for Information Disclosure (Tech Stack)
+                if 'tech_stack' in http_data and http_data['tech_stack']:
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="INFO DISCLOSURE",
+                        message="Technology Stack Exposed",
+                        rationale="Exposing detailed version information aids attackers in targeting specific vulnerabilities.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.e (Security in Acquisition)",
+                        cvss_base_score=2.6,
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                        technical_detail=f"Headers found: {', '.join(http_data['tech_stack'])}",
+                        remediation="Configure web server to suppress 'X-Powered-By', 'X-AspNet-Version' and similar headers.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.e (Security in Acquisition)"
+                    )
+                    host_findings.append(f)
+
+                # Check for Obsolete/Vulnerable Software (Basic Banner Matching)
+                # This is a simplified check. In a real scenario, this would query a CVE database.
+                server_header = http_data.get('headers', {}).get('Server', '').lower()
+                
+                # Example: Apache 2.2 (EOL 2017), PHP 5.x (EOL 2018), IIS 6.0 (EOL 2015)
+                obsolete_signatures = [
+                    ('apache/2.2', 'Apache 2.2 is EOL since 2017'),
+                    ('apache/2.0', 'Apache 2.0 is EOL since 2013'),
+                    ('nginx/1.0', 'Nginx 1.0 is severely outdated'),
+                    ('php/5.', 'PHP 5.x is EOL since 2018'),
+                    ('php/7.0', 'PHP 7.0 is EOL since 2019'),
+                    ('microsoft-iis/6.0', 'IIS 6.0 is EOL since 2015'),
+                    ('microsoft-iis/7.0', 'IIS 7.0 is EOL since 2020')
+                ]
+
+                for sig, reason in obsolete_signatures:
+                    if sig in server_header or any(sig in ts.lower() for ts in http_data.get('tech_stack', [])):
+                        f = ComplianceFinding(
+                            severity="HIGH",
+                            category="VULNERABILITY",
+                            message="Obsolete/EOL Software Detected",
+                            rationale="Using End-of-Life software guarantees unpatched vulnerabilities.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.e (Vulnerability Handling)",
+                            cvss_base_score=9.8, # Assuming critical CVEs exist for EOL software
+                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                            technical_detail=f"Banner matched: {reason} (Source: {server_header})",
+                            remediation="Upgrade to a supported version immediately.",
+                            remediation_cost="High",
+                            remediation_effort="High",
+                            compliance_article="Art. 21.2.e (Vulnerability Handling)"
+                        )
+                        host_findings.append(f)
+                        break # Report once per host/port
+
             # Aggregate Host Stats
             if any(f.severity == 'CRITICAL' for f in host_findings):
                 stats['critical_risk_hosts'] += 1

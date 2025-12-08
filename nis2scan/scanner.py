@@ -339,8 +339,21 @@ class Scanner:
                         res.http_info[p] = http_data
                         
                         # OS Fingerprinting from Server Header
-                        if 'headers' in http_data and 'Server' in http_data['headers']:
-                            res.os_match = http_data['headers']['Server']
+                        if 'headers' in http_data:
+                            if 'Server' in http_data['headers']:
+                                res.os_match = http_data['headers']['Server']
+                            
+                            # Capture Tech Stack (X-Powered-By, etc)
+                            tech_stack = []
+                            if 'X-Powered-By' in http_data['headers']:
+                                tech_stack.append(f"Powered-By: {http_data['headers']['X-Powered-By']}")
+                            if 'X-AspNet-Version' in http_data['headers']:
+                                tech_stack.append(f"AspNet: {http_data['headers']['X-AspNet-Version']}")
+                            if 'X-Generator' in http_data['headers']:
+                                tech_stack.append(f"Generator: {http_data['headers']['X-Generator']}")
+                            
+                            if tech_stack:
+                                http_data['tech_stack'] = tech_stack
                         
                         # If HTTP check failed (connection error), treat port as closed
                         # This filters out false positives from transparent proxies/firewalls
