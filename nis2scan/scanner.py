@@ -6,6 +6,7 @@ import ipaddress
 import aiohttp
 import time
 import itertools
+import re
 from typing import List, Dict, Any, Union
 from urllib.parse import urlparse
 from dataclasses import dataclass, field
@@ -128,6 +129,37 @@ class Scanner:
                     result['waf_cdn'] = self.resilience_checker.detect_waf_cdn(
                         dict(resp.headers), cookies_str
                     )
+
+                    # Cookie Security (Raw Header Analysis)
+                    result['cookies_analysis'] = []
+                    # aiohttp headers is a multidict, use getall for multiple Set-Cookie headers
+                    raw_cookies = resp.headers.getall('Set-Cookie', [])
+                    for rc in raw_cookies:
+                        c_info = {
+                            'raw': rc,
+                            'secure': 'secure' in rc.lower(),
+                            'httponly': 'httponly' in rc.lower(),
+                            'samesite': 'samesite' in rc.lower()
+                        }
+                        result['cookies_analysis'].append(c_info)
+
+                    # Subresource Integrity (SRI) Check
+                    result['sri_missing'] = []
+                    # Find external scripts
+                    # Regex to find <script src="...">
+                    script_tags = re.finditer(r'<script[^>]+src=["\'](http[s]?://[^"\']+)["\'][^>]*>', body, re.IGNORECASE)
+                    
+                    for match in script_tags:
+                        src = match.group(1)
+                        full_tag = match.group(0)
+                        
+                        # Check if external (heuristic: doesn't contain our hostname)
+                        # We also ignore common local references like localhost or relative paths (already filtered by regex http)
+                        if host_header not in src:
+                            # It's external
+                            # Check for integrity attribute
+                            if 'integrity=' not in full_tag:
+                                result['sri_missing'].append(src)
                     
                     # Legal compliance (Italian requirements, cookie banner)
                     # User Requirement: Check P.IVA only on www and root domains, not IPs or service subdomains.

@@ -220,6 +220,66 @@ class ComplianceEngine:
                         compliance_article="Art. 21.2.f (Cyber Hygiene)"
                      )
                      host_findings.append(f)
+
+                # Cookie Security
+                cookies = info.get('cookies_analysis', [])
+                for c in cookies:
+                    # Check Secure Flag (only relevant for HTTPS)
+                    if port in [443, 8443] and not c.get('secure'):
+                        f = ComplianceFinding(
+                            severity="LOW",
+                            category="CYBER HYGIENE",
+                            message="Cookie Missing 'Secure' Flag",
+                            rationale="Cookies without the Secure flag can be transmitted over unencrypted connections.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            cvss_base_score=3.0,
+                            technical_detail=f"Cookie: {c.get('raw', '')}",
+                            remediation="Set the 'Secure' flag for all sensitive cookies.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                        )
+                        host_findings.append(f)
+                    
+                    # Check HttpOnly Flag
+                    if not c.get('httponly'):
+                        f = ComplianceFinding(
+                            severity="LOW",
+                            category="CYBER HYGIENE",
+                            message="Cookie Missing 'HttpOnly' Flag",
+                            rationale="Cookies without HttpOnly are accessible to JavaScript, increasing XSS risk.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            cvss_base_score=3.0,
+                            technical_detail=f"Cookie: {c.get('raw', '')}",
+                            remediation="Set the 'HttpOnly' flag for session cookies.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                        )
+                        host_findings.append(f)
+
+                # SRI Check
+                sri_missing = info.get('sri_missing', [])
+                if sri_missing:
+                    # Limit to first few to avoid spam
+                    for src in sri_missing[:3]:
+                        f = ComplianceFinding(
+                            severity="MEDIUM",
+                            category="SUPPLY CHAIN SECURITY",
+                            message="Subresource Integrity (SRI) Missing",
+                            rationale="External scripts without SRI can be tampered with to inject malware.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.d (Supply Chain Security)",
+                            cvss_base_score=5.0,
+                            technical_detail=f"Script: {src}",
+                            remediation="Add 'integrity' and 'crossorigin' attributes to external script tags.",
+                            remediation_cost="Low",
+                            remediation_effort="Medium",
+                            compliance_article="Art. 21.2.d (Supply Chain Security)"
+                        )
+                        host_findings.append(f)
             
             # TLS
             for port, info in host.tls_info.items():
