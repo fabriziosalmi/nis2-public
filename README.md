@@ -17,11 +17,14 @@ Automated NIS2 Directive compliance scanning and reporting tool with comprehensi
 # Start the scanner
 docker-compose up -d
 
+# Initialize configuration (Interactive)
+docker-compose exec scanner python -m nis2scan.cli init
+
 # Run a scan
 docker-compose exec scanner python -m nis2scan.cli scan
 
-# View reports
-open http://localhost:8000
+# View reports (HTTPS enabled by default)
+open https://localhost
 ```
 
 ## Documentation
@@ -89,7 +92,13 @@ docker-compose exec scanner python -m nis2scan.cli scan
 docker-compose up -d
 ```
 
-Services: Scanner (8000), Prometheus (9090), Node Exporter
+Services:
+- **Traefik** (80/443): Reverse Proxy with automatic HTTPS (self-signed)
+- **Scanner**: Backend service (accessible via Traefik)
+- **Prometheus** (9090): Metrics
+- **Node Exporter**: Host metrics
+
+Access reports at **https://localhost** (accept the self-signed certificate warning).
 
 ### Full Stack (With Grafana)
 

@@ -82,7 +82,7 @@ CONFIG_FILE=./my_config.yaml docker-compose up -d
 # Run the scan
 docker-compose exec scanner python -m nis2scan.cli scan
 
-# View reports at http://localhost:8000
+# View reports at https://localhost (accept self-signed cert)
 ```
 
 ### Local Installation

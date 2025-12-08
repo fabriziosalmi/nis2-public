@@ -52,7 +52,7 @@ CONFIG_FILE=./test_config.yaml docker-compose up -d
 docker-compose exec scanner python -m nis2scan.cli scan
 
 # View reports
-open http://localhost:8000
+open https://localhost
 ```
 
 ## Why NIS2 Scanner?

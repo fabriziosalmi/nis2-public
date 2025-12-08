@@ -16,7 +16,8 @@ docker-compose up -d
 ```
 
 **Services:**
-- Scanner (port 8000) - Serving HTML reports
+- Traefik (ports 80/443) - Reverse Proxy & HTTPS
+- Scanner (internal) - Serving HTML reports
 - Prometheus (port 9090) - Metrics collection
 - Node Exporter - Metrics exporter
 
@@ -56,12 +57,13 @@ docker-compose exec scanner python -m nis2scan.cli scan --profile production
 
 Open in browser:
 ```
-http://localhost:8000/
+https://localhost/
 ```
+*(Accept the self-signed certificate warning)*
 
 Or specific report:
 ```
-http://localhost:8000/nis2_report_<timestamp>.html
+https://localhost/nis2_report_<timestamp>.html
 ```
 
 ### Grafana Dashboard

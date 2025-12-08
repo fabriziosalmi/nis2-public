@@ -13,7 +13,8 @@ docker-compose up -d
 ```
 
 **Services:**
-- **Scanner** (port 8000) - HTML report server
+- **Traefik** (ports 80/443) - Reverse Proxy & HTTPS
+- **Scanner** (internal) - HTML report server
 - **Prometheus** (port 9090) - Metrics collection
 - **Node Exporter** - System metrics
 
@@ -62,7 +63,8 @@ Integrate with your existing Grafana instance:
 
 | Service | Port | Required | Purpose |
 |---------|------|----------|---------|
-| Scanner | 8000 | ✅ Yes | Serves HTML reports |
+| Traefik | 80/443 | ✅ Yes | Reverse Proxy & HTTPS |
+| Scanner | - | ✅ Yes | Serves HTML reports (internal) |
 | Prometheus | 9090 | ✅ Yes | Metrics collection |
 | Node Exporter | - | ✅ Yes | Exports metrics |
 | Grafana | 3000 | ⚪ Optional | Visualization |
@@ -79,7 +81,7 @@ docker-compose up -d
 docker-compose exec scanner python -m nis2scan.cli scan
 
 # View reports
-open http://localhost:8000
+open https://localhost
 ```
 
 ### Full Monitoring Setup

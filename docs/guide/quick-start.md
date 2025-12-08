@@ -10,7 +10,8 @@ docker-compose up -d
 ```
 
 This starts:
-- **Scanner** (port 8000) - Report server
+- **Traefik** (ports 80/443) - Reverse Proxy & HTTPS
+- **Scanner** (internal) - Report server
 - **Prometheus** (port 9090) - Metrics collection
 - **Node Exporter** - System metrics
 
@@ -24,7 +25,7 @@ docker-compose exec scanner python -m nis2scan.cli scan
 ## 3. View Results
 
 Open your browser to:
-- **Reports**: [http://localhost:8000](http://localhost:8000)
+- **Reports**: [https://localhost](https://localhost) (accept self-signed cert)
 - **Prometheus**: [http://localhost:9090](http://localhost:9090)
 
 ## Using a Custom Configuration
