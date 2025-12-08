@@ -2,6 +2,7 @@ import asyncio
 import click
 import logging
 import os
+import shutil
 import yaml
 from rich.logging import RichHandler
 from rich.console import Console
@@ -87,6 +88,41 @@ def init(output):
         console.print(f"[dim]You can now run the scan with: python -m nis2scan.cli scan -c {output}[/dim]")
     except Exception as e:
         console.print(f"\n[red]Error saving configuration: {e}[/red]")
+
+
+@cli.command()
+@click.option('--force', '-f', is_flag=True, help='Force deletion without confirmation.')
+def clean(force):
+    """Remove all generated reports and evidence."""
+    console = Console()
+    reports_dir = "reports"
+    
+    if not os.path.exists(reports_dir):
+        console.print(f"[yellow]Directory '{reports_dir}' does not exist. Nothing to clean.[/yellow]")
+        return
+
+    if not force:
+        if not Confirm.ask(f"Are you sure you want to delete all files in '{reports_dir}'?"):
+            console.print("[yellow]Operation cancelled.[/yellow]")
+            return
+
+    deleted_count = 0
+    try:
+        for item in os.listdir(reports_dir):
+            item_path = os.path.join(reports_dir, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.unlink(item_path)
+                    deleted_count += 1
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                    deleted_count += 1
+            except Exception as e:
+                console.print(f"[red]Failed to delete {item_path}: {e}[/red]")
+        
+        console.print(f"[green]Successfully cleaned up {deleted_count} items from '{reports_dir}'.[/green]")
+    except Exception as e:
+        console.print(f"[red]Error during cleanup: {e}[/red]")
 
 
 @cli.command()
