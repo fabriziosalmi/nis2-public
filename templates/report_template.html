@@ -298,7 +298,20 @@
                         </td>
                         <td>
                             {% if finding.reference %}
-                            <div class="reference">{{ finding.reference }}</div>
+                                {% set ref_url = "https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX%3A32022L2555" %}
+                                {% if "D.Lgs" in finding.reference or "138/2024" in finding.reference %}
+                                    {% set ref_url = "https://www.gazzettaufficiale.it/eli/id/2024/10/01/24G00157/sg" %}
+                                {% elif "GDPR" in finding.reference %}
+                                    {% set ref_url = "https://eur-lex.europa.eu/eli/reg/2016/679/oj" %}
+                                {% endif %}
+                                <div class="reference">
+                                    <a href="{{ ref_url }}" target="_blank" rel="noopener noreferrer" title="Open Reference" style="color: var(--primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                                        {{ finding.reference }}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </a>
+                                </div>
                             {% else %}
                             <span style="color: #cbd5e1;">-</span>
                             {% endif %}
