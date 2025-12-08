@@ -18,50 +18,50 @@
 
         @media print {
 
-        @media print {
+            @media print {
+                .btn-print {
+                    display: none !important;
+                }
+
+                .dashboard {
+                    break-inside: avoid;
+                }
+
+                .section-block {
+                    break-inside: avoid;
+                }
+
+                body {
+                    background: white;
+                }
+
+                .container {
+                    max-width: 100%;
+                    margin: 0;
+                    padding: 0;
+                    box-shadow: none;
+                }
+            }
+
             .btn-print {
-                display: none !important;
+                background-color: var(--primary);
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 0.9rem;
+                transition: opacity 0.2s;
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
             }
 
-            .dashboard {
-                break-inside: avoid;
+            .btn-print:hover {
+                opacity: 0.9;
             }
-
-            .section-block {
-                break-inside: avoid;
-            }
-
-            body {
-                background: white;
-            }
-
-            .container {
-                max-width: 100%;
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
-            }
-        }
-
-        .btn-print {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: opacity 0.2s;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-print:hover {
-            opacity: 0.9;
-        }
     </style>
 </head>
 
@@ -198,13 +198,13 @@
         <div class="controls-toolbar"
             style="background: var(--bg-card); padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
             <!-- Search -->
-            <div style="flex: 1; min-width: 250px;">
+            <div style="flex: 1 1 300px; min-width: 250px;">
                 <input type="text" id="searchInput" placeholder="🔍 Search findings..."
                     style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: var(--text); font-size: 0.9rem;">
             </div>
 
             <!-- Severity Filters -->
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; flex-wrap: nowrap; flex-shrink: 0;">
                 <button class="filter-btn" data-severity="ALL" onclick="filterBySeverity('ALL')"
                     style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--primary); color: white; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
                     ALL
@@ -310,6 +310,15 @@
                     {% endif %}
                 </tbody>
             </table>
+
+            <!-- Empty State Message -->
+            <div id="emptyState"
+                style="display: none; text-align: center; padding: 60px 20px; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border); margin-top: 20px;">
+                <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">🔍</div>
+                <h3 style="font-size: 1.25rem; color: var(--text-main); margin-bottom: 8px;">Nessun elemento trovato
+                </h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Prova a modificare i filtri o la ricerca</p>
+            </div>
         </div>
 
         <!-- Methodology & Disclaimer -->
@@ -402,6 +411,19 @@
             if (visibleCountEl) {
                 visibleCountEl.textContent = visibleCount;
                 visibleCountEl.style.color = visibleCount === 0 ? '#ef4444' : 'var(--text-muted)';
+            }
+
+            // Toggle empty state and table visibility
+            const emptyState = document.getElementById('emptyState');
+            const tableContainer = document.querySelector('.table-container table');
+            if (emptyState && tableContainer) {
+                if (visibleCount === 0) {
+                    tableContainer.style.display = 'none';
+                    emptyState.style.display = 'block';
+                } else {
+                    tableContainer.style.display = 'table';
+                    emptyState.style.display = 'none';
+                }
             }
         }
 
