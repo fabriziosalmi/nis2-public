@@ -319,23 +319,31 @@ class Scanner:
                     if is_open:
                         res.open_ports.append(port)
             
+            # Deep check web ports (if web_checks enabled)
+            if self.config.features.get('web_checks', True):
+                ports_to_remove = []
+                for p in res.open_ports:
+                    if p in [80, 443, 8080, 8443]:
+                        # Determine hostname to use
+                        h_name = original_target if original_target != ip else ip
+                        http_data = await self.check_http(ip, p, hostname=h_name)
+                        res.http_info[p] = http_data
+                        
+                        # If HTTP check failed (connection error), treat port as closed
+                        # This filters out false positives from transparent proxies/firewalls
+                        if 'error' in http_data:
+                            ports_to_remove.append(p)
+                        elif p in [443, 8443]:
+                            tls_data = await self.check_tls(ip, p, hostname=h_name)
+                            res.tls_info[p] = tls_data
+
+                for p in ports_to_remove:
+                    res.open_ports.remove(p)
+
             if not res.open_ports:
                 res.is_alive = False
             else:
                 res.is_alive = True
-                
-                # Deep check web ports (if web_checks enabled)
-                if self.config.features.get('web_checks', True):
-                    for p in res.open_ports:
-                        if p in [80, 443, 8080, 8443]:
-                            # Determine hostname to use
-                            h_name = original_target if original_target != ip else ip
-                            http_data = await self.check_http(ip, p, hostname=h_name)
-                            res.http_info[p] = http_data
-                            
-                            if p in [443, 8443]:
-                                tls_data = await self.check_tls(ip, p, hostname=h_name)
-                                res.tls_info[p] = tls_data
             
             return res
 
