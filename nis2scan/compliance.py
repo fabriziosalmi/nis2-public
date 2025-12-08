@@ -215,6 +215,25 @@ class ComplianceEngine:
                     )
                     host_findings.append(f)
                 
+                # Check for TLS Errors (e.g. Self-signed, Verify Failed)
+                if info.get('error'):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="CRYPTO",
+                        message=f"SSL/TLS Certificate Verification Failed on {port}",
+                        rationale="Certificate is invalid, self-signed, or untrusted.",
+                        target=host.ip,
+                        reference="NIS2 Directive Art. 21.2.g (Cryptography)",
+                        cvss_base_score=5.0,
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                        technical_detail=f"TLS Error: {info.get('error')}",
+                        remediation="Ensure a valid, trusted certificate is installed (e.g. Let's Encrypt).",
+                        remediation_cost="Medium",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cryptography)"
+                    )
+                    host_findings.append(f)
+
                 if info.get('expired'):
                     f = ComplianceFinding(
                         severity="HIGH",
