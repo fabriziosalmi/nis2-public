@@ -12,10 +12,10 @@ export default defineConfig({
         logo: '/logo.svg',
 
         nav: [
+            { text: 'Home', link: '/' },
             { text: 'Guide', link: '/guide/getting-started' },
-            { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Examples', link: '/examples/' },
-            { text: 'Reference', link: '/reference/config-schema' }
+            { text: 'Reference', link: '/reference/cli' }
         ],
 
         sidebar: {
@@ -68,7 +68,7 @@ export default defineConfig({
         },
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/yourusername/nis2-public' }
+            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-public' }
         ],
 
         footer: {

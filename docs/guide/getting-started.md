@@ -20,7 +20,7 @@ The easiest way to get started is using Docker:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nis2-public.git
+git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
 
 # Start the scanner
@@ -36,7 +36,7 @@ For development or customization:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nis2-public.git
+git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
 
 # Create virtual environment

@@ -14,7 +14,7 @@ hero:
       link: /guide/quick-start
     - theme: alt
       text: View on GitHub
-      link: https://github.com/yourusername/nis2-public
+      link: https://github.com/fabriziosalmi/nis2-public
 
 features:
   - icon: 🔍

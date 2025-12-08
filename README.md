@@ -39,7 +39,7 @@ Full documentation is available at: **[https://yourusername.github.io/nis2-publi
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/yourusername/nis2-public.git
+git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
 docker-compose up -d
 ```
@@ -47,7 +47,7 @@ docker-compose up -d
 ### Local
 
 ```bash
-git clone https://github.com/yourusername/nis2-public.git
+git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
 python3 -m venv venv
 source venv/bin/activate
@@ -131,5 +131,5 @@ MIT License - see LICENSE file for details
 ## Support
 
 - Documentation: https://yourusername.github.io/nis2-public
-- Issues: https://github.com/yourusername/nis2-public/issues
-- Discussions: https://github.com/yourusername/nis2-public/discussions
+- Issues: https://github.com/fabriziosalmi/nis2-public/issues
+- Discussions: https://github.com/fabriziosalmi/nis2-public/discussions

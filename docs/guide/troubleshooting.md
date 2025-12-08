@@ -255,7 +255,7 @@ docker-compose build --no-cache scanner
 
 If you're still experiencing issues:
 
-1. Check the [GitHub Issues](https://github.com/yourusername/nis2-public/issues)
+1. Check the [GitHub Issues](https://github.com/fabriziosalmi/nis2-public/issues)
 2. Review [Configuration Guide](/guide/configuration)
 3. See [Examples](/examples/) for working setups
 4. Open a new issue with:
