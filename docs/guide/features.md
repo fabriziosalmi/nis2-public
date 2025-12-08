@@ -67,10 +67,10 @@ Automated checks for:
 ### Italian Legal Compliance
 
 Specific checks for Italian requirements:
-- P.IVA (VAT number) presence
-- Privacy policy availability
-- Cookie consent banners
-- GDPR compliance indicators
+- **P.IVA (VAT number)**: Validates presence of 11-digit VAT number on root/www domains.
+- **Privacy Policy**: Checks for mandatory privacy policy links.
+- **Cookie Consent**: Verifies presence of cookie banners and consent mechanisms.
+- **Dynamic Analysis**: Uses **Playwright** (headless browser) to detect compliance elements rendered via JavaScript (e.g., modern cookie banners), ensuring accuracy where static analysis fails.
 
 ## Threat Detection
 

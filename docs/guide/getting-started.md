@@ -45,6 +45,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+playwright install chromium
 
 # Run a scan
 python -m nis2scan.cli scan -c test_config.yaml

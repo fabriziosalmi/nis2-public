@@ -40,7 +40,15 @@ class ComplianceEngine:
 
     def evaluate(self, scan_results: List[ScanResult], scan_id: str = "N/A") -> ComplianceReport:
         all_findings = []
-        stats = {'analyzed_hosts': 0, 'active_hosts': 0, 'compliant_hosts': 0, 'high_risk_hosts': 0, 'critical_risk_hosts': 0}
+        stats = {
+            'analyzed_hosts': 0, 
+            'active_hosts': 0, 
+            'compliant_hosts': 0, 
+            'critical_risk_hosts': 0,
+            'high_risk_hosts': 0, 
+            'medium_risk_hosts': 0,
+            'low_risk_hosts': 0
+        }
         
         # Methodology Tracking for Report
         checked_items = [
@@ -524,6 +532,10 @@ class ComplianceEngine:
                 stats['critical_risk_hosts'] += 1
             elif any(f.severity == 'HIGH' for f in host_findings):
                 stats['high_risk_hosts'] += 1
+            elif any(f.severity == 'MEDIUM' for f in host_findings):
+                stats['medium_risk_hosts'] += 1
+            elif any(f.severity == 'LOW' for f in host_findings):
+                stats['low_risk_hosts'] += 1
             elif not host_findings:
                 stats['compliant_hosts'] += 1
             
