@@ -1,0 +1,32 @@
+# Optional Grafana Override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.grafana.yml up
+#
+# This enables Grafana visualization on top of the base stack.
+# You can also point to an existing Grafana instance by configuring
+# Prometheus datasource manually.
+
+version: '3.8'
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nis2-grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - nis2-net
+
+networks:
+  nis2-net:
+    external: true
+
+volumes:
+  grafana-data:

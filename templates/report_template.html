@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIS2 Compliance Report</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* Injected CSS */
+            {
+                {
+                css_content|safe
+            }
+        }
+
+        @media print {
+            .btn-print {
+                display: none !important;
+            }
+
+            .dashboard {
+                break-inside: avoid;
+            }
+
+            .section-block {
+                break-inside: avoid;
+            }
+
+            body {
+                background: white;
+            }
+
+            .container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+        }
+
+        .btn-print {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: opacity 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-print:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <h1>NIS2 Scan</h1>
+                <span style="color: var(--text-muted); font-size: 1.1rem;">Compliance Intelligence Report</span>
+            </div>
+            <div class="report-meta">
+                <button onclick="window.print()" class="btn-print">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download PDF / Print
+                </button>
+                <div style="margin-top: 10px;">
+                    <div><strong>Scan ID:</strong> {{ report.scan_id }}</div>
+                    <div>Project: {{ report.project_name if report.project_name else "Network Audit" }}</div>
+                    <div>Generated: <span id="gen-date">Today</span></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Executive Summary -->
+        <div class="section-block">
+            <div class="section-title">Executive Summary</div>
+            <div class="executive-text">
+                {{ report.executive_summary|safe }}
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- Score Card -->
+            <div class="card" style="align-items: center; text-align: center;">
+                <div class="card-title">Overall Compliance Score</div>
+                <div class="score-container">
+                    <div class="score-circle" style="--score: {{ report.total_score }}">
+                        <div class="score-value">{{ report.total_score }}</div>
+                    </div>
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.9rem;">
+                    {% if report.total_score >= 80 %}
+                    <span style="color: #10b981; font-weight: 600;">Good Standing</span>
+                    {% elif report.total_score >= 50 %}
+                    <span style="color: #eab308; font-weight: 600;">Needs Improvement</span>
+                    {% else %}
+                    <span style="color: #ef4444; font-weight: 600;">Critical Risk</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="card">
+                <div class="card-title">Key Metrics</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: auto;">
+                    {% for key, value in report.stats.items() %}
+                    <div style="text-align: center; padding: 10px; background: var(--bg-body); border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{ value }}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">{{
+                            key|replace("_", " ") }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- NIS2 Art. 21 Compliance Matrix -->
+        <div class="section-block">
+            <div class="section-title">NIS2 Article 21 Compliance Matrix</div>
+            <div class="matrix-grid">
+                {% for item, status in report.compliance_matrix.items() %}
+                <div class="matrix-row">
+                    <div>{{ item }}</div>
+                    <div class="matrix-status 
+                        {% if " Manual" in status %}status-manual{% elif "Automated"==status %}status-auto{% else
+                        %}status-partial{% endif %}">
+                        {{ status }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Asset Inventory -->
+        {% if report.assets %}
+        <div class="section-block">
+            <div class="section-title">Asset Inventory</div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Target / IP</th>
+                            <th>Status</th>
+                            <th>Detected OS / Service</th>
+                            <th>Exposed Ports</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for asset in report.assets %}
+                        <tr>
+                            <td style="font-weight: 600;">{{ asset.target }} <br> <span
+                                    style="font-weight: 400; color: var(--text-muted);">{{ asset.ip }}</span></td>
+                            <td>
+                                {% if asset.status == "Active" %}
+                                <span class="badge badge-LOW">Active</span>
+                                {% else %}
+                                <span class="badge badge-INFO">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ asset.os }}</td>
+                            <td>
+                                {% for port in asset.ports %}
+                                <span
+                                    style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">{{
+                                    port }}</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <h2 style="margin-bottom: 24px; font-weight: 700; color: var(--primary);">Prioritized Findings & Remediation
+        </h2>
+
+        <!-- Interactive Controls -->
+        <div class="controls-toolbar"
+            style="background: var(--bg-card); padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+            <!-- Search -->
+            <div style="flex: 1; min-width: 250px;">
+                <input type="text" id="searchInput" placeholder="🔍 Search findings..."
+                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: var(--text); font-size: 0.9rem;">
+            </div>
+
+            <!-- Severity Filters -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="filter-btn" data-severity="ALL" onclick="filterBySeverity('ALL')"
+                    style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--primary); color: white; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                    ALL
+                </button>
+                <button class="filter-btn" data-severity="CRITICAL" onclick="filterBySeverity('CRITICAL')"
+                    style="padding: 6px 12px; border: 1px solid #dc2626; border-radius: 6px; background: transparent; color: #dc2626; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                    CRITICAL
+                </button>
+                <button class="filter-btn" data-severity="HIGH" onclick="filterBySeverity('HIGH')"
+                    style="padding: 6px 12px; border: 1px solid #ea580c; border-radius: 6px; background: transparent; color: #ea580c; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                    HIGH
+                </button>
+                <button class="filter-btn" data-severity="MEDIUM" onclick="filterBySeverity('MEDIUM')"
+                    style="padding: 6px 12px; border: 1px solid #eab308; border-radius: 6px; background: transparent; color: #eab308; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                    MEDIUM
+                </button>
+                <button class="filter-btn" data-severity="LOW" onclick="filterBySeverity('LOW')"
+                    style="padding: 6px 12px; border: 1px solid #10b981; border-radius: 6px; background: transparent; color: #10b981; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                    LOW
+                </button>
+            </div>
+
+            <!-- Font Size Toggle -->
+            <div style="display: flex; gap: 4px; align-items: center; margin-left: auto;">
+                <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 8px;">Font:</span>
+                <button onclick="changeFontSize('small')" title="Small font"
+                    style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); cursor: pointer; font-size: 0.75rem;">
+                    A
+                </button>
+                <button onclick="changeFontSize('normal')" title="Normal font"
+                    style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); cursor: pointer; font-size: 0.9rem;">
+                    A
+                </button>
+                <button onclick="changeFontSize('large')" title="Large font"
+                    style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); cursor: pointer; font-size: 1.1rem;">
+                    A
+                </button>
+            </div>
+
+            <!-- Results Count -->
+            <div id="resultsCount" style="font-size: 0.85rem; color: var(--text-muted); white-space: nowrap;">
+                Showing <span id="visibleCount">{{ report.findings|length }}</span> of {{ report.findings|length }}
+                findings
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="10%" style="cursor: pointer; user-select: none;" onclick="sortTable('severity')"
+                            title="Click to sort">
+                            Severity <span id="sort-severity">⇅</span>
+                        </th>
+                        <th width="35%">Finding & Technical Detail</th>
+                        <th width="35%">Remediation Plan</th>
+                        <th width="20%">Reference</th>
+                    </tr>
+                </thead>
+                <tbody id="findingsTable">
+                    {% for finding in report.findings %}
+                    <tr class="finding-row" data-severity="{{ finding.severity }}"
+                        data-cvss="{{ finding.cvss_base_score }}"
+                        data-searchable="{{ finding.message|lower }} {{ finding.rationale|lower }} {{ finding.technical_detail|lower }}">
+                        <td>
+                            <span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span>
+                            {% if finding.cvss_base_score > 0 %}
+                            <div style="margin-top: 8px;">
+                                <span class="cvss-score">CVSS {{ finding.cvss_base_score }}</span>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="font-weight: 600; margin-bottom: 4px;">{{ finding.message }}</div>
+                            <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px;">{{
+                                finding.rationale }}</div>
+                            <div
+                                style="font-weight: 600; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">
+                                Technical Evidence:</div>
+                            <span class="tech-detail">{{ finding.technical_detail }}</span>
+                        </td>
+                        <td>
+                            <div class="remediation-block">
+                                <strong>Action Required:</strong><br>
+                                {{ finding.remediation }}
+                            </div>
+                        </td>
+                        <td>
+                            {% if finding.reference %}
+                            <div class="reference">{{ finding.reference }}</div>
+                            {% else %}
+                            <span style="color: #cbd5e1;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not report.findings %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            No compliance violations found. Great job!
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Methodology & Disclaimer -->
+        <div class="disclaimer">
+            <strong>Methodology:</strong> This audit was performed using automated network scanning techniques to
+            identify common vulnerabilities and misconfigurations aligned with NIS2 Directive (EU 2022/2555) and Italian
+            Legislative Decree 138/2024. The scan covers external exposure, encryption standards, and basic hygiene.
+            <br><br>
+            <strong>Legal Disclaimer:</strong> This report is for informational purposes only and does not constitute a
+            legal certification of compliance. The absence of findings does not guarantee security. A full compliance
+            audit requires manual verification of organizational policies, incident handling procedures, and supply
+            chain agreements which are outside the scope of this automated tool.
+        </div>
+
+        <footer>
+            <p>Generated by <strong>NIS2 Compliance Scanner</strong> | D.Lgs 138/2024 Assessment Tool</p>
+        </footer>
+    </div>
+
+    <script>
+        { { js_content | safe } }
+        document.getElementById("gen-date").textContent = new Date().toLocaleDateString();
+
+        // State management
+        let currentFilter = 'ALL';
+        let currentSort = { column: null, ascending: true };
+        const totalFindings = {{ report.findings| length }};
+
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function (e) {
+                const searchTerm = e.target.value.toLowerCase();
+                filterAndUpdate();
+            });
+        }
+
+        // Filter by severity
+        function filterBySeverity(severity) {
+            currentFilter = severity;
+
+            // Update button styles
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.dataset.severity === severity) {
+                    btn.style.background = getButtonColor(severity);
+                    btn.style.color = 'white';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = getButtonColor(btn.dataset.severity);
+                }
+            });
+
+            filterAndUpdate();
+        }
+
+        function getButtonColor(severity) {
+            const colors = {
+                'ALL': 'var(--primary)',
+                'CRITICAL': '#dc2626',
+                'HIGH': '#ea580c',
+                'MEDIUM': '#eab308',
+                'LOW': '#10b981'
+            };
+            return colors[severity] || 'var(--primary)';
+        }
+
+        // Combined filter and search
+        function filterAndUpdate() {
+            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+            const rows = document.querySelectorAll('.finding-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const severity = row.dataset.severity;
+                const searchable = row.dataset.searchable || '';
+
+                const matchesSeverity = currentFilter === 'ALL' || severity === currentFilter;
+                const matchesSearch = searchTerm === '' || searchable.includes(searchTerm);
+
+                if (matchesSeverity && matchesSearch) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update counter
+            const visibleCountEl = document.getElementById('visibleCount');
+            if (visibleCountEl) {
+                visibleCountEl.textContent = visibleCount;
+                visibleCountEl.style.color = visibleCount === 0 ? '#ef4444' : 'var(--text-muted)';
+            }
+        }
+
+        // Sort table
+        function sortTable(column) {
+            const tbody = document.getElementById('findingsTable');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('.finding-row'));
+
+            // Toggle sort direction
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal, bVal;
+
+                if (column === 'severity') {
+                    const severityOrder = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1, 'INFO': 0 };
+                    aVal = severityOrder[a.dataset.severity] || 0;
+                    bVal = severityOrder[b.dataset.severity] || 0;
+                } else if (column === 'cvss') {
+                    aVal = parseFloat(a.dataset.cvss) || 0;
+                    bVal = parseFloat(b.dataset.cvss) || 0;
+                }
+
+                return currentSort.ascending ? aVal - bVal : bVal - aVal;
+            });
+
+            // Reorder DOM
+            rows.forEach(row => tbody.appendChild(row));
+
+            // Update sort indicator
+            const indicator = document.getElementById(`sort-${column}`);
+            if (indicator) {
+                indicator.textContent = currentSort.ascending ? '↑' : '↓';
+            }
+        }
+
+        // Font size control
+        function changeFontSize(size) {
+            const container = document.querySelector('.container');
+            if (!container) return;
+
+            // Remove existing font size classes
+            container.classList.remove('font-small', 'font-normal', 'font-large');
+
+            // Add new class
+            container.classList.add(`font-${size}`);
+
+            // Store preference
+            localStorage.setItem('reportFontSize', size);
+        }
+
+        // Restore font size preference
+        const savedFontSize = localStorage.getItem('reportFontSize');
+        if (savedFontSize) {
+            changeFontSize(savedFontSize);
+        }
+
+        // Add CSS for font sizes
+        const style = document.createElement('style');
+        style.textContent = `
+            .font-small { font-size: 0.85rem; }
+            .font-small .section-title { font-size: 1.3rem; }
+            .font-small h2 { font-size: 1.4rem; }
+            .font-small table { font-size: 0.8rem; }
+            
+            .font-normal { font-size: 1rem; }
+            
+            .font-large { font-size: 1.15rem; }
+            .font-large .section-title { font-size: 1.7rem; }
+            .font-large h2 { font-size: 1.8rem; }
+            .font-large table { font-size: 1.05rem; }
+            
+            .finding-row { transition: opacity 0.2s; }
+            
+            @media print {
+                .controls-toolbar { display: none !important; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>

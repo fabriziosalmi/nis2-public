@@ -1,0 +1,17 @@
+project_name: "Verification Scan"
+scan_timeout: 5
+concurrency: 10
+
+targets:
+  ip_ranges: []
+    # - "192.168.100.1"
+  domains:
+    - "example.com"
+  asns: [] # Not tested yet
+
+# Features
+features:
+  dns_checks: true
+  whois_checks: true  # Enable WHOIS domain expiry monitoring
+
+compliance_profile: "standard_nis2"

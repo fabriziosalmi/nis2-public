@@ -1,0 +1,26 @@
+project_name: "NIS2 Compliance Audit"
+
+# Scan settings
+scan_timeout: 10
+concurrency: 50
+max_hosts: 100 # Safety limit
+
+targets:
+  ip_ranges:
+    # Internal Networks
+    - "192.168.1.0/24"
+    # DMZ
+    - "10.0.0.0/24"
+  domains:
+    - "example.com"
+    - "corp.example.com"
+  asns:
+    # - "AS12345" # Un-comment to scan entire ASN
+
+# Feature Flags
+features:
+  dns_checks: true # Enable/Disable DNSSEC & Reliability checks
+  web_checks: true
+  port_scan: true
+
+compliance_profile: "standard_nis2"

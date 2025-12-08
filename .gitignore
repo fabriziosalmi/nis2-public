@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Reports and Evidence (generated files)
+reports/
+evidence/
+*.prom
+
+# Configuration files with sensitive data
+config.yaml
+config_prod.yaml
+*_config.yaml
+!config.example.yaml
+!test_config.yaml
+
+# Docker
+.env
+docker-compose.override.yml
+
+# Node.js (for VitePress docs)
+node_modules/
+package-lock.json
+.cache/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Test and temporary files
+*.tmp
+*.bak
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# OS
+Thumbs.db
+.Spotlight-V100
+.Trashes
