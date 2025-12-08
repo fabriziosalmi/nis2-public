@@ -1,11 +1,11 @@
-aiohttp==3.9.1
+aiohttp==3.13.2
 aiodns==3.1.1
 click==8.1.7
 pyyaml==6.0.1
 rich==13.7.0
-dnspython==2.4.2
-scapy==2.5.0
+dnspython==2.8.0
+scapy==2.6.1
 prometheus_client==0.19.0
 python-whois==0.9.6
-Jinja2==3.1.4
+Jinja2==3.1.6
 watchdog==4.0.0
