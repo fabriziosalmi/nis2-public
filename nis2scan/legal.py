@@ -110,7 +110,8 @@ class LegalChecker:
                     logger.error(f"Failed to launch Playwright browser: {e}. Did you run 'playwright install'?")
                     return {}
 
-                page = await browser.new_page()
+                # Create a new page and ignore HTTPS errors (common when scanning IPs or internal sites)
+                page = await browser.new_page(ignore_https_errors=True)
                 
                 # Go to URL with timeout
                 try:
