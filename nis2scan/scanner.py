@@ -494,7 +494,8 @@ class Scanner:
 
         # 3. SPF
         try:
-            spf_answers = dns.resolver.resolve(domain, 'TXT')
+            # Use TCP to avoid UDP truncation issues with large TXT records
+            spf_answers = dns.resolver.resolve(domain, 'TXT', tcp=True)
             for r in spf_answers:
                 txt_val = "".join([s.decode('utf-8') for s in r.strings])
                 if "v=spf1" in txt_val:
@@ -505,7 +506,7 @@ class Scanner:
 
         # 4. DMARC
         try:
-            dmarc_answers = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT')
+            dmarc_answers = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT', tcp=True)
             for r in dmarc_answers:
                 txt_val = "".join([s.decode('utf-8') for s in r.strings])
                 if "v=DMARC1" in txt_val:
