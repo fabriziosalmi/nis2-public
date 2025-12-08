@@ -158,6 +158,10 @@ def serve(port):
     # Generate custom index.html
     generate_index_page(directory)
     
+    # Start file watcher for auto-updating homepage
+    from .watcher import start_watcher
+    observer = start_watcher(directory, generate_index_page)
+    
     import http.server
     import socketserver
     
@@ -171,6 +175,9 @@ def serve(port):
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
+            logger.info("Stopping server and file watcher...")
+            observer.stop()
+            observer.join()
             logger.info("Server stopped.")
 
 
