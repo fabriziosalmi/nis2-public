@@ -223,22 +223,52 @@ class Scanner:
             cert = ssl_obj.getpeercert()
             
             result['version'] = ssl_obj.version()
-            result['cipher'] = ssl_obj.cipher()
-            # Extract cert details manually or simple verification check
-            # For this MVP let's assume if we can handshake, we check if generic verify would fail
-            # We can try a second connection with verify_mode=CERT_REQUIRED to see if it fails validation?
-            # Or just rely on version for now.
-            
-            # Better approach for Expiry: Use OpenSSL or just parsing. 
-            # Let's keep it simple for now and rely on version checks primarily, 
-            # but note that getting expiry requires `getpeercert()` which requires validation or custom parsing.
-            # We will switch verify_mode to OPTIONAL to try and get the cert.
+            cipher_info = ssl_obj.cipher()
+            result['cipher'] = cipher_info[0] if cipher_info else 'unknown'
             
             writer.close()
             await writer.wait_closed()
+            result['valid'] = True
 
         except Exception as e:
             result['error'] = str(e)
+            return result
+
+        # 2. Check for Weak Versions (TLS 1.0, 1.1)
+        # We attempt to connect forcing older protocols.
+        result['weak_versions'] = []
+        
+        # Check TLS 1.0
+        try:
+            ctx_v1 = ssl.create_default_context()
+            ctx_v1.check_hostname = False
+            ctx_v1.verify_mode = ssl.CERT_NONE
+            ctx_v1.minimum_version = ssl.TLSVersion.TLSv1
+            ctx_v1.maximum_version = ssl.TLSVersion.TLSv1
+            
+            conn_v1 = asyncio.open_connection(ip, port, ssl=ctx_v1)
+            r, w = await asyncio.wait_for(conn_v1, timeout=3.0)
+            result['weak_versions'].append('TLSv1.0')
+            w.close()
+            await w.wait_closed()
+        except Exception:
+            pass
+
+        # Check TLS 1.1
+        try:
+            ctx_v1_1 = ssl.create_default_context()
+            ctx_v1_1.check_hostname = False
+            ctx_v1_1.verify_mode = ssl.CERT_NONE
+            ctx_v1_1.minimum_version = ssl.TLSVersion.TLSv1_1
+            ctx_v1_1.maximum_version = ssl.TLSVersion.TLSv1_1
+            
+            conn_v1_1 = asyncio.open_connection(ip, port, ssl=ctx_v1_1)
+            r, w = await asyncio.wait_for(conn_v1_1, timeout=3.0)
+            result['weak_versions'].append('TLSv1.1')
+            w.close()
+            await w.wait_closed()
+        except Exception:
+            pass
             
         return result
 

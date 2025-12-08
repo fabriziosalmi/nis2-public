@@ -223,12 +223,13 @@ class ComplianceEngine:
             
             # TLS
             for port, info in host.tls_info.items():
+                # Check Negotiated Version
                 version = info.get('version', '')
                 if version in ['TLSv1', 'TLSv1.1']:
                     f = ComplianceFinding(
                         severity="HIGH",
                         category="ENCRYPTION",
-                        message=f"Obsolete TLS Version ({version}) detected on port {port}",
+                        message=f"Obsolete TLS Version ({version}) Negotiated on port {port}",
                         rationale="Weak cryptography.",
                         target=host.ip,
                         reference="D.Lgs 138/2024 Art. 21.2.g (Cryptography)",
@@ -238,6 +239,45 @@ class ComplianceEngine:
                         remediation="Disable support for TLS 1.0 and 1.1. Enforce TLS 1.2 or 1.3.",
                         remediation_cost="Medium",
                         remediation_effort="Medium",
+                        compliance_article="Art. 21.2.g (Cryptography)"
+                    )
+                    host_findings.append(f)
+                
+                # Check Supported Weak Versions (Active Probe)
+                weak_versions = info.get('weak_versions', [])
+                if weak_versions:
+                    f = ComplianceFinding(
+                        severity="HIGH",
+                        category="ENCRYPTION",
+                        message=f"Weak TLS Versions Supported ({', '.join(weak_versions)}) on port {port}",
+                        rationale="Server supports obsolete protocols (TLS 1.0/1.1) allowing downgrade attacks.",
+                        target=host.ip,
+                        reference="NIS2 Art. 21.2.g (Cryptography)",
+                        cvss_base_score=7.5,
+                        technical_detail=f"Accepted connection using: {', '.join(weak_versions)}",
+                        remediation="Disable TLS 1.0 and TLS 1.1 in server configuration.",
+                        remediation_cost="Medium",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cryptography)"
+                    )
+                    host_findings.append(f)
+
+                # Check Weak Ciphers (Negotiated)
+                cipher = info.get('cipher', '')
+                weak_ciphers = ['RC4', '3DES', 'DES', 'NULL', 'EXPORT', 'MD5', 'anon']
+                if any(w in cipher for w in weak_ciphers):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="ENCRYPTION",
+                        message=f"Weak Cipher Suite Negotiated ({cipher}) on port {port}",
+                        rationale="The server negotiated a cipher suite known to be weak.",
+                        target=host.ip,
+                        reference="NIS2 Art. 21.2.g (Cryptography)",
+                        cvss_base_score=5.0,
+                        technical_detail=f"Cipher: {cipher}",
+                        remediation="Reconfigure server to prioritize strong ciphers (AES-GCM, ChaCha20) and disable weak ones.",
+                        remediation_cost="Medium",
+                        remediation_effort="Low",
                         compliance_article="Art. 21.2.g (Cryptography)"
                     )
                     host_findings.append(f)
