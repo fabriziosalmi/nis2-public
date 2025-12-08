@@ -135,6 +135,24 @@ class Scanner:
                     # Secrets detection
                     result['secrets'] = self.secrets_detector.scan_content(body, url)
                     
+                    # Security.txt Check (RFC 9116)
+                    # We check /.well-known/security.txt relative to root
+                    try:
+                        sec_url = f"{schema}://{ip}:{port}/.well-known/security.txt"
+                        async with session.get(sec_url, headers={"Host": host_header}) as sec_resp:
+                            if sec_resp.status == 200:
+                                result['security_txt_found'] = True
+                                result['security_txt_url'] = sec_url
+                            else:
+                                # Try fallback /security.txt
+                                sec_url_alt = f"{schema}://{ip}:{port}/security.txt"
+                                async with session.get(sec_url_alt, headers={"Host": host_header}) as sec_resp_alt:
+                                    if sec_resp_alt.status == 200:
+                                        result['security_txt_found'] = True
+                                        result['security_txt_url'] = sec_url_alt
+                    except Exception:
+                        pass # Ignore errors during security.txt check
+
                     if self.evidence_collector:
                         self.evidence_collector.save_raw_evidence(ip, f"port_{port}_http_body", body, "html")
                         self.evidence_collector.save_raw_evidence(ip, f"port_{port}_http_headers", str(resp.headers), "txt")
@@ -186,11 +204,13 @@ class Scanner:
         return result
 
     async def check_dns_security(self, domain: str) -> Dict[str, Any]:
-        """Check for DNSSEC and Zone Transfer vulnerabilities."""
+        """Check for DNSSEC, Zone Transfer, and Email Security (SPF/DMARC)."""
         result = {
             'dnssec_enabled': False,
             'zone_transfer_exposed': False,
-            'nameservers': []
+            'nameservers': [],
+            'spf_record': None,
+            'dmarc_record': None
         }
         
         # 1. Check DNSSEC (DNSKEY presence)
@@ -224,6 +244,28 @@ class Scanner:
                     continue
         except Exception as e:
             logger.debug(f"AXFR check failed for {domain}: {e}")
+
+        # 3. Check SPF (TXT record on domain)
+        try:
+            txt_records = dns.resolver.resolve(domain, 'TXT')
+            for r in txt_records:
+                txt_val = r.to_text().strip('"')
+                if txt_val.startswith('v=spf1'):
+                    result['spf_record'] = txt_val
+                    break
+        except Exception:
+            pass
+
+        # 4. Check DMARC (TXT record on _dmarc.domain)
+        try:
+            dmarc_records = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT')
+            for r in dmarc_records:
+                txt_val = r.to_text().strip('"')
+                if txt_val.startswith('v=DMARC1'):
+                    result['dmarc_record'] = txt_val
+                    break
+        except Exception:
+            pass
 
         return result
 

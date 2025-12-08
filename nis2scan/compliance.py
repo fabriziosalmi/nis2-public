@@ -271,6 +271,43 @@ class ComplianceEngine:
                     )
                     host_findings.append(f)
 
+                # Email Security (SPF/DMARC)
+                if not host.dns_info.get('spf_record'):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="EMAIL SECURITY",
+                        message="SPF Record Missing",
+                        rationale="Lack of SPF allows attackers to spoof emails from your domain.",
+                        target=host.target, # Domain level
+                        reference="NIS2 Art. 21.2.j (Secured Communications)",
+                        cvss_base_score=4.3,
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                        technical_detail="No TXT record starting with 'v=spf1' found.",
+                        remediation="Configure SPF record (e.g., 'v=spf1 mx -all') to authorize senders.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.j (Secured Communications)"
+                    )
+                    host_findings.append(f)
+
+                if not host.dns_info.get('dmarc_record'):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="EMAIL SECURITY",
+                        message="DMARC Record Missing",
+                        rationale="DMARC is essential for email authentication and reporting spoofing attempts.",
+                        target=host.target, # Domain level
+                        reference="NIS2 Art. 21.2.j (Secured Communications)",
+                        cvss_base_score=4.3,
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                        technical_detail="No TXT record found at _dmarc subdomain.",
+                        remediation="Implement DMARC policy (start with p=none for monitoring).",
+                        remediation_cost="Low",
+                        remediation_effort="Medium",
+                        compliance_article="Art. 21.2.j (Secured Communications)"
+                    )
+                    host_findings.append(f)
+
             # ========== PHASE 5: ADVANCED CHECKS ==========
             
             # 1. Secrets Detection
@@ -379,6 +416,29 @@ class ComplianceEngine:
                             remediation_cost="Medium",
                             remediation_effort="Medium",
                             compliance_article="GDPR Compliance"
+                        )
+                        host_findings.append(f)
+
+                # Security.txt Check
+                if http_data.get('security_txt_found'):
+                    # Positive finding (optional to report, but good to track)
+                    pass
+                else:
+                    # Only report if it's a main web port to avoid noise
+                    if port in [80, 443]:
+                        f = ComplianceFinding(
+                            severity="LOW",
+                            category="VULNERABILITY HANDLING",
+                            message="Security.txt Missing",
+                            rationale="A security.txt file helps security researchers report vulnerabilities safely.",
+                            target=f"{host.ip}:{port}",
+                            reference="RFC 9116, NIS2 Art. 21.2.e",
+                            cvss_base_score=0.0,
+                            technical_detail="File not found at /.well-known/security.txt or /security.txt",
+                            remediation="Publish a security.txt file with contact details.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.e (Vulnerability Handling)"
                         )
                         host_findings.append(f)
 
