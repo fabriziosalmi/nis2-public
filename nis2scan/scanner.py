@@ -148,7 +148,12 @@ class Scanner:
                             should_check_legal = True
                     
                     if should_check_legal:
-                        result['legal'] = await self.legal_checker.analyze_page(url, body)
+                        # Use FQDN for legal checks so Playwright visits the real domain, not the IP
+                        legal_url = f"{schema}://{host_header}"
+                        if port not in [80, 443]:
+                            legal_url += f":{port}"
+                        legal_url += "/"
+                        result['legal'] = await self.legal_checker.analyze_page(legal_url, body)
                     
                     # Secrets detection
                     result['secrets'] = self.secrets_detector.scan_content(body, url)
