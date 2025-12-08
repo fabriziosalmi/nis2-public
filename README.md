@@ -60,13 +60,17 @@ python -m nis2scan.cli scan
 Create a `config.yaml`:
 
 ```yaml
+# config.yaml
 project_name: "My Scan"
 targets:
-  domains:
-    - "example.com"
+  domains: ["example.com"]
+
 features:
-  dns_checks: true
-  whois_checks: true
+  dns_checks: true    # DNSSEC & Zone Transfer detection
+  web_checks: true    # HTTP headers, TLS, WAF/CDN, legal compliance
+  port_scan: true     # Network port scanning
+  whois_checks: true  # Domain expiry monitoring
+```
 compliance_profile: "standard_nis2"
 ```
 

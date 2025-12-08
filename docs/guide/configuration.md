@@ -77,8 +77,10 @@ targets:
   asns: []
 
 features:
-  dns_checks: true
-  whois_checks: true
+  dns_checks: true    # DNSSEC validation & Zone Transfer (AXFR) detection
+  web_checks: true    # HTTP security headers, TLS/SSL, WAF/CDN, legal compliance
+  port_scan: true     # Network port scanning (critical services, databases, web)
+  whois_checks: true  # Domain expiry monitoring via WHOIS
 
 compliance_profile: "standard_nis2"
 ```
@@ -103,10 +105,19 @@ compliance_profile: "standard_nis2"
 
 #### Features
 
+All features are **enabled by default**. Disable specific checks to optimize scan performance.
+
 | Feature | Type | Default | Description |
 |---------|------|---------|-------------|
-| `dns_checks` | boolean | true | Enable DNS security checks (DNSSEC, AXFR) |
-| `whois_checks` | boolean | true | Enable WHOIS domain expiry monitoring |
+| `dns_checks` | boolean | true | DNSSEC validation & Zone Transfer (AXFR) detection |
+| `web_checks` | boolean | true | HTTP security headers, TLS/SSL, WAF/CDN, legal compliance |
+| `port_scan` | boolean | true | Network port scanning (SSH, RDP, SMB, databases, web) |
+| `whois_checks` | boolean | true | Domain expiry monitoring via WHOIS |
+
+**Performance Tips:**
+- For IP-only scans: disable `dns_checks` and `whois_checks`
+- For internal networks: disable `whois_checks`
+- For quick port discovery: disable `web_checks`
 
 #### Compliance Profile
 
@@ -131,6 +142,8 @@ targets:
 
 features:
   dns_checks: true
+  web_checks: true
+  port_scan: true
   whois_checks: true
 
 compliance_profile: "standard_nis2"
