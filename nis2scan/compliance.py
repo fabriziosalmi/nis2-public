@@ -419,25 +419,50 @@ class ComplianceEngine:
                         )
                         host_findings.append(f)
             
-            # 2. WHOIS Domain Expiry
-            if host.whois_info.get('warning'):
-                days_left = host.whois_info.get('days_remaining', 0)
-                f = ComplianceFinding(
-                    severity="HIGH",
-                    category="BUSINESS CONTINUITY",
-                    message=f"Domain Expiring Soon ({days_left} days)",
-                    rationale="Domain expiration can cause service disruption and loss of control.",
-                    target=host.ip,
-                    reference="NIS2 Art. 21.2.c (Business Continuity)",
-                    cvss_base_score=6.5,
-                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L",
-                    technical_detail=f"Domain expires: {host.whois_info.get('expiry_date', 'Unknown')}",
-                    remediation="Renew domain registration immediately. Enable auto-renewal.",
-                    remediation_cost="Low",
-                    remediation_effort="Low",
-                    compliance_article="Art. 21.2.c (Business Continuity)"
-                )
-                host_findings.append(f)
+            # 2. WHOIS Domain Expiry & Data Accuracy (Art. 28)
+            if host.whois_info:
+                # Expiry Check
+                if host.whois_info.get('warning'):
+                    days_left = host.whois_info.get('days_remaining', 0)
+                    f = ComplianceFinding(
+                        severity="HIGH",
+                        category="BUSINESS CONTINUITY",
+                        message=f"Domain Expiring Soon ({days_left} days)",
+                        rationale="Domain expiration can cause service disruption and loss of control.",
+                        target=host.ip,
+                        reference="NIS2 Art. 21.2.c (Business Continuity)",
+                        cvss_base_score=6.5,
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L",
+                        technical_detail=f"Domain expires: {host.whois_info.get('expiry_date', 'Unknown')}",
+                        remediation="Renew domain registration immediately. Enable auto-renewal.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.c (Business Continuity)"
+                    )
+                    host_findings.append(f)
+                
+                # Data Availability Check (Art. 28)
+                # If we have WHOIS info but critical fields are missing/empty (beyond redaction)
+                # This is a heuristic. If 'registrar' is missing, it's suspicious.
+                if not host.whois_info.get('registrar') and not host.whois_info.get('org'):
+                     f = ComplianceFinding(
+                        severity="LOW",
+                        category="DOMAIN DATA",
+                        message="Incomplete Domain Registration Data",
+                        rationale="Entities must ensure domain registration data is accurate and complete.",
+                        target=host.ip,
+                        reference="NIS2 Art. 28 (Domain Registration Data)",
+                        cvss_base_score=0.0,
+                        technical_detail="Registrar or Organization field missing in WHOIS data.",
+                        remediation="Verify domain registration details with your registrar.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 28 (Domain Data)"
+                    )
+                     host_findings.append(f)
+            else:
+                # WHOIS Lookup Failed or Empty
+                pass # Already handled by scanner errors or just ignored
             
             # 3. WAF/CDN Protection (Positive finding - reduces risk)
             for port, http_data in host.http_info.items():
@@ -518,9 +543,9 @@ class ComplianceEngine:
                             severity="LOW",
                             category="VULNERABILITY HANDLING",
                             message="Security.txt Missing",
-                            rationale="A security.txt file helps security researchers report vulnerabilities safely.",
+                            rationale="A security.txt file helps security researchers report vulnerabilities safely and supports incident reporting obligations.",
                             target=f"{host.ip}:{port}",
-                            reference="RFC 9116, NIS2 Art. 21.2.e",
+                            reference="RFC 9116, NIS2 Art. 21.2.e & Art. 23 (Reporting)",
                             cvss_base_score=0.0,
                             technical_detail="File not found at /.well-known/security.txt or /security.txt",
                             remediation="Publish a security.txt file with contact details.",
