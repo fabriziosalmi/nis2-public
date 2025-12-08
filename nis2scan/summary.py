@@ -124,8 +124,8 @@ class SummaryGenerator:
         # Group by message/remediation to aggregate targets
         grouped = {}
         for f in findings:
-            # Key: (Message, Remediation, Severity)
-            key = (f.message, f.remediation, f.severity)
+            # Key: (Message, Remediation, Severity, Reference)
+            key = (f.message, f.remediation, f.severity, f.reference)
             if key not in grouped:
                 grouped[key] = []
             grouped[key].append(f.target)
@@ -140,7 +140,7 @@ class SummaryGenerator:
         )
         
         top_actions = []
-        for (msg, rem, sev), targets in sorted_groups:
+        for (msg, rem, sev, ref), targets in sorted_groups:
             # Create a granular action item
             # If many targets, summarize. If few, list them.
             if len(targets) > 3:
@@ -154,7 +154,8 @@ class SummaryGenerator:
                 "step": rem,
                 "target": target_str,
                 "count": len(targets),
-                "severity": sev
+                "severity": sev,
+                "reference": ref
             }
             top_actions.append(action)
             
@@ -163,6 +164,23 @@ class SummaryGenerator:
                 break
                 
         return top_actions
+
+    def _get_reference_html(self, reference: str) -> str:
+        """Generate a small icon link to the relevant regulation."""
+        if not reference:
+            return ""
+            
+        # Default to NIS2 Directive (Italian)
+        url = "https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX%3A32022L2555"
+        
+        if "D.Lgs" in reference or "138/2024" in reference:
+            # Link to Italian Official Gazette for D.Lgs 138/2024
+            url = "https://www.gazzettaufficiale.it/eli/id/2024/10/01/24G00157/sg"
+        elif "GDPR" in reference:
+            # Link to GDPR
+            url = "https://eur-lex.europa.eu/eli/reg/2016/679/oj"
+            
+        return f'<a href="{url}" target="_blank" title="Approfondisci: {reference}" style="text-decoration: none; font-size: 0.9em; margin-left: 4px; vertical-align: middle;">📖</a>'
 
     def _build_html(self, report, risks: List[BusinessRisk], metrics: Dict[str, Any], action_plan: List[Dict[str, str]]) -> str:
         """Construct the final HTML string."""
@@ -187,9 +205,14 @@ class SummaryGenerator:
         if risks:
             html += """<div style="margin-bottom: 20px;"><strong style="color: var(--primary);">Key Business Risks:</strong><ul style="margin-top: 10px;">"""
             for risk in risks:
+                ref_link = ""
+                if risk.related_findings:
+                    # Use the reference from the first finding in this risk group
+                    ref_link = self._get_reference_html(risk.related_findings[0].reference)
+                
                 html += f"""
                 <li style="margin-bottom: 8px;">
-                    <strong>{risk.name}:</strong> {risk.impact}
+                    <strong>{risk.name}:</strong> {risk.impact} {ref_link}
                 </li>
                 """
             html += "</ul></div>"
@@ -199,9 +222,11 @@ class SummaryGenerator:
             html += """<div><strong style="color: var(--primary);">Strategic Priorities (Top 10):</strong><ol style="margin-top: 10px;">"""
             for action in action_plan:
                 priority_color = "#ef4444" if action['priority'] == "Immediate" else "#3b82f6"
+                ref_link = self._get_reference_html(action.get('reference', ''))
+                
                 html += f"""
                 <li style="margin-bottom: 8px;">
-                    <strong style="color: {priority_color};">{action['priority']}:</strong> {action['step']} 
+                    <strong style="color: {priority_color};">{action['priority']}:</strong> {action['step']} {ref_link}
                     <div style="font-size: 0.85em; color: var(--text-muted); margin-top: 2px;">
                         Issue: {action['finding']} | Affects: {action['target']}
                     </div>

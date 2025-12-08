@@ -148,7 +148,7 @@ class Scanner:
                             should_check_legal = True
                     
                     if should_check_legal:
-                        result['legal'] = self.legal_checker.analyze_page(url, body)
+                        result['legal'] = await self.legal_checker.analyze_page(url, body)
                     
                     # Secrets detection
                     result['secrets'] = self.secrets_detector.scan_content(body, url)
