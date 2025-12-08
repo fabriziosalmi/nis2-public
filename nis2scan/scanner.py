@@ -338,6 +338,10 @@ class Scanner:
                         http_data = await self.check_http(ip, p, hostname=h_name)
                         res.http_info[p] = http_data
                         
+                        # OS Fingerprinting from Server Header
+                        if 'headers' in http_data and 'Server' in http_data['headers']:
+                            res.os_match = http_data['headers']['Server']
+                        
                         # If HTTP check failed (connection error), treat port as closed
                         # This filters out false positives from transparent proxies/firewalls
                         if 'error' in http_data:
@@ -348,6 +352,13 @@ class Scanner:
 
                 for p in ports_to_remove:
                     res.open_ports.remove(p)
+
+            # Simple OS Fingerprinting based on ports if still unknown
+            if res.os_match == "Unknown":
+                if 445 in res.open_ports or 139 in res.open_ports:
+                    res.os_match = "Windows (Likely)"
+                elif 22 in res.open_ports:
+                    res.os_match = "Linux/Unix (Likely)"
 
             if not res.open_ports:
                 res.is_alive = False
