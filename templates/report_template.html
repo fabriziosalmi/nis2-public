@@ -178,9 +178,14 @@
                             <td>{{ asset.os }}</td>
                             <td>
                                 {% for port in asset.ports %}
-                                <span
-                                    style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">{{
-                                    port }}</span>
+                                <a href="https://portchecker.io/api/{{ asset.ip }}/{{ port }}" target="_blank" rel="noopener noreferrer" title="Verify Port {{ port }} on portchecker.io" style="text-decoration: none; color: inherit;">
+                                    <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+                                        {{ port }}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity: 0.6;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </span>
+                                </a>
                                 {% endfor %}
                             </td>
                         </tr>
