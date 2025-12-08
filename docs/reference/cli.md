@@ -4,6 +4,54 @@ Command-line interface reference for the NIS2 Scanner.
 
 ## Commands
 
+### init
+
+Interactively generate a configuration file.
+
+```bash
+python -m nis2scan.cli init [OPTIONS]
+```
+
+**Options**:
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--output` | `-o` | PATH | `config.yaml` | Output configuration file path |
+
+**Examples**:
+
+```bash
+# Create default config
+python -m nis2scan.cli init
+
+# Create custom config
+python -m nis2scan.cli init -o my_scan.yaml
+```
+
+### clean
+
+Remove all generated reports and evidence.
+
+```bash
+python -m nis2scan.cli clean [OPTIONS]
+```
+
+**Options**:
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--force` | `-f` | FLAG | `False` | Force deletion without confirmation |
+
+**Examples**:
+
+```bash
+# Interactive clean
+python -m nis2scan.cli clean
+
+# Force clean (no prompt)
+python -m nis2scan.cli clean --force
+```
+
 ### scan
 
 Run a compliance scan.

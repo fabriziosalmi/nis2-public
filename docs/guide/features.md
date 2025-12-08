@@ -41,6 +41,11 @@ Validates presence and configuration of:
 - Identifies DNS misconfigurations
 - Detects information leakage
 
+### Email Security (NIS2 Art. 21.2.j)
+
+- **SPF Validation**: Checks for valid Sender Policy Framework records to prevent spoofing.
+- **DMARC Check**: Verifies Domain-based Message Authentication, Reporting, and Conformance policies.
+
 ## Compliance Checks
 
 ### NIS2 Directive Requirements
@@ -48,9 +53,16 @@ Validates presence and configuration of:
 Automated checks for:
 - Network security measures
 - Incident handling capabilities
-- Business continuity
+- Business continuity (Domain Expiry)
 - Supply chain security
 - Security in network and information systems acquisition
+- Vulnerability Handling (Security.txt, EOL Software)
+
+### Vulnerability Handling (NIS2 Art. 21.2.e)
+
+- **Security.txt**: Checks for RFC 9116 compliance (`/.well-known/security.txt`) to facilitate vulnerability reporting.
+- **Obsolete Software**: Detects End-of-Life (EOL) software versions (e.g., old Apache/PHP/IIS) via banner analysis.
+- **OS Fingerprinting**: Passively identifies operating systems and technology stacks to assess exposure.
 
 ### Italian Legal Compliance
 
