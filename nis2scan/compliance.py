@@ -272,7 +272,8 @@ class ComplianceEngine:
                     host_findings.append(f)
 
                 # Email Security (SPF/DMARC)
-                if not host.dns_info.get('spf_record'):
+                spf_info = host.dns_info.get('spf', {})
+                if not spf_info.get('present'):
                     f = ComplianceFinding(
                         severity="MEDIUM",
                         category="EMAIL SECURITY",
@@ -290,7 +291,8 @@ class ComplianceEngine:
                     )
                     host_findings.append(f)
 
-                if not host.dns_info.get('dmarc_record'):
+                dmarc_info = host.dns_info.get('dmarc', {})
+                if not dmarc_info.get('present'):
                     f = ComplianceFinding(
                         severity="MEDIUM",
                         category="EMAIL SECURITY",

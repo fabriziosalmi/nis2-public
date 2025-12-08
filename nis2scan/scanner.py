@@ -130,7 +130,25 @@ class Scanner:
                     )
                     
                     # Legal compliance (Italian requirements, cookie banner)
-                    result['legal'] = self.legal_checker.analyze_page(url, body)
+                    # User Requirement: Check P.IVA only on www and root domains, not IPs or service subdomains.
+                    should_check_legal = False
+                    try:
+                        # Check if IP
+                        ipaddress.ip_address(host_header)
+                    except ValueError:
+                        # Not an IP, assume domain
+                        parts = host_header.split('.')
+                        if host_header.startswith('www.'):
+                            should_check_legal = True
+                        elif len(parts) == 2:
+                            # e.g. example.com
+                            should_check_legal = True
+                        elif len(parts) == 3 and len(parts[-1]) == 2 and len(parts[-2]) <= 3:
+                            # Heuristic for co.uk, com.it, etc.
+                            should_check_legal = True
+                    
+                    if should_check_legal:
+                        result['legal'] = self.legal_checker.analyze_page(url, body)
                     
                     # Secrets detection
                     result['secrets'] = self.secrets_detector.scan_content(body, url)
@@ -383,7 +401,13 @@ class Scanner:
                 for p in res.open_ports:
                     if p in [80, 443, 8080, 8443]:
                         # Determine hostname to use
-                        h_name = original_target if original_target != ip else ip
+                        # If original_target is a CIDR or IP, use the IP as Host header (or reverse DNS if we had it)
+                        # If original_target is a domain, use it.
+                        if '/' in original_target or original_target == ip:
+                            h_name = ip
+                        else:
+                            h_name = original_target
+
                         http_data = await self.check_http(ip, p, hostname=h_name)
                         res.http_info[p] = http_data
                         
@@ -465,6 +489,28 @@ class Scanner:
                         break 
                 except Exception:
                     continue
+        except Exception:
+            pass
+
+        # 3. SPF
+        try:
+            spf_answers = dns.resolver.resolve(domain, 'TXT')
+            for r in spf_answers:
+                txt_val = "".join([s.decode('utf-8') for s in r.strings])
+                if "v=spf1" in txt_val:
+                    result['spf'] = {'present': True, 'record': txt_val}
+                    break
+        except Exception:
+            pass
+
+        # 4. DMARC
+        try:
+            dmarc_answers = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT')
+            for r in dmarc_answers:
+                txt_val = "".join([s.decode('utf-8') for s in r.strings])
+                if "v=DMARC1" in txt_val:
+                    result['dmarc'] = {'present': True, 'record': txt_val}
+                    break
         except Exception:
             pass
 
