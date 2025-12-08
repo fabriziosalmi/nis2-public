@@ -79,12 +79,31 @@ class ComplianceEngine:
         
         total_host_scores = 0
         
+        # Track positive indicators for matrix automation
+        has_security_txt = False
+        has_spf_dmarc = False
+        has_redundancy = False 
+
         for host in scan_results:
             stats['analyzed_hosts'] += 1
             
             # Skip inactive hosts for compliance scoring (but track them as analyzed)
             if not host.is_alive:
                 continue
+
+            # Check for Matrix Automation Indicators
+            # 1. Security.txt (Incident Handling)
+            for port, http_data in host.http_info.items():
+                if http_data.get('security_txt_found'):
+                    has_security_txt = True
+            
+            # 2. SPF/DMARC (Secure Communications)
+            if host.dns_info.get('spf', {}).get('present') or host.dns_info.get('dmarc', {}).get('present'):
+                has_spf_dmarc = True
+            
+            # 3. Redundancy (MX Records)
+            if len(host.dns_info.get('mx', [])) > 1:
+                has_redundancy = True
 
             stats['active_hosts'] += 1
             host_findings = []
@@ -569,6 +588,16 @@ class ComplianceEngine:
                 "os": "Unknown" if not host.os_match else host.os_match,
                 "ports": sorted(host.open_ports)
             })
+
+        # Update NIS2 Matrix based on collected indicators
+        if has_security_txt:
+            nis2_matrix["b) Incident Handling"] = "Partially Automated (Security.txt found)"
+        
+        if has_spf_dmarc:
+            nis2_matrix["j) MFA & Communications"] = "Partially Automated (Email Security Verified)"
+            
+        if has_redundancy:
+             nis2_matrix["c) Business Continuity & Crisis Mgmt"] = "Partially Automated (Redundancy Detected)"
 
         # Generate Executive Summary using Modular Generator
         summary_gen = SummaryGenerator()

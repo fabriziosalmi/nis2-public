@@ -227,14 +227,15 @@ class Scanner:
         return result
 
     def check_dns_security_sync(self, domain: str) -> Dict[str, Any]:
-        """Check for DNSSEC, Zone Transfer, and Email Security (SPF/DMARC)."""
+        """Check for DNSSEC, Zone Transfer, Email Security (SPF/DMARC), and Redundancy (MX)."""
         # This is the synchronous implementation to be run in a thread
         result = {
             'dnssec_enabled': False,
             'zone_transfer_exposed': False,
             'nameservers': [],
-            'spf_record': None,
-            'dmarc_record': None
+            'spf': {'present': False, 'record': None},
+            'dmarc': {'present': False, 'record': None},
+            'mx': []
         }
         
         # 1. Check DNSSEC (DNSKEY presence)
@@ -277,7 +278,7 @@ class Scanner:
                 # We need to handle potential multi-string records
                 txt_val = "".join([s.decode('utf-8') if isinstance(s, bytes) else s for s in r.strings])
                 if txt_val.startswith('v=spf1'):
-                    result['spf_record'] = txt_val
+                    result['spf'] = {'present': True, 'record': txt_val}
                     break
         except Exception:
             pass
@@ -288,8 +289,15 @@ class Scanner:
             for r in dmarc_records:
                 txt_val = "".join([s.decode('utf-8') if isinstance(s, bytes) else s for s in r.strings])
                 if txt_val.startswith('v=DMARC1'):
-                    result['dmarc_record'] = txt_val
+                    result['dmarc'] = {'present': True, 'record': txt_val}
                     break
+        except Exception:
+            pass
+
+        # 5. Check MX Records (Redundancy)
+        try:
+            mx_records = dns.resolver.resolve(domain, 'MX')
+            result['mx'] = [str(r.exchange) for r in mx_records]
         except Exception:
             pass
 
