@@ -203,8 +203,9 @@ class Scanner:
             
         return result
 
-    async def check_dns_security(self, domain: str) -> Dict[str, Any]:
+    def check_dns_security_sync(self, domain: str) -> Dict[str, Any]:
         """Check for DNSSEC, Zone Transfer, and Email Security (SPF/DMARC)."""
+        # This is the synchronous implementation to be run in a thread
         result = {
             'dnssec_enabled': False,
             'zone_transfer_exposed': False,
@@ -249,7 +250,9 @@ class Scanner:
         try:
             txt_records = dns.resolver.resolve(domain, 'TXT')
             for r in txt_records:
-                txt_val = r.to_text().strip('"')
+                # r.to_text() returns quoted string like '"v=spf1 ..."'
+                # We need to handle potential multi-string records
+                txt_val = "".join([s.decode('utf-8') if isinstance(s, bytes) else s for s in r.strings])
                 if txt_val.startswith('v=spf1'):
                     result['spf_record'] = txt_val
                     break
@@ -260,7 +263,7 @@ class Scanner:
         try:
             dmarc_records = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT')
             for r in dmarc_records:
-                txt_val = r.to_text().strip('"')
+                txt_val = "".join([s.decode('utf-8') if isinstance(s, bytes) else s for s in r.strings])
                 if txt_val.startswith('v=DMARC1'):
                     result['dmarc_record'] = txt_val
                     break
@@ -268,6 +271,10 @@ class Scanner:
             pass
 
         return result
+
+    async def check_dns_security(self, domain: str) -> Dict[str, Any]:
+        # Wrapper for backward compatibility if needed, but we use check_dns_security_sync
+        return self.check_dns_security_sync(domain)
 
     async def get_targets(self) -> List[tuple]:
         target_groups = []
