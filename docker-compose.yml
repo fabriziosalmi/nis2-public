@@ -1,6 +1,28 @@
 version: '3.8'
 
 services:
+  # 0. Traefik (Reverse Proxy & HTTPS)
+  traefik:
+    image: traefik:latest
+    container_name: nis2-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Global HTTP -> HTTPS Redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - nis2-net
+
   # 1. NIS2 Scanner (The Core)
   scanner:
     build: .
@@ -8,12 +30,19 @@ services:
     container_name: nis2-scanner
     volumes:
       # Use CONFIG_FILE env var or default to config.yaml
-      - ${CONFIG_FILE:-./config.yaml}:/app/config.yaml:ro
+      - ${CONFIG_FILE:-./config.yaml}:/app/config.yaml
       - ./reports:/app/reports
       # Mount config dir if multiple profiles needed
-      - ./configs:/app/configs:ro
-    ports:
-      - "8000:8000" # Serve HTML reports
+      - ./configs:/app/configs
+    # ports:
+    #   - "8000:8000" # Exposed via Traefik now
+    labels:
+      - "traefik.enable=true"
+      # Match any request (IP or Domain)
+      - "traefik.http.routers.scanner.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.scanner.entrypoints=websecure"
+      - "traefik.http.routers.scanner.tls=true"
+      - "traefik.http.services.scanner.loadbalancer.server.port=8000"
     # Command to run a scan periodically or just serve?
     # For now, we let it default to serve.
     # User can run scan via: docker-compose exec scanner python -m nis2scan.cli scan ...

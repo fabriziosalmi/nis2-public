@@ -5,6 +5,7 @@ import logging
 import ipaddress
 import aiohttp
 import time
+import itertools
 from typing import List, Dict, Any, Union
 from urllib.parse import urlparse
 from dataclasses import dataclass, field
@@ -227,23 +228,31 @@ class Scanner:
         return result
 
     async def get_targets(self) -> List[tuple]:
-        all_targets = []
+        target_groups = []
         
-        # 1. Expand all targets first
+        # 1. Expand all targets first, keeping them grouped
         # Support IP Ranges
         for t in self.config.targets.ip_ranges:
              ips = await self.resolve_target(t)
-             all_targets.extend([(ip, t) for ip in ips])
+             if ips:
+                target_groups.append([(ip, t) for ip in ips])
              
         for t in self.config.targets.domains:
              ips = await self.resolve_target(t)
-             all_targets.extend([(ip, t) for ip in ips])
+             if ips:
+                target_groups.append([(ip, t) for ip in ips])
 
-        # 2. Apply Limits
+        # 2. Apply Limits with Round-Robin Balancing
         if self.config.max_hosts > 0:
-            logger.info(f"Limiting scan to first {self.config.max_hosts} hosts (found {len(all_targets)} potential).")
-            return all_targets[:self.config.max_hosts]
+            # Interleave targets from all groups to ensure fair coverage
+            # zip_longest((A1, A2), (B1,)) -> (A1, B1), (A2, None)
+            interleaved = [x for x in itertools.chain.from_iterable(itertools.zip_longest(*target_groups)) if x is not None]
             
+            logger.info(f"Limiting scan to {self.config.max_hosts} hosts (balanced across {len(target_groups)} ranges/domains).")
+            return interleaved[:self.config.max_hosts]
+            
+        # Flatten if no limit
+        all_targets = [item for group in target_groups for item in group]
         return all_targets
 
     async def scan_targets(self, targets: List[tuple]):
