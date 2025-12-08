@@ -2,7 +2,10 @@ import asyncio
 import click
 import logging
 import os
+import yaml
 from rich.logging import RichHandler
+from rich.console import Console
+from rich.prompt import Prompt, Confirm, IntPrompt
 from .config import Config
 from .scanner import Scanner
 from .compliance import ComplianceEngine
@@ -25,6 +28,66 @@ logger = logging.getLogger("nis2scan")
 def cli():
     """NIS2 Compliance Scanner Tool."""
     pass
+
+@cli.command()
+@click.option('--output', '-o', default='config.yaml', help='Output configuration file path.')
+def init(output):
+    """Interactively generate a configuration file."""
+    console = Console()
+    console.print("[bold blue]NIS2 Configuration Generator[/bold blue]")
+    console.print("This wizard will help you create a configuration file for the scanner.\n")
+
+    config = {
+        'project_name': Prompt.ask("Project Name", default="NIS2 Compliance Audit"),
+        'scan_timeout': IntPrompt.ask("Scan Timeout (seconds)", default=10),
+        'concurrency': IntPrompt.ask("Concurrency (threads)", default=50),
+        'max_hosts': IntPrompt.ask("Max Hosts (0 for unlimited)", default=100),
+        'targets': {
+            'ip_ranges': [],
+            'domains': [],
+            'asns': []
+        },
+        'features': {
+            'dns_checks': True,
+            'web_checks': True,
+            'port_scan': True,
+            'whois_checks': True
+        },
+        'compliance_profile': "standard_nis2"
+    }
+
+    # Targets
+    console.print("\n[bold]Targets[/bold]")
+    console.print("[dim]Enter IP ranges (e.g. 192.168.1.0/24) or Domains one by one.[/dim]")
+    
+    while True:
+        ip = Prompt.ask("Add IP Range (CIDR) [leave empty to skip/finish]", default="")
+        if not ip:
+            break
+        config['targets']['ip_ranges'].append(ip)
+
+    while True:
+        domain = Prompt.ask("Add Domain [leave empty to skip/finish]", default="")
+        if not domain:
+            break
+        config['targets']['domains'].append(domain)
+
+    # Features
+    console.print("\n[bold]Features[/bold]")
+    config['features']['dns_checks'] = Confirm.ask("Enable DNS Security Checks?", default=True)
+    config['features']['web_checks'] = Confirm.ask("Enable Web/HTTP Checks?", default=True)
+    config['features']['port_scan'] = Confirm.ask("Enable Port Scanning?", default=True)
+    config['features']['whois_checks'] = Confirm.ask("Enable WHOIS/Expiry Checks?", default=True)
+
+    # Save
+    try:
+        with open(output, 'w') as f:
+            yaml.dump(config, f, sort_keys=False, default_flow_style=False)
+        console.print(f"\n[green]Configuration saved to {output}[/green]")
+        console.print(f"[dim]You can now run the scan with: python -m nis2scan.cli scan -c {output}[/dim]")
+    except Exception as e:
+        console.print(f"\n[red]Error saving configuration: {e}[/red]")
+
 
 @cli.command()
 @click.option('--config', '-c', default='config.yaml', help='Path to configuration file.')
