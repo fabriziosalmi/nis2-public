@@ -14,11 +14,9 @@
 
     <style>
         /* Injected CSS */
-            {
-                {
-                css_content|safe
-            }
-        }
+        {{ css_content|safe }}
+
+        @media print {
 
         @media print {
             .btn-print {
@@ -332,7 +330,7 @@
     </div>
 
     <script>
-        { { js_content | safe } }
+        {{ js_content|safe }}
         document.getElementById("gen-date").textContent = new Date().toLocaleDateString();
 
         // State management

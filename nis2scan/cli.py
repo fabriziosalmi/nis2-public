@@ -264,44 +264,45 @@ def generate_index_page(directory):
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             background-color: var(--bg-body);
             color: var(--text-main);
-            line-height: 1.6;
+            line-height: 1.5;
             min-height: 100vh;
-            padding: 40px 20px;
+            padding: 24px 16px;
             -webkit-font-smoothing: antialiased;
+            font-size: 14px;
         }}
         
         .container {{
-            max-width: 1280px;
+            max-width: 1400px;
             margin: 0 auto;
         }}
         
         header {{
-            margin-bottom: 40px;
+            margin-bottom: 24px;
             border-bottom: 1px solid var(--border);
-            padding-bottom: 20px;
+            padding-bottom: 16px;
         }}
         
         h1 {{
-            font-size: 2.5rem;
+            font-size: 1.75rem;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             letter-spacing: -0.025em;
         }}
         
         .subtitle {{
-            font-size: 1rem;
+            font-size: 0.875rem;
             color: var(--text-muted);
         }}
         
         .stats-bar {{
             background: var(--bg-card);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 40px;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
             display: flex;
             justify-content: center;
-            gap: 60px;
+            gap: 32px;
             flex-wrap: wrap;
             border: 1px solid var(--border);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -312,14 +313,14 @@ def generate_index_page(directory):
         }}
         
         .stat-value {{
-            font-size: 2.5rem;
+            font-size: 1.75rem;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }}
         
         .stat-label {{
-            font-size: 0.875rem;
+            font-size: 0.7rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -328,14 +329,14 @@ def generate_index_page(directory):
         
         .reports-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
         }}
         
         .report-card {{
             background: var(--bg-card);
-            border-radius: 12px;
-            padding: 24px;
+            border-radius: 8px;
+            padding: 16px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             border: 1px solid var(--border);
             transition: transform 0.2s, box-shadow 0.2s;
@@ -354,24 +355,29 @@ def generate_index_page(directory):
             display: flex;
             justify-content: space-between;
             align-items: start;
-            margin-bottom: 12px;
-            padding-bottom: 12px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
             border-bottom: 1px solid var(--border);
+            gap: 8px;
         }}
         
         .project-name {{
-            font-size: 1.125rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: var(--primary);
+            line-height: 1.3;
+            flex: 1;
         }}
         
         .score-badge {{
             background: var(--primary);
             color: white;
-            padding: 6px 14px;
-            border-radius: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            flex-shrink: 0;
         }}
         
         .score-badge.good {{ background: #10b981; }}
@@ -379,34 +385,38 @@ def generate_index_page(directory):
         .score-badge.critical {{ background: #ef4444; }}
         
         .scan-date {{
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 6px;
         }}
         
         .scan-id {{
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             color: var(--text-muted);
             background: #f8fafc;
-            padding: 6px 10px;
-            border-radius: 6px;
-            margin-bottom: 16px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }}
         
         .severity-badges {{
             display: flex;
-            gap: 6px;
-            margin-bottom: 16px;
+            gap: 4px;
+            margin-bottom: 10px;
             flex-wrap: wrap;
         }}
         
         .severity-badge {{
-            font-size: 0.7rem;
-            padding: 3px 8px;
-            border-radius: 4px;
+            font-size: 0.625rem;
+            padding: 2px 6px;
+            border-radius: 3px;
             font-weight: 600;
             text-transform: uppercase;
+            white-space: nowrap;
         }}
         
         .severity-badge.critical {{ background: #fee2e2; color: #dc2626; }}
@@ -417,53 +427,64 @@ def generate_index_page(directory):
         .card-stats {{
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            gap: 8px;
         }}
         
         .card-stat {{
             text-align: center;
-            padding: 12px;
+            padding: 8px;
             background: #f8fafc;
-            border-radius: 8px;
+            border-radius: 6px;
         }}
         
         .card-stat-value {{
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 700;
             color: var(--primary);
         }}
         
         .card-stat-label {{
-            font-size: 0.7rem;
+            font-size: 0.625rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.05em;
             font-weight: 600;
-            margin-top: 4px;
+            margin-top: 2px;
         }}
         
         .empty-state {{
             text-align: center;
-            padding: 80px 20px;
+            padding: 60px 20px;
             background: var(--bg-card);
             border-radius: 12px;
             border: 1px dashed var(--border);
         }}
         
         .empty-state h2 {{
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             color: var(--primary);
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }}
         
         .empty-state p {{
             color: var(--text-muted);
+            font-size: 0.875rem;
         }}
         
         @media (max-width: 768px) {{
-            h1 {{ font-size: 2rem; }}
-            .reports-grid {{ grid-template-columns: 1fr; }}
-            .stats-bar {{ gap: 30px; }}
+            body {{ padding: 16px 12px; }}
+            h1 {{ font-size: 1.5rem; }}
+            .subtitle {{ font-size: 0.8rem; }}
+            .stats-bar {{ gap: 20px; padding: 12px; }}
+            .stat-value {{ font-size: 1.5rem; }}
+            .stat-label {{ font-size: 0.65rem; }}
+            .reports-grid {{ grid-template-columns: 1fr; gap: 12px; }}
+            .card-header {{ flex-direction: column; align-items: start; }}
+            .score-badge {{ align-self: flex-start; }}
+        }}
+        
+        @media (min-width: 1400px) {{
+            .reports-grid {{ grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }}
         }}
     </style>
 </head>
