@@ -176,6 +176,22 @@ class Scanner:
                     except Exception:
                         pass # Ignore errors during security.txt check
 
+                    # Sensitive File Checks (Cyber Hygiene)
+                    result['sensitive_files'] = []
+                    for sensitive_path in ['/.git/HEAD', '/.env']:
+                        try:
+                            sens_url = f"{schema}://{ip}:{port}{sensitive_path}"
+                            async with session.get(sens_url, headers={"Host": host_header}) as sens_resp:
+                                if sens_resp.status == 200:
+                                    # Verify content to avoid false positives (e.g. custom 404 pages returning 200)
+                                    content = await sens_resp.text()
+                                    if sensitive_path == '/.git/HEAD' and 'ref: refs/' in content:
+                                        result['sensitive_files'].append(sensitive_path)
+                                    elif sensitive_path == '/.env' and '=' in content:
+                                        result['sensitive_files'].append(sensitive_path)
+                        except Exception:
+                            pass
+
                     if self.evidence_collector:
                         self.evidence_collector.save_raw_evidence(ip, f"port_{port}_http_body", body, "html")
                         self.evidence_collector.save_raw_evidence(ip, f"port_{port}_http_headers", str(resp.headers), "txt")

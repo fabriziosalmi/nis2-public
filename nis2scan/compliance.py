@@ -490,6 +490,47 @@ class ComplianceEngine:
                         )
                         host_findings.append(f)
 
+                # Sensitive Files Check (Git/Env)
+                if 'sensitive_files' in http_data and http_data['sensitive_files']:
+                    for sfile in http_data['sensitive_files']:
+                        f = ComplianceFinding(
+                            severity="CRITICAL",
+                            category="SUPPLY CHAIN SECURITY",
+                            message=f"Sensitive File Exposed ({sfile})",
+                            rationale="Exposed configuration or version control files can lead to full system compromise.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.d (Supply Chain Security)",
+                            cvss_base_score=9.8,
+                            technical_detail=f"Found accessible {sfile}",
+                            remediation=f"Immediately remove or deny access to {sfile}.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.d (Supply Chain Security)"
+                        )
+                        host_findings.append(f)
+
+                # Server Header Information Leakage
+                headers = http_data.get('headers', {})
+                for h_name in ['Server', 'X-Powered-By']:
+                    # Case insensitive lookup
+                    h_val = next((v for k, v in headers.items() if k.lower() == h_name.lower()), None)
+                    if h_val:
+                        f = ComplianceFinding(
+                            severity="LOW",
+                            category="CYBER HYGIENE",
+                            message=f"Information Leakage ({h_name})",
+                            rationale="Revealing server versions helps attackers target specific vulnerabilities.",
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            cvss_base_score=0.0,
+                            technical_detail=f"Header {h_name}: {h_val}",
+                            remediation="Configure server to suppress version banners.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                        )
+                        host_findings.append(f)
+
             # 5. Obsolete Software & Information Disclosure (Passive)
             for port, http_data in host.http_info.items():
                 # Check for Information Disclosure (Tech Stack)
@@ -598,6 +639,10 @@ class ComplianceEngine:
             
         if has_redundancy:
              nis2_matrix["c) Business Continuity & Crisis Mgmt"] = "Partially Automated (Redundancy Detected)"
+
+        # Enhanced Automation Status
+        nis2_matrix["f) Cyber Hygiene & Training"] = "Partially Automated (Info Leakage & Header Checks)"
+        nis2_matrix["d) Supply Chain Security"] = "Partially Automated (Secrets & Env File Checks)"
 
         # Generate Executive Summary using Modular Generator
         summary_gen = SummaryGenerator()
