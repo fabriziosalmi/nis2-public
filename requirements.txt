@@ -3,7 +3,7 @@ aiodns==3.1.1
 click==8.1.7
 pyyaml==6.0.1
 rich==13.7.0
-dnspython==2.4.2
+dnspython==2.6.1
 scapy==2.5.0
 prometheus_client==0.19.0
 python-whois==0.9.6
