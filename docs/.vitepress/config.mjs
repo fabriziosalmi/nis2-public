@@ -40,8 +40,7 @@ export default defineConfig({
                 {
                     text: 'Advanced',
                     items: [
-                        { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-                        { text: 'CI/CD Integration', link: '/guide/cicd' }
+                        { text: 'Troubleshooting', link: '/guide/troubleshooting' }
                     ]
                 }
             ],
@@ -49,10 +48,7 @@ export default defineConfig({
                 {
                     text: 'Examples',
                     items: [
-                        { text: 'Overview', link: '/examples/' },
-                        { text: 'Basic Scan', link: '/examples/basic-scan' },
-                        { text: 'Production Setup', link: '/examples/production' },
-                        { text: 'Multi-Target Scan', link: '/examples/multi-target' }
+                        { text: 'Overview', link: '/examples/' }
                     ]
                 }
             ],
@@ -61,8 +57,7 @@ export default defineConfig({
                     text: 'Reference',
                     items: [
                         { text: 'Configuration Schema', link: '/reference/config-schema' },
-                        { text: 'CLI Commands', link: '/reference/cli' },
-                        { text: 'API', link: '/reference/api' }
+                        { text: 'CLI Commands', link: '/reference/cli' }
                     ]
                 }
             ]
