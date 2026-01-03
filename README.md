@@ -29,13 +29,13 @@ open https://localhost
 
 ## Documentation
 
-Full documentation is available at: **[https://yourusername.github.io/nis2-public](https://yourusername.github.io/nis2-public)**
+Full documentation is available at: **[https://fabriziosalmi.github.io/nis2-public](https://fabriziosalmi.github.io/nis2-public)**
 
-- [Getting Started](https://yourusername.github.io/nis2-public/guide/getting-started)
-- [Quick Start](https://yourusername.github.io/nis2-public/guide/quick-start)
-- [Configuration Guide](https://yourusername.github.io/nis2-public/guide/configuration)
-- [Docker Guide](https://yourusername.github.io/nis2-public/guide/docker)
-- [Examples](https://yourusername.github.io/nis2-public/examples/)
+- [Getting Started](https://fabriziosalmi.github.io/nis2-public/guide/getting-started)
+- [Quick Start](https://fabriziosalmi.github.io/nis2-public/guide/quick-start)
+- [Configuration Guide](https://fabriziosalmi.github.io/nis2-public/guide/configuration)
+- [Docker Guide](https://fabriziosalmi.github.io/nis2-public/guide/docker)
+- [Examples](https://fabriziosalmi.github.io/nis2-public/examples/)
 
 ## Installation
 
@@ -144,6 +144,6 @@ MIT License - see LICENSE file for details
 
 ## Support
 
-- Documentation: https://yourusername.github.io/nis2-public
+- Documentation: https://fabriziosalmi.github.io/nis2-public
 - Issues: https://github.com/fabriziosalmi/nis2-public/issues
 - Discussions: https://github.com/fabriziosalmi/nis2-public/discussions
