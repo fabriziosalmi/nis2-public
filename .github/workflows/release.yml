@@ -31,8 +31,8 @@ jobs:
           
           # Extract the section for this version from CHANGELOG.md
           if [ -f "CHANGELOG.md" ]; then
-            # Get content between this version and the next version header or end of file
-            CHANGELOG_CONTENT=$(awk "/## \[${VERSION_NUM}\]/,/## \[/" CHANGELOG.md | sed '$d' | tail -n +2)
+            # Get content between this version header and the next version header
+            CHANGELOG_CONTENT=$(awk "/^## \[${VERSION_NUM}\]/ {found=1; next} /^## \[/ {found=0} found" CHANGELOG.md)
             if [ -z "$CHANGELOG_CONTENT" ]; then
               CHANGELOG_CONTENT="Release $VERSION"
             fi
