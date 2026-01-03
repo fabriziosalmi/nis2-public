@@ -1,0 +1,55 @@
+# Create a GitHub release when a tag is pushed
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag name
+        id: get_tag
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_tag.outputs.TAG_NAME }}"
+          # Remove 'v' prefix if present
+          VERSION_NUM="${VERSION#v}"
+          
+          # Extract the section for this version from CHANGELOG.md
+          if [ -f "CHANGELOG.md" ]; then
+            # Get content between this version and the next version header or end of file
+            CHANGELOG_CONTENT=$(awk "/## \[${VERSION_NUM}\]/,/## \[/" CHANGELOG.md | sed '$d' | tail -n +2)
+            if [ -z "$CHANGELOG_CONTENT" ]; then
+              CHANGELOG_CONTENT="Release $VERSION"
+            fi
+          else
+            CHANGELOG_CONTENT="Release $VERSION"
+          fi
+          
+          # Save to file for GitHub release
+          echo "$CHANGELOG_CONTENT" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
