@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
     title: 'NIS2 Compliance Scanner',
     description: 'Automated NIS2 Directive compliance scanning and reporting tool',
+    base: '/nis2-public/',
 
     ignoreDeadLinks: [
         /^https?:\/\/localhost/,
