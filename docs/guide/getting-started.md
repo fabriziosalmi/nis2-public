@@ -1,9 +1,13 @@
-# Getting Started
+# Getting Started (v2.1.0)
 
 ## Introduction
-**NIS2 Checker** is a modular, automated system designed to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs. It helps organizations meet the strict requirements of the NIS2 Directive by automating technical checks and providing governance tracking.
+**NIS2 Checker** has been upgraded to an **Asynchronous Plugin-based Architecture (v2)**. This 10x improvement allows for massive parallel scanning of infrastructure using `httpx` and `asyncio`, while keeping the core logic modular and compliant with NIS2 Art. 21.
 
-## Features
+## Key Features (v2)
+- **High Performance**: 10x faster scanning with HTTP/2 support.
+- **Plugin Architecture**: Easily extendable scanners for Web, Infrastructure, and Compliance.
+- **Vulnerability Disclosure**: Active checks for `security.txt` (RFC 9116).
+- **Governance Integration**: Link technical scans with administrative compliance.
 - **Connectivity Checks**: Verifies target reachability.
 - **SSL/TLS Compliance**: Checks for minimum TLS version, certificate validity, and expiry.
 - **Security Headers**: Verifies presence of critical security headers (HSTS, X-Content-Type-Options, etc.).

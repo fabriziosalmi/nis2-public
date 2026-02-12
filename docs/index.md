@@ -3,12 +3,12 @@ layout: home
 
 hero:
   name: "NIS2 Checker"
-  text: "Automated Compliance & Governance"
-  tagline: "Verify connectivity, SSL, security headers, and infrastructure audit for NIS2 compliance."
+  text: "10x Async Architecture"
+  tagline: "Verify connectivity, SSL, security headers, and infrastructure audit with our new plugin-based engine."
   actions:
     - theme: brand
       text: GitHub Repository
-      link: https://github.com/fabriziosalmi/nis2-checker
+      link: https://github.com/fabriziosalmi/nis2-public
     - theme: alt
       text: Get Started
       link: /guide/getting-started
