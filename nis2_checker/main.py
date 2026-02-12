@@ -9,8 +9,8 @@ from nis2_checker.database import create_db_and_tables, get_session, ScanResult
 from nis2_checker.notifier import send_alert
 
 async def scan_single_target(scanner, target):
-    """Async wrapper for the synchronous scanner."""
-    return await asyncio.to_thread(scanner.scan_target, target)
+    """Runs the async scanner for a target."""
+    return await scanner.scan_target(target)
 
 async def main_async():
     parser = argparse.ArgumentParser(description="NIS2 Compliance Checker")

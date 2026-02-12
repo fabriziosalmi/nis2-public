@@ -12,7 +12,7 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 ### 🧠 Strategic Intelligence (New in v0.4.0)
 - **Strategic Compliance**:
     - **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
-    - **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence.
+    - **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence. 
     - **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS).
     - **Secrets Detection**: Scans for leaked AWS keys, private keys, and tokens.
     - **WHOIS Monitoring**: Alerts on domain expiry (< 30 days).
@@ -27,7 +27,8 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **Real-time Alerts**: Sends **Slack/Webhook notifications** immediately upon detecting CRITICAL issues.
 
 ### 🚀 Performance
-- **AsyncIO Core**: Parallel scanning engine capable of handling hundreds of targets concurrently.
+- **10x Plugin Architecture (v2.1.0)**: Parallel scanning engine powered by `asyncio` and `httpx` (HTTP/2 support).
+- **Asynchronous IO Core**: Non-blocking parallel execution for both network and compliance checks.
 
 ### 📊 Advanced Reporting
 - **Console**: Color-coded summary.

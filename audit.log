@@ -74,3 +74,5 @@
 2025-12-06 11:52:44,276 - scanner_logic - INFO - ScannerLogic initialized with all modules
 2025-12-06 11:52:44,277 - scanner_logic - INFO - Starting scan for target: Example Corp (https://example.com)
 2025-12-06 11:52:44,277 - scanner_logic - INFO - Starting scan for target: Google (Test) (https://google.com)
+2026-02-12 18:17:42,179 - scanner_logic - INFO - ScannerLogic initialized with Plugin-based Engine (v2)
+2026-02-12 18:17:42,179 - scanner_logic - INFO - Scanning Test...

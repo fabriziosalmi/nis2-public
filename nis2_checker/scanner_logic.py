@@ -17,6 +17,11 @@ from nis2_checker.models import CheckResult, TargetScanResult, Severity
 from nis2_checker.audit_mapping import AUDIT_MAPPING
 from nis2_checker.logger import setup_logger
 
+# 10x Plugins
+from nis2_checker.plugins.web_plugin import WebScannerPlugin
+from nis2_checker.plugins.compliance_plugin import CompliancePlugin
+from nis2_checker.plugins.infrastructure_plugin import InfrastructurePlugin
+
 # Disable warnings for self-signed certs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -35,7 +40,14 @@ class ScannerLogic:
         self.compliance_scanner = ComplianceScanner(config.get('compliance', {}))
         self.evidence_collector = EvidenceCollector()
         
-        logger.info("ScannerLogic initialized with all modules")
+        # 10x Improvement: Plugin-based architecture
+        self.plugins = [
+            WebScannerPlugin(config),
+            CompliancePlugin(config),
+            InfrastructurePlugin(config)
+        ]
+        
+        logger.info("ScannerLogic initialized with Plugin-based Engine (v2)")
 
     def _map_result(self, check_id: str, status: str, details: str, raw_data: Dict[str, Any] = None, severity_override=None) -> CheckResult:
         """Helper to create a CheckResult with NIS2 context."""
@@ -65,140 +77,56 @@ class ScannerLogic:
             raw_data=raw_data
         )
 
-    def scan_target(self, target: Dict[str, Any]) -> List[TargetScanResult]:
-        """Run all enabled checks for a single target or CIDR and return structured results."""
+    async def scan_target(self, target: Dict[str, Any]) -> List[TargetScanResult]:
+        """Run all enabled checks for a single target or CIDR using parallel plugins."""
         results = []
         
-        # Check for CIDR
+        # Check for CIDR (Recursive Async Discovery)
         ip = target.get('ip')
         if ip and '/' in ip:
+            import asyncio
             live_hosts = self.nmap_scanner.discover_hosts(ip)
-            for host in live_hosts:
-                sub_target = target.copy()
-                sub_target['ip'] = host
-                sub_target['name'] = f"{target.get('name', 'Network')} - {host}"
-                results.extend(self.scan_target(sub_target))
-            return results
+            tasks = [self.scan_target({**target, 'ip': host, 'name': f"{target.get('name', 'Network')} - {host}"}) for host in live_hosts]
+            nested = await asyncio.gather(*tasks)
+            return [item for sublist in nested for item in sublist]
 
         # Single Target Scan
         url = target.get('url')
         name = target.get('name', url or ip)
-        
-        logger.info(f"Starting scan for target: {name} ({url or ip})")
+        logger.info(f"Scanning {name}...")
         
         scan_result = TargetScanResult(target=url or ip, name=name)
+        context = {}
         
-        # Determine target host for socket connections
-        host = None
-        port = 443
-        if url:
-            parsed = urlparse(url)
-            host = parsed.hostname
-            if parsed.port:
-                port = parsed.port
-        elif ip:
-            host = ip
-
-        target_type = target.get('type', 'generic')
-
-        # 1. WHOIS Scan (Domain Expiry)
-        if host and self.config.get('checks', {}).get('whois_check', True):
-            # Check if host is a domain (not IP) roughly
-            if not host.replace('.', '').isdigit():
-                whois_res = self.whois_scanner.check_domain_expiry(host)
-                scan_result.results.append(self._map_result("domain_expiry", whois_res['status'], whois_res['details'], whois_res.get('data')))
-
-        # 2. Connectivity & Content Checks
-        response_body = None
-        response_headers = {}
+        # 1. Run All Plugins in Parallel
+        import asyncio
+        plugin_tasks = [plugin.scan(target, context) for plugin in self.plugins]
+        plugin_results = await asyncio.gather(*plugin_tasks)
         
-        if self.config['checks'].get('connectivity'):
-            res, response_obj = self.check_connectivity(url, ip, target)
-            scan_result.results.append(self._map_result("connectivity", res['status'], res['details']))
-            
-            if response_obj:
-                response_body = response_obj.text
-                response_headers = response_obj.headers
+        for res_list in plugin_results:
+            scan_result.results.extend(res_list)
 
-        # 3. Content Analysis (Secrets, Tech Stack)
+        # 2. Content Analysis (Dynamic context enrichment)
+        response_body = context.get('response_body')
+        response_headers = context.get('response_headers')
+        
         if response_body:
-            content_res = self.content_scanner.scan_content(response_headers, response_body)
-            
-            if 'secrets_leak' in content_res:
-                s_res = content_res['secrets_leak']
-                # Determine Severity Dynamically
-                sev = Severity.CRITICAL if s_res['status'] == 'FAIL' else Severity.INFO
-                scan_result.results.append(self._map_result("secrets_leak", s_res['status'], s_res['details'], severity_override=sev))
-                
-            if 'tech_stack' in content_res:
-                t_res = content_res['tech_stack']
-                sev = Severity.HIGH if t_res['status'] == 'FAIL' else Severity.INFO
-                scan_result.results.append(self._map_result("tech_stack", t_res['status'], t_res['details'], severity_override=sev))
+            content_res = self.content_scanner.scan_content(response_headers or {}, response_body)
+            for k, v in content_res.items():
+                 sev = Severity.CRITICAL if k == 'secrets_leak' and v['status'] == 'FAIL' else Severity.HIGH
+                 scan_result.results.append(self._map_result(k, v['status'], v['details'], severity_override=sev))
 
-        # 3b. EU/IT Compliance Checks
-        if host:
-            # security.txt (Needs URL)
-            if url:
-                 stxt_res = self.compliance_scanner.scan_security_txt(url)
-                 scan_result.results.append(self._map_result("security_txt", stxt_res['status'], stxt_res['details'], stxt_res.get('data')))
-            
-            # Body Checks (Reuse response_body)
-            if response_body:
-                 comp_res = self.compliance_scanner.scan_italian_compliance(response_body)
-                 for check_key, check_val in comp_res.items():
-                      scan_result.results.append(self._map_result(check_key, check_val['status'], check_val['details']))
+        # 3. Nmap Checks (Wrapped in to_thread as they are subprocess heavy)
+        if self.config.get('nmap', {}).get('enabled'):
+             nmap_raw = await asyncio.to_thread(self.nmap_scanner.scan_target, target)
+             for k, v in nmap_raw.items():
+                  scan_result.results.append(self._map_result(k, v['status'], v['details']))
 
-            # Header Checks (Reuse headers)
-            if response_headers:
-                 waf_res = self.compliance_scanner.detect_waf_cdn(response_headers)
-                 scan_result.results.append(self._map_result("waf_cdn", waf_res['status'], waf_res['details']))
-
-        # 4. Web Checks
-        if target_type in ['web', 'https', 'generic']:
-            if self.config['checks'].get('ssl_tls') and host:
-                res = self.check_ssl(host, port)
-                scan_result.results.append(self._map_result("ssl_tls", res['status'], res['details'], res.get('data')))
-
-            if self.config['checks'].get('security_headers') and url:
-                # We can reuse headers if we already fetched them, but separate check fn is cleaner for now
-                if response_headers:
-                     res = self.check_headers_from_obj(response_headers)
-                else:
-                     res = self.check_headers(url, target)
-                scan_result.results.append(self._map_result("security_headers", res['status'], res['details']))
-
-        # 5. Nmap Infrastructure Checks
-        nmap_raw = self.nmap_scanner.scan_target(target)
-        if nmap_raw:
-            for check_key, check_val in nmap_raw.items():
-                internal_id = check_key
-                if check_key == 'ssh_auth': internal_id = 'ssh_password_auth'
-                elif check_key == 'tls_versions': internal_id = 'deprecated_tls'
-                elif check_key == 'open_mgmt': internal_id = 'open_mgmt_ports'
-                elif check_key == 'rdp_security': internal_id = 'rdp_encryption'
-                elif check_key == 'smb_security': internal_id = 'smb_signing'
-                
-                scan_result.results.append(self._map_result(internal_id, check_val['status'], check_val['details']))
-
-        # 6. DNS Checks
-        if self.config.get('checks', {}).get('dns_checks', False):
-             target_val = target.get('url') or target.get('ip')
-             if target_val:
-                 dns_raw = self.dns_scanner.scan_target(target_val)
-                 for k, v in dns_raw.items():
-                     internal_id = k
-                     if k == 'spf': internal_id = 'spf_record'
-                     elif k == 'dmarc': internal_id = 'dmarc_record'
-                     
-                     scan_result.results.append(self._map_result(internal_id, v['status'], v['details']))
-
-        # 7. Evidence (Screenshot)
-        if self.config.get('checks', {}).get('evidence', True) and url:
-             screenshot_path = self.evidence_collector.take_screenshot(url, name)
-             # We don't necessarily add a "CheckResult" for this, but maybe we attach it to the TargetScanResult?
-             # For now, let's just log it or add a PASS check that it was taken.
+        # 4. Evidence
+        if self.config.get('checks', {}).get('evidence') and url:
+             screenshot_path = await asyncio.to_thread(self.evidence_collector.take_screenshot, url, name)
              if screenshot_path:
-                  scan_result.results.append(self._map_result("evidence_collected", "PASS", f"Screenshot saved to {screenshot_path}"))
+                  scan_result.results.append(self._map_result("evidence_collected", "PASS", f"Screenshot: {screenshot_path}"))
 
         scan_result.calculate_score()
         results.append(scan_result)

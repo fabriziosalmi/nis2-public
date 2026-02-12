@@ -1,6 +1,6 @@
 {
   "name": "nis2-checker",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs.",
   "main": "index.js",
   "directories": {
