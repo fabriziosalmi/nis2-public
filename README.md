@@ -9,25 +9,23 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **SSL/TLS Compliance**: Checks for minimum TLS version (1.2/1.3), certificate validity, and expiry.
 - **Security Headers**: Verifies HSTS, X-Content-Type-Options, X-Frame-Options, CSP.
 
-### 🧠 Strategic Intelligence (New in v0.4.0)
-- **Strategic Compliance**:
-    - **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
-    - **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence. 
-    - **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS).
-    - **Secrets Detection**: Scans for leaked AWS keys, private keys, and tokens.
-    - **WHOIS Monitoring**: Alerts on domain expiry (< 30 days).
-    - **Visual Evidence**: Captures automated screenshots of targets.
+### 🧠 Strategic Compliance
+- **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
+- **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence.
+- **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS CloudFront).
+- **Secrets Detection**: Scans for leaked AWS keys, private keys, and tokens in HTTP response bodies.
+- **WHOIS Monitoring**: Alerts on domain expiry (< 30 days critical, < 60 days warning).
+- **Visual Evidence**: Captures automated screenshots of targets using Playwright.
 - **Holistic DNS Security**: Checks SPF, DMARC, and DNSSEC.
-- **Reporting**: JSON, PDF, and HTML formats with compliance scoring.
-- **Nmap Vulnerability Scan**: integration with `vulners` script to detect **CVEs** on open ports.
+- **Nmap Vulnerability Scan**: Integration with `vulners` script to detect CVEs on open ports.
 - **Service Hardening**: Detects SSH password auth, cleartext HTTP management ports, and insecure RDP/SMB.
 
 ### 📈 Persistence & Alerting
 - **Database History**: All scans are saved to a local SQLite database (`nis2_platform.db`) for trend analysis.
-- **Real-time Alerts**: Sends **Slack/Webhook notifications** immediately upon detecting CRITICAL issues.
+- **Real-time Alerts**: Sends Slack/Webhook notifications upon detecting CRITICAL issues.
 
-### 🚀 Performance
-- **10x Plugin Architecture (v2.1.0)**: Parallel scanning engine powered by `asyncio` and `httpx` (HTTP/2 support).
+### 🚀 Architecture
+- **Plugin-based Engine (v2.1.0)**: Parallel scanning engine powered by `asyncio` and `httpx` (HTTP/2 support).
 - **Asynchronous IO Core**: Non-blocking parallel execution for both network and compliance checks.
 
 ### 📊 Advanced Reporting
@@ -44,8 +42,8 @@ This starts the Web Dashboard and Database automatically.
 
 ```bash
 # Clone the repository
-git clone https://github.com/fabriziosalmi/nis2-checker.git
-cd nis2-checker
+git clone https://github.com/fabriziosalmi/nis2-public.git
+cd nis2-public
 
 # Start the platform
 docker-compose up -d
@@ -67,8 +65,8 @@ docker run --rm \
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/fabriziosalmi/nis2-checker.git
-cd nis2-checker
+git clone https://github.com/fabriziosalmi/nis2-public.git
+cd nis2-public
 
 # 2. Setup Virtual Environment
 python3 -m venv venv
@@ -194,7 +192,7 @@ Achieving NIS2 compliance is not just about technical scans; it requires robust 
 ## CI/CD
 
 ### GitHub Actions
-The `.github/workflows/nis2.yml` workflow is available but **should be used with caution**.
+The `.github/workflows/nis2.yml` workflow is configured for **manual trigger only** (`workflow_dispatch`).
 
 > [!WARNING]
 > **Do not run Nmap scans from public GitHub Runners.**
@@ -203,7 +201,7 @@ The `.github/workflows/nis2.yml` workflow is available but **should be used with
 > **Recommendation**:
 > *   Use **Self-Hosted Runners** inside your network.
 > *   Run the tool via a VPN (e.g., **Tailscale**) or Proxy to reach internal targets safely.
-> *   The workflow in this repo is manually disabled by default for safety.
+> *   The workflow in this repo is manually triggered by default for safety.
 
 ### GitLab CI
 The `.gitlab-ci.yml` pipeline runs on schedules. Configure CI/CD variables for secrets.

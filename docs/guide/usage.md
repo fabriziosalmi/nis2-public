@@ -27,7 +27,10 @@ After a scan, reports are generated:
 ## CI/CD Integration
 
 ### GitHub Actions
-The `.github/workflows/nis2.yml` workflow runs daily. Add secrets to your repository settings to support authenticated scans.
+The `.github/workflows/nis2.yml` workflow is configured for **manual trigger only** (`workflow_dispatch`). Add repository secrets for any authenticated scan targets.
+
+> [!WARNING]
+> Do not run Nmap scans from public GitHub runners — it violates GitHub's Acceptable Use Policy. Use Self-Hosted Runners or connect through a VPN to scan internal infrastructure.
 
 ### GitLab CI
 The `.gitlab-ci.yml` pipeline runs on schedules. Configure CI/CD variables for secrets.
