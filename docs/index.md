@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "NIS2 Checker"
-  text: "10x Async Architecture"
-  tagline: "Verify connectivity, SSL, security headers, and infrastructure audit with our new plugin-based engine."
+  text: "Plugin-based Async Architecture"
+  tagline: "Verify connectivity, SSL/TLS, security headers, and infrastructure compliance with a modular, parallel scanning engine."
   actions:
     - theme: brand
       text: GitHub Repository

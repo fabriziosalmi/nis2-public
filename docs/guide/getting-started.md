@@ -1,26 +1,26 @@
-# Getting Started (v2.1.0)
+# Getting Started
 
 ## Introduction
-**NIS2 Checker** has been upgraded to an **Asynchronous Plugin-based Architecture (v2)**. This 10x improvement allows for massive parallel scanning of infrastructure using `httpx` and `asyncio`, while keeping the core logic modular and compliant with NIS2 Art. 21.
+**NIS2 Checker** uses a plugin-based, asynchronous scanning architecture. The parallel scanning engine allows concurrent checking of multiple targets and checks using `httpx` and `asyncio`, while keeping the core logic modular and aligned with NIS2 Art. 21.
 
-## Key Features (v2)
-- **High Performance**: 10x faster scanning with HTTP/2 support.
-- **Plugin Architecture**: Easily extendable scanners for Web, Infrastructure, and Compliance.
+## Key Features
+- **Plugin Architecture**: Modular scanners for Web, Infrastructure, and Compliance checks.
+- **Async Scanning**: Parallel execution using `httpx` with HTTP/2 support.
 - **Vulnerability Disclosure**: Active checks for `security.txt` (RFC 9116).
-- **Governance Integration**: Link technical scans with administrative compliance.
+- **Governance Integration**: Links technical scans with administrative compliance items.
 - **Connectivity Checks**: Verifies target reachability.
-- **SSL/TLS Compliance**: Checks for minimum TLS version, certificate validity, and expiry.
+- **SSL/TLS Compliance**: Checks minimum TLS version, certificate validity, and expiry.
 - **Security Headers**: Verifies presence of critical security headers (HSTS, X-Content-Type-Options, etc.).
 - **Infrastructure Audit**: Checks for SSH password auth, deprecated TLS, and open management ports using Nmap.
-- **Network Discovery**: Scans entire subnets (CIDR) with low-impact settings.
+- **Network Discovery**: Scans entire subnets (CIDR) with configurable timing settings.
 - **Governance Checklist**: Integrated manual checklist for NIS2 governance priorities.
 - **Authentication Support**: Supports Basic Auth and Bearer Tokens via environment variables.
-- **Reporting**: Console output and JSON reports.
-- **CI/CD Integration**: Ready-to-use GitHub Actions and GitLab CI pipelines.
+- **Reporting**: Console, JSON, HTML, PDF, CSV, Markdown, and JUnit XML output formats.
+- **CI/CD Integration**: GitHub Actions and GitLab CI pipeline configurations included.
 
 > [!IMPORTANT]
 > **Running Nmap on GitHub Actions**
-> Please note that running port scans (Nmap) from public GitHub runners is generally forbidden. You should use **Self-Hosted Runners** or connect via a VPN (like **Tailscale**) to scan your infrastructure legally and safely. The provided workflow is disabled by default to prevent accidental misuse.
+> Running port scans (Nmap) from public GitHub runners is forbidden by GitHub's Acceptable Use Policy. Use **Self-Hosted Runners** or connect via a VPN (such as **Tailscale**) to scan your infrastructure safely. The provided workflow uses `workflow_dispatch` (manual trigger only) to prevent accidental misuse.
 
 ## Installation
 
@@ -32,8 +32,8 @@ We recommend using **Docker** for the easiest setup, as it includes all system d
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/fabriziosalmi/nis2-checker.git
-    cd nis2-checker
+    git clone https://github.com/fabriziosalmi/nis2-public.git
+    cd nis2-public
     ```
 
 2.  **Start the Platform**:
@@ -49,14 +49,14 @@ We recommend using **Docker** for the easiest setup, as it includes all system d
 ### Prerequisites
 - Python 3.11+
 - Nmap (must be installed on the system)
-- Chrome/Chromium (for screenshots)
+- Chrome/Chromium (for screenshots via Playwright)
 
 ### Steps
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/fabriziosalmi/nis2-checker.git
-    cd nis2-checker
+    git clone https://github.com/fabriziosalmi/nis2-public.git
+    cd nis2-public
     ```
 
 2.  **Create a Virtual Environment**:

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
     title: "NIS2 Checker",
     description: "Enterprise NIS2 Compliance & Audit Platform",
-    base: "/nis2-checker/",
+    base: "/nis2-public/",
     ignoreDeadLinks: true,
     themeConfig: {
         // https://vitepress.dev/reference/default-theme-config
@@ -32,13 +32,14 @@ export default defineConfig({
             {
                 text: 'Reference',
                 items: [
-                    { text: 'API Reference', link: '/reference/api' }
+                    { text: 'API Reference', link: '/reference/api' },
+                    { text: 'Strategic Checks', link: '/reference/strategic_checks' }
                 ]
             }
         ],
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-checker' }
+            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-public' }
         ],
 
         footer: {

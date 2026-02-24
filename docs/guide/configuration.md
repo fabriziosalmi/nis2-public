@@ -4,34 +4,49 @@
 Configure timeouts, enabled checks, and required headers.
 
 ```yaml
+# Timeout for requests in seconds
 timeout: 10
+
+# Compliance checks
 checks:
+  connectivity: true
   ssl_tls: true
   security_headers: true
-  connectivity: true
-  ssh_password: true
-  tls_deprecated: true
-  http_cleartext: true
-  windows_rdp: true
-  windows_smb: true
-report:
-  json: true   # Generate JSON report (nis2_report.json)
-  html: true   # Generate HTML dashboard (nis2_report.html)
-  pdf: true    # Generate PDF report (report.pdf)
+  dns_checks: true
+  whois_check: true
+  evidence: true
 
+# SSL/TLS Requirements
+ssl:
+  min_version: "TLSv1.2"
+  check_expiry: true
+  expiry_warning_days: 30
+
+# Required Security Headers
+headers:
+  required:
+    - "Strict-Transport-Security"
+    - "X-Content-Type-Options"
+    - "X-Frame-Options"
+
+# Infrastructure Audit (Nmap)
 nmap:
   enabled: true
-  vuln_scan_enabled: true # NEW: Scan for CVEs using vulners script
-  timing: 3 # 0-5 (0=paranoid, 3=normal, 5=insane)
+  timing: 3 # 0-5 (0=paranoid, 1=sneaky, 2=polite, 3=normal, 4=aggressive, 5=insane)
   discovery: true # Enable ping scan for CIDR targets
   ports:
     ssh: 22
     https: 443
     http_mgmt: [80, 8080]
+    rdp: 3389
+    smb: 445
   checks:
     ssh_password: true
     tls_deprecated: true
     http_cleartext: true
+    windows_rdp: true
+    windows_smb: true
+    dns_checks: true
 
 # DNS Security Checks
 dns:
@@ -49,11 +64,6 @@ notifications:
 report:
   format: "console" # console, json, pdf, html
   output_file: "report.json"
-
-headers:
-  required:
-    - "Strict-Transport-Security"
-    - "X-Content-Type-Options"
 ```
 
 ## Targets (`targets.yaml`)
