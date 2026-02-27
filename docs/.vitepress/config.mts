@@ -44,7 +44,7 @@ export default defineConfig({
 
         footer: {
             message: 'Released under the MIT License.',
-            copyright: 'Copyright © 2025 NIS2 Checker Team'
+            copyright: 'Copyright © 2025-2026 Fabrizio Salmi'
         }
     }
 })
