@@ -4,12 +4,12 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 
 ## Features
 
-### 🛡️ Core Compliance
+### Core Compliance
 - **Connectivity Checks**: Verifies target reachability (IPv4/IPv6).
 - **SSL/TLS Compliance**: Checks for minimum TLS version (1.2/1.3), certificate validity, and expiry.
 - **Security Headers**: Verifies HSTS, X-Content-Type-Options, X-Frame-Options, CSP.
 
-### 🧠 Strategic Compliance
+### Strategic Compliance
 - **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
 - **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence.
 - **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS CloudFront).
@@ -20,21 +20,21 @@ A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for 
 - **Nmap Vulnerability Scan**: Integration with `vulners` script to detect CVEs on open ports.
 - **Service Hardening**: Detects SSH password auth, cleartext HTTP management ports, and insecure RDP/SMB.
 
-### 📈 Persistence & Alerting
+### Persistence & Alerting
 - **Database History**: All scans are saved to a local SQLite database (`nis2_platform.db`) for trend analysis.
 - **Real-time Alerts**: Sends Slack/Webhook notifications upon detecting CRITICAL issues.
 
-### 🚀 Architecture
+### Architecture
 - **Plugin-based Engine (v2.1.0)**: Parallel scanning engine powered by `asyncio` and `httpx` (HTTP/2 support).
 - **Asynchronous IO Core**: Non-blocking parallel execution for both network and compliance checks.
 
-### 📊 Advanced Reporting
+### Advanced Reporting
 - **Console**: Color-coded summary.
 - **JSON**: Machine-readable data for SIEM integration.
 - **PDF**: Executive reports with visual graphs and governance gaps.
 - **HTML**: Interactive dashboard.
 
-## 🚀 Quick Start (Docker)
+## Quick Start (Docker)
 The easiest way to run the platform is using Docker.
 
 ### Option 1: Docker Compose (Recommended)
@@ -61,7 +61,7 @@ docker run --rm \
   fabriziosalmi/nis2-checker
 ```
 
-## 🐍 Installation (Python)
+## Installation (Python)
 
 ```bash
 # 1. Clone the repository
@@ -137,7 +137,7 @@ python3 -m nis2_checker.main report-incident
 ```
 This generates a JSON file following CSIRT Italia/ENISA taxonomy in your current directory.
 
-## 🐳 Docker Support
+## Docker Support
 Run the checker anywhere without installing dependencies.
 
 ### Docker Usage
@@ -152,7 +152,7 @@ docker run -v $(pwd):/app nis2-checker scan --targets targets.yaml
 docker run -it -v $(pwd):/app nis2-checker report-incident
 ```
 
-## 📊 Reporting
+## Reporting
 The tool automatically generates reports in the following formats based on the `--output` extension or configuration:
 
 - **Console**: Default summary in the terminal.
@@ -177,7 +177,7 @@ python3 -m nis2_checker.main scan --output report.csv
 python3 -m nis2_checker.main scan --output junit.xml
 ```
 
-## 📜 Governance & Compliance (NIS2)
+## Governance & Compliance (NIS2)
 
 Achieving NIS2 compliance is not just about technical scans; it requires robust organizational governance. We provide a **[Governance Checklist](governance_checklist.md)** to help you track non-technical requirements.
 
