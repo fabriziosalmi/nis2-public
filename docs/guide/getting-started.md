@@ -1,81 +1,72 @@
 # Getting Started
 
-## Introduction
-**NIS2 Checker** uses a plugin-based, asynchronous scanning architecture. The parallel scanning engine allows concurrent checking of multiple targets and checks using `httpx` and `asyncio`, while keeping the core logic modular and aligned with NIS2 Art. 21.
+## Prerequisites
 
-## Key Features
-- **Plugin Architecture**: Modular scanners for Web, Infrastructure, and Compliance checks.
-- **Async Scanning**: Parallel execution using `httpx` with HTTP/2 support.
-- **Vulnerability Disclosure**: Active checks for `security.txt` (RFC 9116).
-- **Governance Integration**: Links technical scans with administrative compliance items.
-- **Connectivity Checks**: Verifies target reachability.
-- **SSL/TLS Compliance**: Checks minimum TLS version, certificate validity, and expiry.
-- **Security Headers**: Verifies presence of critical security headers (HSTS, X-Content-Type-Options, etc.).
-- **Infrastructure Audit**: Checks for SSH password auth, deprecated TLS, and open management ports using Nmap.
-- **Network Discovery**: Scans entire subnets (CIDR) with configurable timing settings.
-- **Governance Checklist**: Integrated manual checklist for NIS2 governance priorities.
-- **Authentication Support**: Supports Basic Auth and Bearer Tokens via environment variables.
-- **Reporting**: Console, JSON, HTML, PDF, CSV, Markdown, and JUnit XML output formats.
-- **CI/CD Integration**: GitHub Actions and GitLab CI pipeline configurations included.
-
-> [!IMPORTANT]
-> **Running Nmap on GitHub Actions**
-> Running port scans (Nmap) from public GitHub runners is forbidden by GitHub's Acceptable Use Policy. Use **Self-Hosted Runners** or connect via a VPN (such as **Tailscale**) to scan your infrastructure safely. The provided workflow uses `workflow_dispatch` (manual trigger only) to prevent accidental misuse.
-
-## Installation
-
-We recommend using **Docker** for the easiest setup, as it includes all system dependencies (like Nmap and Pango for PDF generation).
-
-### 🐳 Option 1: Docker (Recommended)
-
-**Prerequisites**: Docker and Docker Compose installed.
-
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/fabriziosalmi/nis2-public.git
-    cd nis2-public
-    ```
-
-2.  **Start the Platform**:
-    ```bash
-    docker-compose up -d
-    ```
-
-3.  **Access the Dashboard**:
-    Open `http://localhost:8000` in your browser.
-
-### 🐍 Option 2: Python (Manual)
-
-### Prerequisites
-- Python 3.11+
-- Nmap (must be installed on the system)
-- Chrome/Chromium (for screenshots via Playwright)
-
-### Steps
-
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/fabriziosalmi/nis2-public.git
-    cd nis2-public
-    ```
-
-2.  **Create a Virtual Environment**:
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Run the Web App**:
-    ```bash
-    python -m nis2_checker.web
-    ```
+- Docker and Docker Compose
+- Git
 
 ## Quick Start
+
+1. **Clone the repository:**
+
 ```bash
-python -m nis2_checker.main --config config.yaml --targets targets.yaml
+git clone https://github.com/fabriziosalmi/nis2-public.git
+cd nis2-public
 ```
+
+2. **Create your environment file:**
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set `JWT_SECRET` and `NEXTAUTH_SECRET` to random values. See [Configuration](./configuration.md) for all variables.
+
+3. **Start the platform:**
+
+```bash
+make dev
+```
+
+This builds and starts all services: PostgreSQL, Redis, FastAPI, Celery worker, Celery Beat, and the Next.js frontend.
+
+4. **Open the dashboard:**
+
+Navigate to [http://localhost:8077](http://localhost:8077). The API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+## First Steps
+
+1. **Register an account** from the login page.
+2. **Create an organization** (or accept an invite to an existing one).
+3. **Add assets** -- enter the domains or IPs you want to scan.
+4. **Run your first scan** -- select an asset and click "Scan Now."
+5. **Review findings** in the dashboard. Each finding maps to a NIS2 article and includes severity and remediation guidance.
+
+## Project Structure
+
+```
+nis2-public/
+  packages/
+    scanner/     # Python CLI scanner (50+ checks)
+    api/         # FastAPI backend (REST API, Celery tasks)
+    web/         # Next.js 15 frontend (shadcn/ui)
+  infra/
+    docker/      # docker-compose.dev.yml, docker-compose.prod.yml
+  scripts/       # DB seed, migration helpers
+  docs/          # This documentation (VitePress)
+```
+
+## Useful Make Targets
+
+| Command | Description |
+|---|---|
+| `make dev` | Start all services in development mode |
+| `make dev-down` | Stop development services |
+| `make dev-logs` | Tail logs for all services |
+| `make api-logs` | Tail API service logs |
+| `make web-logs` | Tail frontend logs |
+| `make db-upgrade` | Run database migrations |
+| `make db-seed` | Seed database with sample data |
+| `make test` | Run all tests (scanner + API) |
+| `make prod` | Start production stack |
+| `make clean` | Remove containers, volumes, and caches |

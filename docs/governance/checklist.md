@@ -1,16 +1,20 @@
 # NIS2 Governance Checklist: 30 Priorities
 
-## 📖 How to Use This Document
-This checklist is designed to be a living document for Compliance Officers, CISOs, and IT Managers.
+## How to Use This Document
 
-1.  **Assessment**: Go through each item and mark the current status.
-2.  **Assignment**: Assign an owner to each missing item (e.g., "IT Manager" for Backups, "Legal" for Contracts).
-3.  **Tracking**: Review this document monthly during board or management meetings.
-4.  **Evidence**: Store proofs of compliance (PDFs, screenshots, logs) in a secure repository referenced here.
+This checklist complements the automated scans performed by the NIS2 Platform. While the scanner covers technical checks (TLS, headers, DNS, ports), this checklist addresses organizational and governance requirements that require human assessment.
+
+Use it alongside the platform's Compliance Matrix:
+
+1. **Assessment**: Go through each item and mark the current status.
+2. **Assignment**: Assign an owner to each missing item (e.g., "IT Manager" for Backups, "Legal" for Contracts).
+3. **Tracking**: Review this document monthly during board or management meetings.
+4. **Evidence**: Store proofs of compliance (PDFs, screenshots, logs) in a secure repository referenced here.
 
 This checklist is ordered by "Survival and Legal Compliance" logic: first, the items that save you from immediate sanctions and operational halts, then structure, and finally optimization.
 
-## 🔗 Official & Helpful References
+## Official References
+
 - **NIS2 Directive (EU 2022/2555)**: [Official Text (EUR-Lex)](https://eur-lex.europa.eu/eli/dir/2022/2555/oj)
 - **ACN Portal (Italy)**: [Registration Login](https://portale.acn.gov.it/login)
 - **ENISA Guidelines**: [Technical Implementation Guidance](https://www.enisa.europa.eu/publications/nis2-technical-implementation-guidance)
@@ -19,8 +23,9 @@ This checklist is ordered by "Survival and Legal Compliance" logic: first, the i
 
 ---
 
-## 🔴 CRITICAL PRIORITY (Must-Have by Deadlines)
-*Without these, the company is legally exposed or technically defenseless.*
+## CRITICAL PRIORITY (Must-Have by Deadlines)
+
+Without these, the company is legally exposed or technically defenseless.
 
 - [ ] **Scoping Analysis**: Definitive confirmation if the company is an "Essential" or "Important" entity under Legislative Decree 138/2024 (or local transposition).
 - [ ] **ACN Portal Registration**: Has the company registered on the National Cybersecurity Agency portal? (Primary formal obligation).
@@ -33,8 +38,9 @@ This checklist is ordered by "Survival and Legal Compliance" logic: first, the i
 - [ ] **Vulnerability Management (Patching)**: Are critical security patches installed within certain timeframes (e.g., 48-72h from release)?
 - [ ] **Cybersecurity Budget**: Has a specific and adequate budget been allocated for NIS2 compliance?
 
-## 🟠 HIGH PRIORITY (Core Processes)
-*These measures define the company's ability to manage risk.*
+## HIGH PRIORITY (Core Processes)
+
+These measures define the company's ability to manage risk.
 
 - [ ] **Risk Assessment**: Has a formal cyber risk analysis been conducted on all critical assets?
 - [ ] **Information Security Policy**: Is there an approved "master" document dictating corporate security rules?
@@ -47,8 +53,9 @@ This checklist is ordered by "Survival and Legal Compliance" logic: first, the i
 - [ ] **Backup Testing**: Is a data restoration test performed at least every 6 months?
 - [ ] **Access Control (Least Privilege)**: Do employees have only the permissions strictly necessary to work (no local Admins everywhere)?
 
-## 🔵 MEDIUM PRIORITY (Optimization and Hygiene)
-*Technical and organizational measures necessary for complete compliance.*
+## MEDIUM PRIORITY (Optimization and Hygiene)
+
+Technical and organizational measures necessary for complete compliance.
 
 - [ ] **Network Segmentation**: Is the production network (OT) or critical departments separated from the office/guest network?
 - [ ] **Onboarding/Offboarding**: Is there an automatic checklist to revoke access when an employee leaves the company?

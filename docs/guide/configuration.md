@@ -1,91 +1,69 @@
 # Configuration
 
-## Global Settings (`config.yaml`)
-Configure timeouts, enabled checks, and required headers.
+All configuration is managed through environment variables defined in `.env`. Copy `.env.example` to `.env` and adjust values for your environment.
 
-```yaml
-# Timeout for requests in seconds
-timeout: 10
+## Database
 
-# Compliance checks
-checks:
-  connectivity: true
-  ssl_tls: true
-  security_headers: true
-  dns_checks: true
-  whois_check: true
-  evidence: true
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://nis2:nis2secret@postgres:5432/nis2` | Async database connection string (used by FastAPI) |
+| `DATABASE_URL_SYNC` | `postgresql://nis2:nis2secret@postgres:5432/nis2` | Sync connection string (used by Alembic migrations) |
+| `POSTGRES_USER` | `nis2` | PostgreSQL user |
+| `POSTGRES_PASSWORD` | `nis2secret` | PostgreSQL password |
+| `POSTGRES_DB` | `nis2` | PostgreSQL database name |
 
-# SSL/TLS Requirements
-ssl:
-  min_version: "TLSv1.2"
-  check_expiry: true
-  expiry_warning_days: 30
+## Redis
 
-# Required Security Headers
-headers:
-  required:
-    - "Strict-Transport-Security"
-    - "X-Content-Type-Options"
-    - "X-Frame-Options"
+| Variable | Default | Description |
+|---|---|---|
+| `REDIS_URL` | `redis://redis:6379/0` | Redis connection for caching and sessions |
 
-# Infrastructure Audit (Nmap)
-nmap:
-  enabled: true
-  timing: 3 # 0-5 (0=paranoid, 1=sneaky, 2=polite, 3=normal, 4=aggressive, 5=insane)
-  discovery: true # Enable ping scan for CIDR targets
-  ports:
-    ssh: 22
-    https: 443
-    http_mgmt: [80, 8080]
-    rdp: 3389
-    smb: 445
-  checks:
-    ssh_password: true
-    tls_deprecated: true
-    http_cleartext: true
-    windows_rdp: true
-    windows_smb: true
-    dns_checks: true
+## Authentication (JWT)
 
-# DNS Security Checks
-dns:
-  timeout: 5
-  checks:
-    email_security: true # SPF, DMARC
-    dns_security: true   # DNSSEC
+| Variable | Default | Description |
+|---|---|---|
+| `JWT_SECRET` | (change in production) | Secret key for signing JWT tokens. Generate with `openssl rand -hex 32` |
+| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime in minutes |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime in days |
 
-# Alerting / Notifications
-notifications:
-  slack_webhook: "https://hooks.slack.com/services/YOUR/WEBHOOK"
-  alert_on: ["FAIL"] # Trigger alert only on critical failures
+## Celery
 
-# Reporting
-report:
-  format: "console" # console, json, pdf, html
-  output_file: "report.json"
-```
+| Variable | Default | Description |
+|---|---|---|
+| `CELERY_BROKER_URL` | `redis://redis:6379/1` | Celery message broker |
+| `CELERY_RESULT_BACKEND` | `redis://redis:6379/2` | Celery result backend |
 
-## Targets (`targets.yaml`)
-Define your targets using URLs, IPs, or CIDR notation.
+## Frontend (Next.js)
 
-```yaml
-targets:
-  - url: "https://example.com"
-    name: "Example Web"
-    type: "web"
-  
-  - ip: "192.168.1.10"
-    name: "Internal Server"
-    type: "ssh"
+| Variable | Default | Description |
+|---|---|---|
+| `NEXTAUTH_URL` | `http://localhost:8077` | NextAuth base URL |
+| `NEXTAUTH_SECRET` | (change in production) | NextAuth encryption secret |
+| `API_URL` | `http://localhost:8000` | Internal API URL (server-side) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Public API URL (client-side) |
 
-  - ip: "192.168.1.0/24"
-    name: "Office Network"
-    type: "generic" # Scans all hosts in subnet
-```
+## Production (Caddy)
 
-### Target Types
-- `web` / `https`: Runs SSL, Headers, and Web Port checks.
-- `ssh`: Runs SSH Authentication checks.
-- `windows`: Runs RDP and SMB security checks.
-- `generic`: Runs a broad set of safe checks.
+| Variable | Default | Description |
+|---|---|---|
+| `DOMAIN` | `nis2.yourdomain.com` | Domain for Caddy auto-HTTPS. Set this for production deployments |
+
+## Scanner Defaults
+
+Scanner behavior is configured through the API and organization settings in the dashboard. Key defaults:
+
+- **Timeout**: 10 seconds per check
+- **Concurrency**: Parallel check execution per target
+- **Max hosts**: Configurable limit on targets per scan
+- **Feature toggles**: Individual check categories can be enabled/disabled per organization
+
+## Organization Settings
+
+Organization-level settings are managed through the dashboard under **Settings**:
+
+- Organization name and metadata
+- Default scan configuration
+- Team member management (invite, role assignment)
+- API key management
+- Notification preferences

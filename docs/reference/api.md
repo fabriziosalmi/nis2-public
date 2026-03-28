@@ -1,82 +1,102 @@
 # API Reference
 
-## ScannerLogic
+The NIS2 Platform exposes a REST API at `http://localhost:8000`. Interactive OpenAPI documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
 
-The main orchestrator that coordinates all plugins and scanners for a given target.
+All endpoints return JSON. Authenticated endpoints require a `Bearer` token in the `Authorization` header.
 
-```python
-from nis2_checker.scanner_logic import ScannerLogic
+## Authentication
 
-scanner = ScannerLogic(config)
-results = await scanner.scan_target(target)
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/auth/register` | Register a new user | No |
+| POST | `/api/auth/login` | Obtain access and refresh tokens | No |
+| POST | `/api/auth/refresh` | Refresh an expired access token | Yes |
+| POST | `/api/auth/logout` | Invalidate the current token | Yes |
+| GET | `/api/auth/me` | Get current user profile | Yes |
+
+## Scans
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/scans` | Create and queue a new scan | Yes |
+| GET | `/api/scans` | List scans for current organization | Yes |
+| GET | `/api/scans/{scan_id}` | Get scan details and status | Yes |
+| DELETE | `/api/scans/{scan_id}` | Delete a scan and its findings | Yes |
+| GET | `/api/scans/{scan_id}/findings` | List findings for a scan | Yes |
+| GET | `/api/scans/compare` | Compare two scans (query params: `scan_a`, `scan_b`) | Yes |
+
+## Findings
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/api/findings` | List all findings (filterable by severity, status, asset, article) | Yes |
+| GET | `/api/findings/{finding_id}` | Get finding details | Yes |
+| PATCH | `/api/findings/{finding_id}` | Update finding status (resolved, accepted, false positive) | Yes |
+
+## Assets
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/assets` | Create a new asset | Yes |
+| GET | `/api/assets` | List assets for current organization | Yes |
+| GET | `/api/assets/{asset_id}` | Get asset details | Yes |
+| PUT | `/api/assets/{asset_id}` | Update an asset | Yes |
+| DELETE | `/api/assets/{asset_id}` | Delete an asset | Yes |
+
+## Schedules
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/schedules` | Create a scan schedule (cron expression) | Yes |
+| GET | `/api/schedules` | List scan schedules | Yes |
+| PUT | `/api/schedules/{schedule_id}` | Update a schedule | Yes |
+| DELETE | `/api/schedules/{schedule_id}` | Delete a schedule | Yes |
+
+## Reports
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/reports` | Generate a report (PDF, JSON, or CSV) | Yes |
+| GET | `/api/reports` | List generated reports | Yes |
+| GET | `/api/reports/{report_id}` | Download a report file | Yes |
+
+## Organizations
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| POST | `/api/organizations` | Create an organization | Yes |
+| GET | `/api/organizations/{org_id}` | Get organization details | Yes |
+| PUT | `/api/organizations/{org_id}` | Update organization settings | Yes |
+| POST | `/api/organizations/{org_id}/members` | Invite a member | Yes |
+
+## Health
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/api/health` | Service health check (DB, Redis, Celery) | No |
+
+## Error Responses
+
+All errors follow a consistent format:
+
+```json
+{
+  "detail": "Description of the error"
+}
 ```
 
-`scan_target(target)` accepts a dict with either a `url` or `ip` key and returns a list of `TargetScanResult` objects. Targets with CIDR notation in `ip` are expanded via Nmap host discovery before scanning.
+Common HTTP status codes:
 
-## Plugin Architecture
+| Code | Meaning |
+|---|---|
+| 400 | Bad request (validation error) |
+| 401 | Unauthorized (missing or invalid token) |
+| 403 | Forbidden (insufficient role permissions) |
+| 404 | Resource not found |
+| 422 | Unprocessable entity (invalid request body) |
+| 429 | Rate limit exceeded |
+| 500 | Internal server error |
 
-Scanners are implemented as plugins that subclass `ScannerPlugin` from `nis2_checker.plugins.base`. Each plugin implements the `scan(target, context)` coroutine and returns a list of `CheckResult` objects.
+## Rate Limiting
 
-### Built-in Plugins
-
-| Plugin | Module | Checks |
-|---|---|---|
-| `WebScannerPlugin` | `nis2_checker.plugins.web_plugin` | Connectivity, security headers, P.IVA, WAF/CDN detection |
-| `CompliancePlugin` | `nis2_checker.plugins.compliance_plugin` | `security.txt` (RFC 9116) |
-| `InfrastructurePlugin` | `nis2_checker.plugins.infrastructure_plugin` | SSL/TLS, SPF, DMARC |
-
-### Writing a Custom Plugin
-
-```python
-from nis2_checker.plugins.base import ScannerPlugin
-from nis2_checker.models import CheckResult, Severity
-from typing import Dict, Any, List
-
-class MyPlugin(ScannerPlugin):
-    async def scan(self, target: Dict[str, Any], context: Dict[str, Any]) -> List[CheckResult]:
-        # Perform checks and return results
-        return []
-```
-
-Register the plugin by appending an instance to `ScannerLogic.plugins` after initialization.
-
-## NmapScanner
-
-Handles infrastructure audits using Nmap subprocesses. Used by `ScannerLogic` when `nmap.enabled` is `true` in `config.yaml`.
-
-```python
-from nis2_checker.nmap_scanner import NmapScanner
-
-nmap = NmapScanner(config.get('nmap', {}))
-results = nmap.scan_target(target)
-```
-
-## Data Models
-
-### CheckResult
-
-Represents the outcome of a single compliance check.
-
-| Field | Type | Description |
-|---|---|---|
-| `check_id` | `str` | Unique identifier for the check (e.g. `ssl_tls`) |
-| `name` | `str` | Human-readable check name |
-| `status` | `str` | `PASS`, `FAIL`, `WARN`, or `SKIPPED` |
-| `details` | `str` | Description of the result |
-| `severity` | `Severity` | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO` |
-| `nis2_article` | `str` | Relevant NIS2 article reference |
-| `remediation` | `str` | Suggested fix (only present on `FAIL`) |
-
-### TargetScanResult
-
-Aggregates all `CheckResult` objects for a single scan target.
-
-| Field | Type | Description |
-|---|---|---|
-| `target` | `str` | URL or IP address of the scanned target |
-| `name` | `str` | Human-readable target label |
-| `timestamp` | `datetime` | Time the scan was performed |
-| `compliance_score` | `float` | Weighted score from 0 to 100 |
-| `results` | `List[CheckResult]` | All check results for this target |
-
-Call `calculate_score()` to compute the weighted compliance score after populating `results`. Weights are: CRITICAL=10, HIGH=5, MEDIUM=2, LOW=1, INFO=0.
+API endpoints are rate-limited per user. Default: 100 requests per minute. Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
