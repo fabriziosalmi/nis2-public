@@ -46,6 +46,31 @@ report.html
 *.swp
 *.swo
 
+# Claude Code
+.claude/
+
+# Database
+nis2_platform.db
+*.sqlite3
+
+# Environment
+.env
+
+# Next.js
+packages/web/.next/
+packages/web/next-env.d.ts
+
+# Celery
+celerybeat-schedule
+packages/api/celerybeat-schedule
+
+# Docker volumes
+pgdata/
+
+# Reports output
+reports/
+evidence/
+
 # OS
 .DS_Store
 Thumbs.db
