@@ -1,207 +1,144 @@
-# NIS2 Compliance Checker
+# NIS2 Compliance Platform
 
-A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs.
+Full-stack SaaS platform for automated NIS2 Directive (EU 2022/2555) compliance scanning, reporting, and management. Built with FastAPI, Next.js 15, shadcn/ui, PostgreSQL, and Celery.
 
 ## Features
 
-### Core Compliance
-- **Connectivity Checks**: Verifies target reachability (IPv4/IPv6).
-- **SSL/TLS Compliance**: Checks for minimum TLS version (1.2/1.3), certificate validity, and expiry.
-- **Security Headers**: Verifies HSTS, X-Content-Type-Options, X-Frame-Options, CSP.
+- **Automated Compliance Scanner** — 50+ security checks: ports, TLS/SSL, HTTP headers, DNS (DNSSEC, SPF, DMARC), WHOIS, WAF/CDN detection, secrets, SRI, legal compliance
+- **NIS2 Art. 21 Compliance Matrix** — Maps all 10 subsections (a-j) of D.Lgs 138/2024 with automated/manual status tracking
+- **Multi-tenant SaaS** — Organization-based isolation with role-based access (admin/auditor/viewer)
+- **Admin Dashboard** — Real-time stats, compliance score trends, findings by severity charts (Recharts)
+- **Findings Management** — Severity badges, status workflow (open/acknowledged/resolved), bulk updates, filtering
+- **Report Generation** — PDF, JSON, CSV reports via async Celery tasks with download API
+- **Scheduled Scans** — Cron-based recurring scans with Celery Beat
+- **Scan Comparison** — Diff two scans: new/resolved/persistent findings with score delta
+- **Asset Management** — Domains, IPs, CIDR blocks with tags and status tracking
+- **Caddy Reverse Proxy** — Automatic HTTPS via Let's Encrypt, zero-config TLS
+- **Italian Compliance** — P.IVA detection, privacy policy, cookie banner checks (Playwright)
+- **Prometheus Metrics** — Scanner metrics export for monitoring
 
-### Strategic Compliance
-- **Incident Reporting (Art. 23)**: Interactive CLI helper for generating CSIRT-compliant early warning reports.
-- **EU/IT Specifics**: Validates `security.txt` (RFC 9116), Italian P.IVA/Privacy mandates, and Cookie Banner presence.
-- **Resilience**: Detects WAF & CDN protection (Cloudflare, Akamai, AWS CloudFront).
-- **Secrets Detection**: Scans for leaked AWS keys, private keys, and tokens in HTTP response bodies.
-- **WHOIS Monitoring**: Alerts on domain expiry (< 30 days critical, < 60 days warning).
-- **Visual Evidence**: Captures automated screenshots of targets using Playwright.
-- **Holistic DNS Security**: Checks SPF, DMARC, and DNSSEC.
-- **Nmap Vulnerability Scan**: Integration with `vulners` script to detect CVEs on open ports.
-- **Service Hardening**: Detects SSH password auth, cleartext HTTP management ports, and insecure RDP/SMB.
+## Architecture
 
-### Persistence & Alerting
-- **Database History**: All scans are saved to a local SQLite database (`nis2_platform.db`) for trend analysis.
-- **Real-time Alerts**: Sends Slack/Webhook notifications upon detecting CRITICAL issues.
+```
+packages/
+  scanner/    # Python compliance scanner engine (standalone CLI)
+  api/        # FastAPI backend (29 endpoints, async, Celery workers)
+  web/        # Next.js 15 + shadcn/ui + Zustand + TanStack Query
+infra/
+  docker/     # Docker Compose (dev + prod), Caddyfile
+```
 
-### Architecture
-- **Plugin-based Engine (v2.1.0)**: Parallel scanning engine powered by `asyncio` and `httpx` (HTTP/2 support).
-- **Asynchronous IO Core**: Non-blocking parallel execution for both network and compliance checks.
+## Tech Stack
 
-### Advanced Reporting
-- **Console**: Color-coded summary.
-- **JSON**: Machine-readable data for SIEM integration.
-- **PDF**: Executive reports with visual graphs and governance gaps.
-- **HTML**: Interactive dashboard.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, React 19, shadcn/ui, Tailwind v4, Zustand, TanStack Query, Recharts |
+| Backend | FastAPI, SQLAlchemy (async), Alembic, Pydantic v2, Celery, Redis |
+| Database | PostgreSQL 16 |
+| Scanner | Python asyncio, aiohttp, dnspython, Playwright, python-whois |
+| Infra | Docker, Caddy 2 (auto-HTTPS), Prometheus |
 
-## Quick Start (Docker)
-The easiest way to run the platform is using Docker.
-
-### Option 1: Docker Compose (Recommended)
-This starts the Web Dashboard and Database automatically.
+## Quick Start
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
 
-# Start the platform
-docker-compose up -d
+# Configure
+cp .env.example .env
 
-# Access the dashboard at http://localhost:8000
+# Start development stack
+make dev
+
+# Open
+# UI:       http://localhost:8077
+# API Docs: http://localhost:8000/docs
 ```
 
-### Option 2: Docker CLI (One-off Scan)
-Run a single scan without the web interface.
+### Development Commands
 
 ```bash
-docker run --rm \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -v $(pwd)/targets.yaml:/app/targets.yaml \
-  fabriziosalmi/nis2-checker
+make dev          # Start all services (postgres, redis, api, celery, web)
+make dev-down     # Stop services
+make dev-logs     # Follow all logs
+make api-logs     # Follow API logs
+make web-logs     # Follow frontend logs
+make test         # Run all tests
+make clean        # Stop + remove volumes
+make prod         # Start production stack with Caddy
 ```
 
-## Installation (Python)
+## Production Deployment
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/fabriziosalmi/nis2-public.git
-cd nis2-public
+# Set your domain
+echo "DOMAIN=nis2.yourdomain.com" >> .env
 
-# 2. Setup Virtual Environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Install Browsers (for Screenshots)
-playwright install chromium
-
-# 5. Run the Scan
-python3 -m nis2_checker.main
+# Deploy with auto-HTTPS
+make prod
 ```
 
-## Configuration
+Caddy handles TLS certificates automatically via Let's Encrypt.
 
-### `config.yaml`
-Configure timeouts, enabled checks, and required headers.
+## API
 
-```yaml
-timeout: 10
-checks:
-  ssl_tls: true
-  security_headers: true
-  connectivity: true
-ssl:
-  min_version: "TLSv1.2"
-headers:
-  required:
-    - "Strict-Transport-Security"
-    - "X-Content-Type-Options"
+29 REST endpoints under `/api/v1/`:
+
+| Group | Endpoints |
+|-------|-----------|
+| Auth | `POST /register`, `/login`, `/refresh`, `GET/PATCH /me` |
+| Scans | CRUD + `/results`, `/findings`, `/cancel`, `/compare/{id}` |
+| Findings | List, filter, update status, bulk update, stats |
+| Assets | CRUD + CSV import |
+| Schedules | CRUD + trigger immediate run |
+| Reports | Generate (PDF/JSON/CSV), status polling, download |
+| Organizations | CRUD + member management (invite, roles) |
+| Health | Liveness + readiness checks |
+
+Full OpenAPI docs at `/docs` when the API is running.
+
+## Scanner Checks
+
+| Category | Checks |
+|----------|--------|
+| Ports | 14 critical ports (SSH, RDP, SMB, MySQL, PostgreSQL, Redis, MongoDB, FTP, Telnet) |
+| TLS/SSL | Version, ciphers, weak version probing (TLS 1.0/1.1), certificate expiry |
+| HTTP | HSTS, CSP, X-Frame-Options, cookies (Secure/HttpOnly/SameSite), SRI |
+| DNS | DNSSEC, zone transfer (AXFR), SPF, DMARC, MX redundancy |
+| Secrets | AWS keys, GitHub tokens, private keys, JWTs in responses |
+| Legal | P.IVA (Italy), privacy policy, cookie banner (dynamic via Playwright) |
+| Resilience | WAF/CDN detection, banner/version disclosure, SSH hardening |
+| WHOIS | Domain expiry monitoring (30-day warning threshold) |
+
+## Project Structure
+
+```
+packages/api/app/
+  models/       # 11 SQLAlchemy models (User, Org, Scan, Finding, Asset, ...)
+  routers/      # 8 FastAPI routers
+  schemas/      # Pydantic request/response schemas
+  services/     # Scanner adapter (scan_service.py)
+  tasks/        # Celery tasks (scan, report, scheduled)
+  middleware/   # Tenant isolation, audit logging
+
+packages/web/src/
+  app/dashboard/  # 16 pages (scans, assets, findings, compliance, reports, settings)
+  components/     # shadcn/ui components + layout (sidebar, header)
+  hooks/          # TanStack Query hooks
+  stores/         # Zustand auth store
+  lib/            # API client, utilities
 ```
 
-### `targets.yaml`
-Define your targets.
+## Contributing
 
-```yaml
-targets:
-  - url: "https://example.com"
-    name: "Example"
-  
-  - url: "https://internal.api"
-    name: "Internal API"
-    auth_id: "INTERNAL_API" # Uses INTERNAL_API_TOKEN or INTERNAL_API_USER/_PASS env vars
-```
+Contributions welcome. Please open an issue first to discuss changes.
 
-## Usage
+## License
 
-```bash
-python -m nis2_checker.main --config config.yaml --targets targets.yaml
-```
+MIT License - see LICENSE file for details.
 
-### Authentication
-To scan protected targets, define `auth_id` in `targets.yaml` and set corresponding environment variables:
+## Links
 
-- **Bearer Token**: `export INTERNAL_API_TOKEN="your-token"`
-- **Basic Auth**: 
-  ```bash
-  export INTERNAL_API_USER="username"
-  export INTERNAL_API_PASS="password"
-  ```
-
-### Incident Reporting (Art. 23)
-Use the interactive wizard to generate an early warning report for CSIRTs:
-```bash
-python3 -m nis2_checker.main report-incident
-```
-This generates a JSON file following CSIRT Italia/ENISA taxonomy in your current directory.
-
-## Docker Support
-Run the checker anywhere without installing dependencies.
-
-### Docker Usage
-```bash
-# Build
-docker build -t nis2-checker .
-
-# Run Scan
-docker run -v $(pwd):/app nis2-checker scan --targets targets.yaml
-
-# Run Incident Reporter (Interactive)
-docker run -it -v $(pwd):/app nis2-checker report-incident
-```
-
-## Reporting
-The tool automatically generates reports in the following formats based on the `--output` extension or configuration:
-
-- **Console**: Default summary in the terminal.
-- **JSON**: Detailed structure for programmatic processing.
-- **Markdown**: GitHub-flavored summary, ideal for CI/CD job summaries.
-- **CSV**: Spreadsheet-ready format for auditing tracking.
-- **JUnit XML**: Integration with CI/CD test dashboards (GitLab/Jenkins).
-- **PDF**: Executive summary with visual layout (requires `weasyprint`).
-
-### Examples
-```bash
-# JSON (Default)
-python3 -m nis2_checker.main scan --output report.json
-
-# Markdown
-python3 -m nis2_checker.main scan --output report.md
-
-# CSV
-python3 -m nis2_checker.main scan --output report.csv
-
-# JUnit XML
-python3 -m nis2_checker.main scan --output junit.xml
-```
-
-## Governance & Compliance (NIS2)
-
-Achieving NIS2 compliance is not just about technical scans; it requires robust organizational governance. We provide a **[Governance Checklist](governance_checklist.md)** to help you track non-technical requirements.
-
-### How to use the Governance Checklist
-1.  **Download/Clone**: Keep the `governance_checklist.md` in your repository or export it to your internal documentation system (Confluence, SharePoint).
-2.  **Prioritize**: Start with the **🔴 Critical Priority** items. These are "Must-Haves" to avoid immediate legal repercussions and ensure business continuity.
-3.  **Assign & Track**: Use the checklist to assign tasks to specific departments (Legal, HR, IT) and track progress during monthly compliance reviews.
-4.  **Audit Trail**: Use the checklist as a high-level index for your compliance evidence.
-
-> **Note**: This tool and checklist are aids for compliance but do not replace legal advice or official certification.
-
-## CI/CD
-
-### GitHub Actions
-The `.github/workflows/nis2.yml` workflow is configured for **manual trigger only** (`workflow_dispatch`).
-
-> [!WARNING]
-> **Do not run Nmap scans from public GitHub Runners.**
-> Port scanning public targets from GitHub's infrastructure violates their Acceptable Use Policy and may get your account banned.
->
-> **Recommendation**:
-> *   Use **Self-Hosted Runners** inside your network.
-> *   Run the tool via a VPN (e.g., **Tailscale**) or Proxy to reach internal targets safely.
-> *   The workflow in this repo is manually triggered by default for safety.
-
-### GitLab CI
-The `.gitlab-ci.yml` pipeline runs on schedules. Configure CI/CD variables for secrets.
+- Issues: https://github.com/fabriziosalmi/nis2-public/issues
+- Discussions: https://github.com/fabriziosalmi/nis2-public/discussions

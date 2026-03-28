@@ -1,7 +1,7 @@
 {
-  "name": "nis2-checker",
-  "version": "2.1.0",
-  "description": "A modular, automated system to verify NIS2 compliance (Basic Cyber Hygiene) for URLs and IPs.",
+  "name": "nis2-platform",
+  "version": "2.0.0",
+  "description": "NIS2 Compliance Platform - Full-stack SaaS for automated compliance scanning and management",
   "main": "index.js",
   "directories": {
     "test": "tests"
@@ -14,18 +14,21 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fabriziosalmi/nis2-checker.git"
+    "url": "git+https://github.com/fabriziosalmi/nis2-public.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["nis2", "compliance", "cybersecurity", "scanner"],
+  "author": "Fabrizio Salmi",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/fabriziosalmi/nis2-checker/issues"
+    "url": "https://github.com/fabriziosalmi/nis2-public/issues"
   },
-  "homepage": "https://github.com/fabriziosalmi/nis2-checker#readme",
+  "homepage": "https://github.com/fabriziosalmi/nis2-public#readme",
   "devDependencies": {
     "vitepress": "^1.6.4",
     "vue": "^3.5.25"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
   }
 }

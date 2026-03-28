@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nis2-web",
+      "runtimeExecutable": "echo",
+      "runtimeArgs": ["Server already running via Docker on port 8077"],
+      "port": 8077,
+      "autoPort": false
+    }
+  ]
+}
