@@ -32,31 +32,31 @@ This builds and starts all services: PostgreSQL, Redis, FastAPI, Celery worker, 
 
 4. **Open the dashboard:**
 
-Navigate to [http://localhost:8077](http://localhost:8077). The API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
+- Frontend: [http://localhost:8077](http://localhost:8077)
+- API docs (Swagger UI): [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ## First Steps
 
-1. **Register an account** from the login page.
-2. **Create an organization** (or accept an invite to an existing one).
-3. **Add assets** -- enter the domains or IPs you want to scan.
-4. **Run your first scan** -- select an asset and click "Scan Now."
-5. **Review findings** in the dashboard. Each finding maps to a NIS2 article and includes severity and remediation guidance.
+1. Register an account from the login page. Registration automatically creates an organization and assigns you the admin role.
+2. Add assets -- enter the domains or IPs you want to scan.
+3. Run a scan -- select one or more assets and click Start Scan.
+4. Review findings in the dashboard. Each finding maps to a NIS2 article and includes severity and remediation guidance.
 
 ## Project Structure
 
 ```
 nis2-public/
   packages/
-    scanner/     # Python CLI scanner (50+ checks)
-    api/         # FastAPI backend (REST API, Celery tasks)
-    web/         # Next.js 15 frontend (shadcn/ui)
+    scanner/     # Python scanner (aiohttp, asyncio, dnspython, playwright)
+    api/         # FastAPI backend (REST API, Celery task definitions)
+    web/         # Next.js 15 frontend (shadcn/ui, Tailwind CSS)
   infra/
     docker/      # docker-compose.dev.yml, docker-compose.prod.yml
   scripts/       # DB seed, migration helpers
   docs/          # This documentation (VitePress)
 ```
 
-## Useful Make Targets
+## Make Targets
 
 | Command | Description |
 |---|---|
@@ -65,8 +65,12 @@ nis2-public/
 | `make dev-logs` | Tail logs for all services |
 | `make api-logs` | Tail API service logs |
 | `make web-logs` | Tail frontend logs |
+| `make db-migrate msg="description"` | Generate a new Alembic migration |
 | `make db-upgrade` | Run database migrations |
 | `make db-seed` | Seed database with sample data |
 | `make test` | Run all tests (scanner + API) |
+| `make test-scanner` | Run scanner tests only |
+| `make test-api` | Run API tests only |
 | `make prod` | Start production stack |
+| `make prod-down` | Stop production stack |
 | `make clean` | Remove containers, volumes, and caches |

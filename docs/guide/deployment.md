@@ -76,34 +76,30 @@ Automate backups with a cron job on the host.
 
 ## Scaling Celery Workers
 
-Scale workers to handle more concurrent scans:
+Scale the Celery worker service to handle more concurrent scans:
 
 ```bash
-docker compose -f infra/docker/docker-compose.prod.yml up -d --scale worker=4
+docker compose -f infra/docker/docker-compose.prod.yml up -d --scale celery-worker=4
 ```
 
 Each worker process handles scan execution and report generation. Monitor queue depth in Redis to determine when to scale.
 
 ## Monitoring
 
-### Prometheus
+### Health Checks
 
-The platform exposes metrics for Prometheus scraping. Configure your Prometheus instance to scrape:
+The API exposes two health endpoints:
 
-- API metrics: `http://api:8000/metrics`
-- Celery worker metrics via the Redis exporter
-
-A Prometheus instance is available on port `9099` in the dev stack.
-
-### Health Check
-
-The `/api/health` endpoint returns the status of all dependencies:
+- `GET /api/v1/health` -- returns `{"status": "ok"}`. Use this for load balancer liveness probes.
+- `GET /api/v1/health/ready` -- checks database and Redis connectivity. Returns `{"status": "ok", "checks": {...}}` or `{"status": "degraded", "checks": {...}}`.
 
 ```bash
-curl https://nis2.yourdomain.com/api/health
+curl https://nis2.yourdomain.com/api/v1/health/ready
 ```
 
-Returns: database connectivity, Redis connectivity, and Celery worker availability.
+### Prometheus
+
+A Prometheus instance is available on port `9099` in the dev stack. The scanner writes `.prom` text files for metrics collection. FastAPI does not expose an HTTP `/metrics` endpoint directly.
 
 ## Updating
 

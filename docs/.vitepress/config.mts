@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-    title: "NIS2 Platform",
-    description: "NIS2 Compliance Scanning & Management Platform",
+    title: "NIS2 Platform Docs",
+    description: "Documentation for the NIS2 compliance scanning platform",
     base: "/nis2-public/",
     ignoreDeadLinks: true,
     themeConfig: {
@@ -45,7 +45,7 @@ export default defineConfig({
 
         footer: {
             message: 'Released under the MIT License.',
-            copyright: 'Copyright © 2025-2026 Fabrizio Salmi'
+            copyright: 'Copyright 2025-2026 Fabrizio Salmi'
         }
     }
 })

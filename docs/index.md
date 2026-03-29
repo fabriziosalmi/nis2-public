@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "NIS2 Platform"
-  text: "Compliance Scanning & Management"
-  tagline: "Full-stack SaaS platform for automated NIS2 Art. 21 compliance scanning, finding management, and report generation."
+  text: "Compliance Scanning and Management"
+  tagline: "Open-source platform for scanning infrastructure against NIS2 Directive Art. 21 requirements."
   actions:
     - theme: brand
       text: Get Started
@@ -17,16 +17,16 @@ hero:
       link: /governance/checklist
 
 features:
-  - title: Admin Dashboard
-    details: 16-page Next.js dashboard for scans, assets, findings, compliance matrix, reports, and team management.
-  - title: Automated Scanner
-    details: 50+ compliance checks covering ports, TLS, DNS, HTTP headers, legal pages, secrets, WHOIS, and WAF detection.
+  - title: Scanner
+    details: Checks ports, TLS versions and ciphers, HTTP security headers, DNS records (DNSSEC, SPF, DMARC, AXFR), WHOIS expiry, cookie flags, SRI, secrets in page source, sensitive file exposure, security.txt, WAF/CDN detection, and Italian legal requirements (P.IVA, privacy policy, cookie banner).
+  - title: Dashboard
+    details: Next.js 15 frontend with pages for scans, assets, findings, compliance matrix, reports, schedules, team management, API keys, and settings.
   - title: Report Generation
-    details: Export findings as PDF, JSON, or CSV. Reports generated asynchronously via Celery workers.
+    details: Export scan results as PDF, JSON, or CSV. Reports are generated asynchronously via Celery workers and downloaded when ready.
   - title: Scheduled Scans
-    details: Configure recurring scans with cron expressions via Celery Beat. Compare results across scan runs.
+    details: Set up recurring scans with cron expressions. Celery Beat dispatches scans on schedule. Compare findings between any two scans in an organization.
   - title: Multi-Tenant Organizations
-    details: JWT authentication with RBAC (admin, auditor, viewer). Isolated data per organization.
+    details: JWT authentication with role-based access (admin, auditor, viewer). Data is isolated per organization.
   - title: NIS2 Art. 21 Compliance Matrix
-    details: Map scanner findings to NIS2 directive articles. Track compliance posture over time.
+    details: Each scan produces a compliance_matrix mapping findings to NIS2 directive articles. The compliance page reads from the most recent completed scan.
 ---

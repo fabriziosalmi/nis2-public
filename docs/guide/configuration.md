@@ -51,19 +51,19 @@ All configuration is managed through environment variables defined in `.env`. Co
 
 ## Scanner Defaults
 
-Scanner behavior is configured through the API and organization settings in the dashboard. Key defaults:
+Scanner behavior is configured per scan via the API when creating a scan or schedule. Organization settings store defaults that new scans inherit. Key defaults in the scan creation endpoint:
 
-- **Timeout**: 10 seconds per check
-- **Concurrency**: Parallel check execution per target
-- **Max hosts**: Configurable limit on targets per scan
-- **Feature toggles**: Individual check categories can be enabled/disabled per organization
+- **Timeout**: 10 seconds per check (`scan_timeout`)
+- **Concurrency**: 20 parallel tasks (`concurrency`)
+- **Max hosts**: 0 (unlimited) -- configurable limit on targets per scan (`max_hosts`)
+- **Features**: Individual check categories (`dns_checks`, `web_checks`, `port_scan`, `whois_checks`) can be toggled per scan. Organization settings store the defaults that new scans inherit.
 
 ## Organization Settings
 
 Organization-level settings are managed through the dashboard under **Settings**:
 
 - Organization name and metadata
-- Default scan configuration
+- Default scan configuration (features, concurrency, timeout)
 - Team member management (invite, role assignment)
 - API key management
-- Notification preferences
+- Notification channel preferences

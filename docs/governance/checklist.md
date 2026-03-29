@@ -2,7 +2,7 @@
 
 ## How to Use This Document
 
-This checklist complements the automated scans performed by the NIS2 Platform. While the scanner covers technical checks (TLS, headers, DNS, ports), this checklist addresses organizational and governance requirements that require human assessment.
+This checklist covers organizational and governance requirements that cannot be verified by automated scanning. The scanner checks technical controls (TLS, headers, DNS, ports). This checklist addresses the rest: policies, processes, training, and legal obligations.
 
 Use it alongside the platform's Compliance Matrix:
 
