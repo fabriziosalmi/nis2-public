@@ -19,10 +19,11 @@ import uuid
 from typing import Any, Optional
 
 from fastapi import Request
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.database import async_session_factory
+from app.database import IS_POSTGRES, async_session_factory
 from app.middleware.identity import current_org_id, current_user_id
 from app.models.audit_log import AuditLog
 
@@ -130,6 +131,15 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         try:
             async with async_session_factory() as session:
+                # The audit middleware runs in its own session, separate from
+                # the request's get_db() session. We must scope it to the
+                # tenant ourselves so the RLS WITH CHECK on audit_logs
+                # accepts the INSERT.
+                if IS_POSTGRES:
+                    await session.execute(
+                        text("SET LOCAL app.current_org_id = :v"),
+                        {"v": str(org_id)},
+                    )
                 session.add(
                     AuditLog(
                         organization_id=org_id,

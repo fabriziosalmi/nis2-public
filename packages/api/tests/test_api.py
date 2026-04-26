@@ -264,7 +264,7 @@ class TestOpenAPI:
         assert resp.status_code == 200
         schema = resp.json()
         assert schema["info"]["title"] == "NIS2 Compliance Platform API"
-        assert schema["info"]["version"] == "2.4.0"
+        assert schema["info"]["version"] == "2.4.1"
 
     def test_all_router_tags_present(self, client):
         resp = client.get("/openapi.json")
