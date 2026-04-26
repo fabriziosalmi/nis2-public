@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# VitePress
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Reports
+report.json
+report.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Database
+nis2_platform.db
+*.sqlite3
+
+# Environment
+.env
+
+# Next.js
+packages/web/.next/
+packages/web/next-env.d.ts
+
+# Celery
+celerybeat-schedule
+packages/api/celerybeat-schedule
+
+# Docker volumes
+pgdata/
+
+# Reports output
+reports/
+evidence/
+screenshots/
+scan_history.json
+incident_report_*.json
+report.*
+!report.py
+
+# Logs
+audit.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc caches
+__pycache__/
+.pytest_cache/
+*.pyc
+# VitePress build artifacts
+docs/.vitepress/cache/
+docs/.vitepress/dist/

@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nis2}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nis2secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nis2}
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nis2"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ../../packages/api:/app/packages/api
+      - ../../packages/scanner:/app/packages/scanner
+    ports: ["8000:8000"]
+    env_file: ../../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  celery-worker:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ../../packages/api:/app/packages/api
+      - ../../packages/scanner:/app/packages/scanner
+    env_file: ../../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  celery-beat:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    volumes:
+      - ../../packages/api:/app/packages/api
+    env_file: ../../.env
+    depends_on:
+      redis: { condition: service_healthy }
+
+  web:
+    build:
+      context: ../../packages/web
+      dockerfile: Dockerfile
+      target: dev
+    command: npm run dev
+    volumes:
+      - ../../packages/web:/app
+      - /app/node_modules
+      - /app/.next
+    ports: ["8077:3000"]
+    env_file: ../../.env
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+
+volumes:
+  pgdata:
