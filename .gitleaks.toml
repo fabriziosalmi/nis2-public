@@ -1,0 +1,36 @@
+# gitleaks 8.x configuration.
+#
+# We extend the upstream default rule set rather than replacing it: every
+# built-in detector (AWS keys, RSA private keys, JWT tokens, etc.) keeps
+# firing as before. The allowlist below carves out narrow, file-scoped
+# exceptions for material that *intentionally* looks secret-shaped but
+# is documented test or placeholder data — never a real credential.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "NIS2-specific allowlist for known test fixtures and CI placeholders"
+
+# packages/scanner/tests/test_features.py exists to verify the
+# secrets-detection scanner actually catches real-looking secrets. It
+# embeds the canonical AWS docs sample key (AKIAIOSFODNN7EXAMPLE) and
+# locally-generated RSA test keys. These are intentional test inputs;
+# without them the scanner has no positive coverage. None are real.
+paths = [
+    '''packages/scanner/tests/test_features\.py''',
+]
+
+# Specific placeholder values pinned in non-test files but obviously not
+# real credentials. Keep this list narrow — every entry here weakens the
+# real scan, so prefer `paths` when possible.
+regexes = [
+    # AWS canonical sample access key from AWS public documentation.
+    # Cited in their own developer guides; flagged here too to allow
+    # any future test or doc reference.
+    '''AKIAIOSFODNN7EXAMPLE''',
+    # Placeholder JWT secret used in .github/workflows/ci.yml's
+    # integration-tests job. Long enough to satisfy the production
+    # secret-length validator without being a real production secret.
+    '''integration-test-secret-must-be-at-least-32-chars-long-yes''',
+]
