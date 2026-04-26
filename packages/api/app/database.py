@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import logging
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -21,13 +23,29 @@ logger = logging.getLogger(__name__)
 # we silently skip the RLS scoping.
 IS_POSTGRES = settings.database_url.startswith(("postgresql", "postgres"))
 
-engine: AsyncEngine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
+# Integration tests create a fresh TestClient per test, which means a new
+# asyncio event loop per test. SQLAlchemy's default pooled connections get
+# attached to whichever loop first checks them out — reuse from a different
+# loop raises "Future attached to a different loop" / "Event loop is closed".
+# NullPool sidesteps this: each request opens a fresh asyncpg connection
+# and closes it on release. The performance hit is irrelevant in tests
+# and never reaches production.
+_INTEGRATION_TEST_MODE = os.environ.get("INTEGRATION_DB") == "1"
+
+if _INTEGRATION_TEST_MODE:
+    engine: AsyncEngine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+else:
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
 
 async_session_factory = async_sessionmaker(
     engine,
