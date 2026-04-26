@@ -205,10 +205,11 @@ jobs:
           pip install -e packages/scanner
           pip install -e packages/api
       - name: Audit installed Python dependencies
-        # `--disable-pip` requires `-r REQUIREMENT` in newer pip-audit
-        # versions; without `-r` we let pip-audit inspect the installed
-        # editable packages directly. `--strict` makes warnings fatal.
-        run: pip-audit --strict
+        # `--skip-editable` excludes our own monorepo packages (nis2scan,
+        # nis2-api) which are installed via `pip install -e` and therefore
+        # not published to PyPI. Without --strict, real vulnerabilities
+        # still fail the job; missing-from-PyPI warnings do not.
+        run: pip-audit --skip-editable
 
   # -----------------------------------------------------------------------
   # Web dependency vulnerability scan
