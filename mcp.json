@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nis2-compliance": {
+      "command": "python",
+      "args": ["-c", "from app.mcp_server import run_mcp_stdio; run_mcp_stdio()"],
+      "cwd": "packages/api",
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+# Version control
+.git
+.github
+.gitignore
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+
+# Documentation (not needed in runtime image)
+docs/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Build artifacts
+*.log
+*.bak
+report.json
+report.html
+test_report.md
