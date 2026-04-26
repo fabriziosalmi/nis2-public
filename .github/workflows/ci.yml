@@ -97,6 +97,15 @@ jobs:
           pip install -e packages/scanner
           pip install -e packages/api
           pip install pytest pytest-asyncio httpx slowapi
+      - name: Drop SUPERUSER from app role so RLS actually enforces
+        # The postgres:16-alpine image creates POSTGRES_USER as a SUPERUSER
+        # by default. Postgres lets SUPERUSERs bypass RLS unconditionally —
+        # even FORCE ROW LEVEL SECURITY does not constrain them — which
+        # would silently mask the failsafe behaviour the tests verify.
+        env:
+          PGPASSWORD: nis2secret
+        run: |
+          psql -h localhost -U nis2 -d nis2_test -c "ALTER ROLE nis2 NOSUPERUSER;"
       - name: Run integration tests
         run: cd packages/api && python -m pytest tests/test_integration.py -v --tb=short
 
