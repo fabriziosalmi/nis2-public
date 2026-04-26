@@ -1,9 +1,10 @@
 # Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import hashlib
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -11,20 +12,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.models.api_key import ApiKey
 from app.models.membership import Membership
 from app.models.user import User
-from app.models.api_key import ApiKey
 from app.utils.jwt import decode_token
 
+# auto_error=False so we can fall back to the access_token cookie when
+# the Authorization header is absent.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _extract_access_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> str | None:
+    """Prefer the httpOnly cookie (web), fall back to Bearer (SDK / CLI)."""
+    cookie_token = request.cookies.get("access_token")
+    if cookie_token:
+        return cookie_token
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    return None
+
+
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Extract and validate the current user from the JWT Bearer token."""
-    if credentials is None:
+    """Extract and validate the current user from cookie or Bearer token."""
+    token = _extract_access_token(request, credentials)
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token",
@@ -32,7 +50,7 @@ async def get_current_user(
         )
 
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(token)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +104,6 @@ async def get_current_user(
 
 async def get_current_org(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> tuple[User, Membership]:
     """Get the current user and their active organization membership.
 
@@ -103,15 +120,24 @@ async def get_current_org(
     return current_user, membership
 
 
+async def get_current_user_org(
+    current_user: User = Depends(get_current_user),
+) -> tuple[User, uuid.UUID]:
+    """Sugar dependency: return (user, organization_id) directly."""
+    if not current_user.memberships:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of any organization",
+        )
+    return current_user, current_user.memberships[0].organization_id
+
+
 async def get_api_key_org(
     db: AsyncSession = Depends(get_db),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> tuple[ApiKey, uuid.UUID]:
-    """Authenticate via API key (X-API-Key header or Bearer token starting with 'nis2_').
+    """Authenticate via API key (Bearer token starting with 'nis2_').
     Returns (api_key, organization_id) for CI/CD integrations."""
-    import hashlib
-    from app.models.api_key import ApiKey
-
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,10 +160,8 @@ async def get_api_key_org(
             detail="Invalid or revoked API key",
         )
 
-    # Update last_used_at
     from datetime import datetime, timezone
     api_key.last_used_at = datetime.now(timezone.utc)
     await db.flush()
 
     return api_key, api_key.organization_id
-

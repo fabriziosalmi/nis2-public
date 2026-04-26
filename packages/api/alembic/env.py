@@ -2,7 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
@@ -17,6 +17,7 @@ from app.models import (  # noqa: F401
     Membership,
     NotificationChannel,
     Organization,
+    RevokedToken,
     Scan,
     ScanResult,
     ScanSchedule,
@@ -51,6 +52,13 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
+    # Migrations run with FORCE ROW LEVEL SECURITY in effect. Bypass the
+    # tenant policy explicitly so DDL and any data migrations can touch
+    # all rows. Postgres ignores the GUC for non-Postgres backends.
+    try:
+        connection.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+    except Exception:
+        pass
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()

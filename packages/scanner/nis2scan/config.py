@@ -21,6 +21,12 @@ class Config:
     max_hosts: int = 0 # 0 means unlimited
     dry_run: bool = False
     features: dict = field(default_factory=dict)
+    # Optional pre-resolved hostname -> IP map. When the API hands us a
+    # scan config it embeds the IP it resolved at validation time so the
+    # scanner connects to that exact address (DNS-rebinding mitigation).
+    # CLI users without pre-resolution leave this empty and the scanner
+    # falls back to live DNS lookup.
+    pinned_ips: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str, max_hosts: int = 0, dry_run: bool = False) -> "Config":

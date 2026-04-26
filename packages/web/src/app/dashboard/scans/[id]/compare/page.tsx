@@ -28,7 +28,6 @@ const severityColors: Record<string, string> = {
 export default function ScanComparePage() {
   const params = useParams()
   const scanId = params.id as string
-  const token = useAuthStore((s) => s.token)
   const { data: scansData } = useScans()
   const [otherId, setOtherId] = useState<string>("")
   const [comparison, setComparison] = useState<any>(null)
@@ -39,10 +38,10 @@ export default function ScanComparePage() {
   )
 
   const compare = async () => {
-    if (!token || !otherId) return
+    if (!otherId) return
     setLoading(true)
     try {
-      const data = await api.compareScan(token, scanId, otherId)
+      const data = await api.compareScan(scanId, otherId)
       setComparison(data)
     } catch (err: any) {
       toast.error("Comparison failed", { description: err.message })

@@ -88,12 +88,19 @@ async def create_scan(
             detail="No valid active assets found for the provided IDs",
         )
 
-    # Build config snapshot from assets
+    # Build config snapshot from assets. We forward the validation-time
+    # pinned IP for each domain so the scanner connects to that exact
+    # address (closing the DNS-rebinding TOCTOU window). CIDR ranges and
+    # domains that didn't resolve at validation time stay un-pinned and
+    # the scanner falls back to live resolution.
     domains: list[str] = []
     ip_ranges: list[str] = []
+    pinned_ips: dict[str, str] = {}
     for asset in assets:
         if asset.target_type == "domain":
             domains.append(asset.target_value)
+            if asset.pinned_ip:
+                pinned_ips[asset.target_value] = asset.pinned_ip
         elif asset.target_type in ("ip", "cidr"):
             ip_ranges.append(asset.target_value)
 
@@ -101,6 +108,7 @@ async def create_scan(
         "name": payload.name,
         "domains": domains,
         "ip_ranges": ip_ranges,
+        "pinned_ips": pinned_ips,
         "scan_type": payload.scan_type,
         "features": payload.features or {
             "dns_checks": True,

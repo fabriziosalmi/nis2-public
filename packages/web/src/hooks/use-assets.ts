@@ -6,30 +6,28 @@ import { api } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
 
 export function useAssets(page = 1) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['assets', page],
-    queryFn: () => api.listAssets(token!, page),
-    enabled: !!token,
+    queryFn: () => api.listAssets(page),
+    enabled: !!user,
     staleTime: 30_000,
   })
 }
 
 export function useCreateAsset() {
-  const token = useAuthStore((s) => s.token)
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: { name: string; type: string; target: string; tags?: string[] }) =>
-      api.createAsset(token!, data),
+      api.createAsset(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
   })
 }
 
 export function useDeleteAsset() {
-  const token = useAuthStore((s) => s.token)
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.deleteAsset(token!, id),
+    mutationFn: (id: string) => api.deleteAsset(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
   })
 }

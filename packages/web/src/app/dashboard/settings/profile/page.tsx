@@ -43,7 +43,6 @@ const locales = [
 ]
 
 export default function ProfileSettingsPage() {
-  const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
   const setAuth = useAuthStore((s) => s.setAuth)
   const orgId = useAuthStore((s) => s.orgId)
@@ -63,11 +62,10 @@ export default function ProfileSettingsPage() {
   })
 
   const onProfileSubmit = async (data: ProfileForm) => {
-    if (!token) return
     setLoadingProfile(true)
     try {
-      const updated = await api.updateMe(token, data)
-      setAuth(token, updated, orgId || "")
+      const updated = await api.updateMe(data)
+      setAuth(updated, orgId)
       profileForm.reset({ full_name: updated.full_name, locale: updated.locale })
       toast.success("Profile updated")
     } catch (err: any) {
@@ -78,10 +76,9 @@ export default function ProfileSettingsPage() {
   }
 
   const onPasswordSubmit = async (data: PasswordForm) => {
-    if (!token) return
     setLoadingPassword(true)
     try {
-      await api.updateMe(token, {
+      await api.updateMe({
         current_password: data.current_password,
         new_password: data.new_password,
       })

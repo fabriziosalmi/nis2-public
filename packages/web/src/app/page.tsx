@@ -9,17 +9,13 @@ import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
 
 export default function Home() {
   const router = useRouter()
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   const hydrated = useAuthHydrated()
 
   useEffect(() => {
     if (!hydrated) return
-    if (token) {
-      router.replace("/dashboard")
-    } else {
-      router.replace("/login")
-    }
-  }, [hydrated, token, router])
+    router.replace(user ? "/dashboard" : "/login")
+  }, [hydrated, user, router])
 
   return (
     <div className="flex h-screen items-center justify-center">

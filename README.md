@@ -3,9 +3,8 @@
   <br />
   <img src="https://img.shields.io/github/v/release/fabriziosalmi/nis2-public?style=flat-square&color=10b981" alt="Release" />
   <img src="https://img.shields.io/github/license/fabriziosalmi/nis2-public?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/i18n-6%20languages-3b82f6?style=flat-square" alt="i18n" />
+  <img src="https://img.shields.io/badge/i18n-5%20languages-3b82f6?style=flat-square" alt="i18n" />
   <img src="https://img.shields.io/badge/MCP-compatible-8b5cf6?style=flat-square" alt="MCP" />
-  <img src="https://img.shields.io/badge/CI-passing-10b981?style=flat-square" alt="CI" />
 </p>
 
 # NIS2 Continuous Posture Management and Remediation Platform
@@ -20,44 +19,48 @@ Designed for self-hosted, on-premise deployment. Your scan data, asset inventory
 
 ## What this platform is (and is not)
 
-This is **not** a scanner that calls itself a compliance platform. This is a GRC (Governance, Risk, Compliance) layer with an integrated technical validation engine.
+This is **not** a scanner that calls itself a compliance platform. It's a GRC layer with an integrated technical validation engine. It does **not** replace a CISO, an internal audit programme, or a real legal review of your D.Lgs 138/2024 obligations.
 
-| Layer | What it does | NIS2 coverage |
-|-------|-------------|---------------|
-| **Governance Framework** | 30-item weighted checklist mapped to Art. 21 (all 10 subsections), document tracking, approval workflows | ~40% |
-| **Remediation and Execution Control** | 15+ structured playbooks, AI copilot, effort/cost estimation, open/acknowledged/resolved workflow | ~40% |
-| **Technical Validation Engine** | 50+ automated checks (TLS, DNS, ports, certificates, headers, secrets) — the probe that verifies if the theory matches the network | ~20% |
+| Layer | What it does |
+|-------|--------------|
+| **Governance Framework** | 30-item checklist cross-referenced to NIS2 Art. 21 sub-paragraphs, document tracking, owner assignment |
+| **Remediation and Execution Control** | Structured playbooks, optional AI copilot (Ollama/OpenAI), open/acknowledged/resolved workflow |
+| **Technical Validation Engine** | 30+ automated checks (TLS, DNS, ports, certificates, headers, secrets) — the probe that verifies if the network reflects the policy |
 
-The scanner is the sonda tecnica. The governance framework is where the real NIS2 compliance lives.
+The scanner is the technical probe. The governance framework is where the substantive NIS2 work lives — and most of it is human work, not automation.
 
 ---
 
 ## NIS2 Directive coverage
 
-### Art. 21 — Risk management measures (all 10 subsections)
+### Art. 21 — Risk management measures
 
-| Subsection | Scope | Platform module |
-|------------|-------|----------------|
-| (a) Risk analysis policies | Risk assessment methodology, periodic updates | Governance checklist |
-| (b) Incident handling | Detection, response, CSIRT notification, lessons learned | Incident module (Art. 23 lifecycle) |
+The compliance matrix references all ten sub-paragraphs (a) through (j). Several of them — by design of the directive itself — cannot be evaluated by an automated scanner and are tracked through the governance checklist (status: *manual verification required*). What the platform automates vs. what stays manual:
+
+| Sub-paragraph | Scope | How the platform supports it |
+|---------------|-------|------------------------------|
+| (a) Risk analysis policies | Methodology, periodic updates | Governance checklist (manual) |
+| (b) Incident handling | Detection, response, CSIRT notification | Incident module + Art. 23 lifecycle |
 | (c) Business continuity | BCP, DRP, backup, periodic testing | BIA module (RTO/RPO/MTPD) |
 | (d) Supply chain security | Vendor assessment, contracts, monitoring | Vendor Risk module (Art. 18) |
-| (e) Secure acquisition and development | SDLC, code review, vulnerability management | Governance checklist |
-| (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | Technical validation engine |
-| (g) Cyber hygiene and training | Awareness, phishing simulation, team skills | Governance checklist |
-| (h) Cryptography | Crypto policy, key management, algorithms | Technical validation (TLS/cert checks) |
-| (i) Human resources security | Onboarding/offboarding, screening, privileged access | Governance checklist |
-| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | Governance checklist |
+| (e) Secure acquisition and development | SDLC, code review, vulnerability management | Governance checklist (manual) |
+| (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | Technical validation engine + checklist |
+| (g) Cyber hygiene and training | Awareness, phishing simulation | Governance checklist (manual) |
+| (h) Cryptography | Crypto policy, key management | Technical validation (TLS/cert) + checklist |
+| (i) Human resources security | Onboarding/offboarding, screening, PAM | Governance checklist (manual) |
+| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | Governance checklist (manual) |
 
 ### Art. 23 — Incident reporting (CSIRT)
 
-Full incident lifecycle with legally binding deadlines:
+Incident lifecycle aligned with the legal deadlines:
 
 | Phase | Deadline | Platform support |
-|-------|---------|-----------------|
-| Early Warning | 24 hours | "Red Button" — generates CSIRT payload from 3 fields + asset inventory |
-| Incident Notification | 72 hours | Structured report with taxonomy, IOCs, timeline |
+|-------|----------|------------------|
+| Early Warning | 24 hours | "Red Button" — generates a CSIRT-ready Early Warning JSON from 3 fields plus the latest asset inventory |
+| Incident Notification | 72 hours | Structured form with taxonomy, IOCs, timeline |
 | Final Report | 1 month | Aggregated data, impact assessment, lessons learned |
+
+> Note: The platform produces the artefacts and tracks the deadlines. **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push.
 
 ### Art. 18 — Supply chain (Vendor Risk Management)
 
@@ -91,20 +94,18 @@ The NIS2 Directive requires each EU member state to transpose it into national l
 
 | Reference | Coverage |
 |-----------|----------|
-| D.Lgs 138/2024 (Italian NIS2 transposition) | Full Art. 21 checklist mapping |
-| Determina ACN 127434/2026 | Technical security baseline measures verification |
+| D.Lgs 138/2024 (Italian NIS2 transposition) | Art. 21 cross-reference in the governance checklist |
+| Determina ACN 127434/2026 | Technical baseline references in the compliance matrix |
 | Determina ACN 127437/2026 | Art. 18 vendor inventory with ACN-specific fields |
-| ACN BIA template | Ready for integration at publication |
+| ACN BIA template | Internal model in place; alignment to the official ACN model pending publication |
 | Compliance deadlines API | Real countdowns: CSIRT referent (Dec 2026), 24h notification (Jan 2027), baseline measures (Jul 2027) |
-| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia` endpoints |
+| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia` |
+
+> **ACN export — preliminary schema.** The official *modello di categorizzazione* announced by ACN (publication expected May/June 2026 per the Tavolo NIS) has not been released yet. The current export is a best-effort structural mapping based on Determina 127437/2026; field names and shape will be re-validated and may change once the official template is published.
 
 ### Other EU member states (extensible)
 
-The governance checklist maps directly to NIS2 Art. 21 (EU level). National-specific modules (like the Italian ACN module) can be added for:
-- **France** (ANSSI)
-- **Germany** (BSI, NIS2UmsuCG)
-- **Spain** (CCN-CERT)
-- **Others** — contributions welcome
+The governance checklist maps to NIS2 Art. 21 at the EU level. National-specific modules (like the Italian ACN module) can be added for ANSSI (France), BSI (Germany), CCN-CERT (Spain) and others — contributions welcome.
 
 ---
 
@@ -115,7 +116,7 @@ The governance checklist maps directly to NIS2 Art. 21 (EU level). National-spec
 ```bash
 git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
-cp .env.example .env    # Generate real secrets (see comments)
+cp .env.example .env    # Generate real secrets — see comments inside
 make prod               # Production: Caddy auto-HTTPS + all services
 
 # Or development:
@@ -128,7 +129,7 @@ For air-gapped environments: Ollama AI copilot runs entirely local.
 
 ---
 
-## Technical validation engine (50+ checks)
+## Technical validation engine (30+ checks)
 
 These automated checks verify whether the security measures documented in your governance framework are actually implemented on the network:
 
@@ -144,7 +145,7 @@ These automated checks verify whether the security measures documented in your g
 
 ### EU Privacy / GDPR Posture (separate from NIS2)
 
-> These checks verify GDPR / ePrivacy / Consumer Code requirements. They are **not** NIS2 controls and are clearly labeled as such in all reports.
+> These checks verify GDPR / ePrivacy / Consumer Code requirements. They are **not** NIS2 controls and are clearly labelled as such in all reports — never aggregated into the NIS2 score.
 
 - P.IVA (Italian commercial website requirement)
 - Privacy policy detection
@@ -155,7 +156,7 @@ These automated checks verify whether the security measures documented in your g
 ## API surface
 
 | Router | Endpoints | Purpose |
-|--------|----------|---------|
+|--------|-----------|---------|
 | `/api/v1/auth` | 4 | JWT authentication, registration |
 | `/api/v1/scans` | 6 | Scan management, results, comparison |
 | `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved) |
@@ -166,7 +167,7 @@ These automated checks verify whether the security measures documented in your g
 | `/api/v1/governance` | 4 | 30-item Art. 21 checklist |
 | `/api/v1/certificates` | 3 | Deep certificate analysis |
 | `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation |
-| `/api/v1/acn-export` | 3 | ACN-compatible JSON export (Italy) |
+| `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema) |
 | `/api/v1/deadlines` | 1 | Compliance deadline countdown |
 | `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload |
 | `/api/v1/mcp` | 2 | Model Context Protocol for AI assistants |
@@ -177,7 +178,7 @@ These automated checks verify whether the security measures documented in your g
 
 Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 
-- Organization-based data isolation
+- Organization-based data isolation (`organization_id` filter on every protected query)
 - RBAC: admin, auditor, viewer per organization
 - Executive PDF/CSV reports per client
 - Aggregated compliance dashboard across all organizations
@@ -193,16 +194,16 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 | **Backend** | FastAPI, SQLAlchemy (async), Pydantic v2, Celery, Redis, slowapi |
 | **Database** | PostgreSQL 16 |
 | **Scanner** | Python asyncio, aiohttp, dnspython, Playwright, python-whois |
-| **Security** | CSP, HSTS, rate limiting, SSRF prevention, API key auth |
+| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting, SSRF prevention, API key auth |
 | **AI / MCP** | MCP Server (stdio + HTTP), Ollama/OpenAI |
 | **Infra** | Docker, Caddy 2 (auto-HTTPS), GitHub Actions CI |
 
 ## Languages
 
-| English | Italiano | Francais | Deutsch | Espanol | Portugues |
-|---------|----------|----------|---------|---------|-----------|
+| English | Italiano | Français | Deutsch | Español |
+|---------|----------|----------|---------|---------|
 
-200+ translation keys. Cookie-based locale switching.
+189 translation keys across 5 locales. Cookie-based locale switching.
 
 ---
 
@@ -214,7 +215,7 @@ Platform developed and maintained by **Fabrizio Salmi**, independent NIS2 consul
 |---------|-------------|
 | **Private NIS2 scan** | White-label scan with executive report for the board |
 | **Certificate remediation** | TLS/SSL lifecycle with CertMate and CertMate-NG |
-| **NIS2 readiness assessment** | Gap analysis on all 10 Art. 21 subsections |
+| **NIS2 readiness assessment** | Gap analysis on all 10 Art. 21 sub-paragraphs |
 | **Incident response** | CSIRT Art. 23 notification support, taxonomy, timeline |
 | **Continuous monitoring** | Scheduled scans, trend analysis, quarterly reports |
 | **Platform customization** | Private deploy, sector modules, SIEM/SOAR integration |
@@ -230,4 +231,4 @@ AGPL-3.0 — see [LICENSE](LICENSE).
 
 You can freely use, modify, and deploy this platform. If you modify it and offer it as a service to third parties, you must make your modifications available under the same license.
 
-**Commercial license / Dual licensing available for Enterprise.** If your organization needs a commercial license without copyleft obligations, contact [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com).
+**Commercial license / dual licensing available for Enterprise.** If your organization needs a commercial license without copyleft obligations, contact [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com).

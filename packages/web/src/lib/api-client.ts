@@ -1,10 +1,27 @@
 // Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+//
+// Auth model:
+//   - access_token / refresh_token live in httpOnly cookies (set by the API).
+//     They are never exposed to JavaScript, so an XSS can no longer steal them.
+//   - csrf_token is a non-httpOnly cookie. We read it here and echo it back as
+//     the X-CSRF-Token header on every state-changing request (double-submit
+//     pattern). The API's CSRFMiddleware validates the match.
+//   - All requests use credentials: 'include' so the browser attaches the
+//     cookies. URLs are relative; in dev Next.js rewrites them to the API,
+//     in prod Caddy proxies /api/* on the same domain.
 
-interface FetchOptions extends RequestInit {
-  token?: string
+const API_BASE = ''
+
+interface FetchOptions extends RequestInit {}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
 }
 
 class ApiClient {
@@ -15,14 +32,26 @@ class ApiClient {
   }
 
   private async request<T>(path: string, options: FetchOptions = {}): Promise<T> {
-    const { token, ...fetchOptions } = options
+    const method = (options.method || 'GET').toUpperCase()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...((fetchOptions.headers as Record<string, string>) || {}),
+      ...((options.headers as Record<string, string>) || {}),
     }
-    if (token) headers['Authorization'] = `Bearer ${token}`
+    if (!SAFE_METHODS.has(method)) {
+      const csrf = readCookie('csrf_token')
+      if (csrf) headers['X-CSRF-Token'] = csrf
+    }
 
-    const res = await fetch(`${this.baseUrl}${path}`, { ...fetchOptions, headers })
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    })
+
+    if (res.status === 204) {
+      return undefined as T
+    }
+
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: res.statusText }))
       const detail = error.detail
@@ -36,172 +65,170 @@ class ApiClient {
     return res.json()
   }
 
-  // Auth
+  // -------------------------------------------------------------------- Auth
   async register(data: { email: string; password: string; full_name: string; org_name: string }) {
-    return this.request<{ access_token: string; refresh_token: string }>('/api/v1/auth/register', {
+    return this.request<any>('/api/v1/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async login(email: string, password: string) {
-    return this.request<{ access_token: string; refresh_token: string }>('/api/v1/auth/login', {
+    return this.request<any>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
   }
 
-  async getMe(token: string) {
-    return this.request<any>('/api/v1/auth/me', { token })
+  async logout() {
+    return this.request<void>('/api/v1/auth/logout', { method: 'POST' })
   }
 
-  // Scans
-  async listScans(token: string, page = 1, limit = 20) {
-    return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`, { token })
+  async getMe() {
+    return this.request<any>('/api/v1/auth/me')
   }
 
-  async createScan(token: string, data: any) {
-    return this.request<any>('/api/v1/scans', { method: 'POST', body: JSON.stringify(data), token })
+  async updateMe(data: any) {
+    return this.request<any>('/api/v1/auth/me', { method: 'PATCH', body: JSON.stringify(data) })
   }
 
-  async getScan(token: string, id: string) {
-    return this.request<any>(`/api/v1/scans/${id}`, { token })
+  // ------------------------------------------------------------------- Scans
+  async listScans(page = 1, limit = 20) {
+    return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`)
   }
 
-  async getScanResults(token: string, scanId: string) {
-    return this.request<any>(`/api/v1/scans/${scanId}/results`, { token })
+  async createScan(data: any) {
+    return this.request<any>('/api/v1/scans', { method: 'POST', body: JSON.stringify(data) })
   }
 
-  async getScanFindings(token: string, scanId: string) {
-    return this.request<any>(`/api/v1/scans/${scanId}/findings`, { token })
+  async getScan(id: string) {
+    return this.request<any>(`/api/v1/scans/${id}`)
   }
 
-  // Findings
-  async listFindings(token: string, params: Record<string, string> = {}) {
+  async getScanResults(scanId: string) {
+    return this.request<any>(`/api/v1/scans/${scanId}/results`)
+  }
+
+  async getScanFindings(scanId: string) {
+    return this.request<any>(`/api/v1/scans/${scanId}/findings`)
+  }
+
+  async compareScan(scanId: string, otherId: string) {
+    return this.request<any>(`/api/v1/scans/${scanId}/compare/${otherId}`)
+  }
+
+  // ---------------------------------------------------------------- Findings
+  async listFindings(params: Record<string, string> = {}) {
     const qs = new URLSearchParams(params).toString()
-    return this.request<any>(`/api/v1/findings?${qs}`, { token })
+    return this.request<any>(`/api/v1/findings?${qs}`)
   }
 
-  async updateFinding(token: string, id: string, data: any) {
-    return this.request<any>(`/api/v1/findings/${id}`, { method: 'PATCH', body: JSON.stringify(data), token })
+  async updateFinding(id: string, data: any) {
+    return this.request<any>(`/api/v1/findings/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
   }
 
-  async getFindingStats(token: string) {
-    return this.request<any>('/api/v1/findings/stats', { token })
+  async getFindingStats() {
+    return this.request<any>('/api/v1/findings/stats')
   }
 
-  // Assets
-  async listAssets(token: string, page = 1) {
-    return this.request<any>(`/api/v1/assets?page=${page}`, { token })
+  // ------------------------------------------------------------------ Assets
+  async listAssets(page = 1) {
+    return this.request<any>(`/api/v1/assets?page=${page}`)
   }
 
-  async createAsset(token: string, data: any) {
-    return this.request<any>('/api/v1/assets', { method: 'POST', body: JSON.stringify(data), token })
+  async createAsset(data: any) {
+    return this.request<any>('/api/v1/assets', { method: 'POST', body: JSON.stringify(data) })
   }
 
-  async deleteAsset(token: string, id: string) {
-    return this.request<any>(`/api/v1/assets/${id}`, { method: 'DELETE', token })
+  async deleteAsset(id: string) {
+    return this.request<any>(`/api/v1/assets/${id}`, { method: 'DELETE' })
   }
 
-  // Organizations
-  async getOrg(token: string, id: string) {
-    return this.request<any>(`/api/v1/organizations/${id}`, { token })
+  // ----------------------------------------------------------- Organizations
+  async getOrg(id: string) {
+    return this.request<any>(`/api/v1/organizations/${id}`)
   }
 
-  async listMembers(token: string, orgId: string) {
-    return this.request<any>(`/api/v1/organizations/${orgId}/members`, { token })
+  async listOrgs() {
+    return this.request<any>('/api/v1/organizations')
   }
 
-  async inviteMember(token: string, orgId: string, data: { email: string; role: string }) {
+  async updateOrg(orgId: string, data: any) {
+    return this.request<any>(`/api/v1/organizations/${orgId}`, { method: 'PATCH', body: JSON.stringify(data) })
+  }
+
+  async listMembers(orgId: string) {
+    return this.request<any>(`/api/v1/organizations/${orgId}/members`)
+  }
+
+  async inviteMember(orgId: string, data: { email: string; role: string }) {
     return this.request<any>(`/api/v1/organizations/${orgId}/members`, {
       method: 'POST',
       body: JSON.stringify(data),
-      token,
     })
   }
 
-  async updateMemberRole(token: string, orgId: string, memberId: string, role: string) {
+  async updateMemberRole(orgId: string, memberId: string, role: string) {
     return this.request<any>(`/api/v1/organizations/${orgId}/members/${memberId}`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
-      token,
     })
   }
 
-  async removeMember(token: string, orgId: string, memberId: string) {
+  async removeMember(orgId: string, memberId: string) {
     return this.request<any>(`/api/v1/organizations/${orgId}/members/${memberId}`, {
       method: 'DELETE',
-      token,
     })
   }
 
-  // API Keys
-  async listApiKeys(token: string) {
-    return this.request<any>('/api/v1/api-keys', { token })
+  // ---------------------------------------------------------------- API Keys
+  async listApiKeys() {
+    return this.request<any>('/api/v1/api-keys')
   }
 
-  async createApiKey(token: string, data: { name: string }) {
-    return this.request<any>('/api/v1/api-keys', { method: 'POST', body: JSON.stringify(data), token })
+  async createApiKey(data: { name: string }) {
+    return this.request<any>('/api/v1/api-keys', { method: 'POST', body: JSON.stringify(data) })
   }
 
-  async revokeApiKey(token: string, id: string) {
-    return this.request<any>(`/api/v1/api-keys/${id}`, { method: 'DELETE', token })
-  }
-  // Organization settings
-  async updateOrg(token: string, orgId: string, data: any) {
-    return this.request<any>(`/api/v1/organizations/${orgId}`, { method: 'PATCH', body: JSON.stringify(data), token })
+  async revokeApiKey(id: string) {
+    return this.request<any>(`/api/v1/api-keys/${id}`, { method: 'DELETE' })
   }
 
-  async listOrgs(token: string) {
-    return this.request<any>('/api/v1/organizations', { token })
-  }
-
-  // Profile
-  async updateMe(token: string, data: any) {
-    return this.request<any>('/api/v1/auth/me', { method: 'PATCH', body: JSON.stringify(data), token })
-  }
-
-  // Reports
-  async generateReport(token: string, scanId: string, format: string) {
+  // ----------------------------------------------------------------- Reports
+  async generateReport(scanId: string, format: string) {
     return this.request<any>('/api/v1/reports/generate', {
       method: 'POST',
       body: JSON.stringify({ scan_id: scanId, format }),
-      token,
     })
   }
 
-  async getReportStatus(token: string, taskId: string) {
-    return this.request<any>(`/api/v1/reports/status/${taskId}`, { token })
+  async getReportStatus(taskId: string) {
+    return this.request<any>(`/api/v1/reports/status/${taskId}`)
   }
 
   getReportDownloadUrl(taskId: string) {
     return `${this.baseUrl}/api/v1/reports/download/${taskId}`
   }
 
-  // Schedules
-  async listSchedules(token: string) {
-    return this.request<any>('/api/v1/schedules', { token })
+  // --------------------------------------------------------------- Schedules
+  async listSchedules() {
+    return this.request<any>('/api/v1/schedules')
   }
 
-  async createSchedule(token: string, data: any) {
-    return this.request<any>('/api/v1/schedules', { method: 'POST', body: JSON.stringify(data), token })
+  async createSchedule(data: any) {
+    return this.request<any>('/api/v1/schedules', { method: 'POST', body: JSON.stringify(data) })
   }
 
-  async updateSchedule(token: string, id: string, data: any) {
-    return this.request<any>(`/api/v1/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(data), token })
+  async updateSchedule(id: string, data: any) {
+    return this.request<any>(`/api/v1/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
   }
 
-  async deleteSchedule(token: string, id: string) {
-    return this.request<any>(`/api/v1/schedules/${id}`, { method: 'DELETE', token })
+  async deleteSchedule(id: string) {
+    return this.request<any>(`/api/v1/schedules/${id}`, { method: 'DELETE' })
   }
 
-  async triggerSchedule(token: string, id: string) {
-    return this.request<any>(`/api/v1/schedules/${id}/run`, { method: 'POST', token })
-  }
-
-  // Scan comparison
-  async compareScan(token: string, scanId: string, otherId: string) {
-    return this.request<any>(`/api/v1/scans/${scanId}/compare/${otherId}`, { token })
+  async triggerSchedule(id: string) {
+    return this.request<any>(`/api/v1/schedules/${id}/run`, { method: 'POST' })
   }
 }
 

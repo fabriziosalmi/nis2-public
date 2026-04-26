@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react'
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+import { api } from '@/lib/api-client'
+
 interface User {
   id?: string
   email: string
@@ -15,25 +17,35 @@ interface User {
   org_id?: string
 }
 
+// We persist only `user` and `orgId` for fast UI hydration on page load.
+// Neither is a secret — both are visible inside the dashboard anyway. The
+// access/refresh tokens live in httpOnly cookies and never touch JS state.
 interface AuthState {
-  token: string | null
   user: User | null
   orgId: string | null
-  setAuth: (token: string, user: User, orgId: string) => void
-  logout: () => void
+  setAuth: (user: User, orgId: string | null) => void
+  logout: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
       user: null,
       orgId: null,
-      setAuth: (token, user, orgId) => set({ token, user, orgId }),
-      logout: () => set({ token: null, user: null, orgId: null }),
+      setAuth: (user, orgId) => set({ user, orgId }),
+      logout: async () => {
+        try {
+          await api.logout()
+        } catch {
+          // Even if the server call fails, drop local state.
+        }
+        set({ user: null, orgId: null })
+      },
     }),
     {
-      name: 'nis2-auth',
+      // v2 = post-cookie-auth schema. v1 stored a JWT in the `token` field;
+      // dropping the key invalidates stale local state from older builds.
+      name: 'nis2-auth-v2',
       storage: createJSONStorage(() => localStorage),
     }
   )
@@ -44,7 +56,6 @@ export function useAuthHydrated() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    // On client, check if already hydrated or wait for it
     try {
       if (useAuthStore.persist.hasHydrated()) {
         setHydrated(true)
@@ -55,7 +66,6 @@ export function useAuthHydrated() {
         return () => unsub()
       }
     } catch {
-      // Fallback: just mark as hydrated after a tick
       setHydrated(true)
     }
   }, [])

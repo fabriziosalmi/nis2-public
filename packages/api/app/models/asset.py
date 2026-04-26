@@ -39,6 +39,13 @@ class Asset(TimestampMixin, Base):
         String(20), nullable=False
     )  # domain, ip, cidr
     target_value: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Pinned IP captured at validation time. The scanner uses this for the
+    # actual TCP connection (with target_value sent as Host header) so a
+    # DNS rebinding between validation and scan cannot redirect us to an
+    # internal address. Null for CIDR ranges and for assets created before
+    # the pinning feature was introduced — the scanner falls back to live
+    # resolution in that case, with the validator catching private answers.
+    pinned_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     tags: Mapped[Optional[list[str]]] = mapped_column(
         ARRAY(Text), default=list, nullable=True
     )

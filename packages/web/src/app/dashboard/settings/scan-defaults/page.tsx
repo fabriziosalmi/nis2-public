@@ -40,29 +40,28 @@ const defaults: ScanDefaultsForm = {
 }
 
 export default function ScanDefaultsPage() {
-  const token = useAuthStore((s) => s.token)
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
 
-  const { register, handleSubmit, reset, formState: { errors, isDirty }, watch } = useForm<ScanDefaultsForm>({
+  const { register, handleSubmit, reset, formState: { errors, isDirty }, watch, setValue } = useForm<ScanDefaultsForm>({
     resolver: zodResolver(scanDefaultsSchema),
     defaultValues: defaults,
   })
 
   useEffect(() => {
-    if (token && orgId) {
-      api.getOrg(token, orgId).then((org) => {
+    if (orgId) {
+      api.getOrg(orgId).then((org) => {
         const saved = org.settings?.scan_defaults
         if (saved) reset({ ...defaults, ...saved })
       }).catch(() => {})
     }
-  }, [token, orgId, reset])
+  }, [orgId, reset])
 
   const onSubmit = async (data: ScanDefaultsForm) => {
-    if (!token || !orgId) return
+    if (!orgId) return
     setLoading(true)
     try {
-      await api.updateOrg(token, orgId, {
+      await api.updateOrg(orgId, {
         settings: { scan_defaults: data },
       })
       reset(data)

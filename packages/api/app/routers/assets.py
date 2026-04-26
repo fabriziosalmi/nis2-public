@@ -15,7 +15,7 @@ from app.models.asset import Asset
 from app.models.membership import Membership
 from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetListResponse, AssetResponse, AssetUpdate
-from app.utils.target_validator import TargetValidationError, validate_target
+from app.utils.target_validator import TargetValidationError, validate_target_pinned
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -75,9 +75,9 @@ async def create_asset(
             detail="Asset with this target already exists in your organization",
         )
 
-    # SSRF validation
+    # SSRF validation + pin the IP for the scanner to use later.
     try:
-        cleaned_value = validate_target(payload.target_type, payload.target_value)
+        validation = validate_target_pinned(payload.target_type, payload.target_value)
     except TargetValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
@@ -85,7 +85,8 @@ async def create_asset(
         organization_id=org_id,
         name=payload.name,
         target_type=payload.target_type,
-        target_value=cleaned_value,
+        target_value=validation.target_value,
+        pinned_ip=validation.pinned_ip,
         tags=payload.tags or [],
     )
     db.add(asset)
@@ -208,9 +209,9 @@ async def import_assets_csv(
 
         tags = [t.strip() for t in tags_str.split(";") if t.strip()] if tags_str else []
 
-        # SSRF validation
+        # SSRF validation + pin IP
         try:
-            target_value = validate_target(target_type, target_value)
+            validation = validate_target_pinned(target_type, target_value)
         except TargetValidationError as e:
             errors_list.append(f"Row {row_num}: {e}")
             skipped += 1
@@ -220,7 +221,8 @@ async def import_assets_csv(
             organization_id=org_id,
             name=name,
             target_type=target_type,
-            target_value=target_value,
+            target_value=validation.target_value,
+            pinned_ip=validation.pinned_ip,
             tags=tags,
         )
         db.add(asset)
