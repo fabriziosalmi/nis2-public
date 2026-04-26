@@ -8,7 +8,7 @@ version = "2.4.1"
 description = "NIS2 Directive compliance scanner engine"
 requires-python = ">=3.10"
 dependencies = [
-    "aiohttp>=3.9",
+    "aiohttp>=3.13.3",  # CVE-2025-69223 (HTTP Parser auto_decompress) fixed in 3.13.3
     "aiodns>=3.1",
     "click>=8.1",
     "pyyaml>=6.0",
