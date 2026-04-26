@@ -81,10 +81,26 @@ def bootstrap_schema():
     yield
 
 
+# In production the auth cookies are set with Secure=True. httpx (under
+# TestClient) honours that and refuses to send Secure cookies over plain
+# http://testserver, which makes every state-changing request fail auth.
+# Pinning base_url to https://testserver keeps the cookie path identical
+# to a real deployment behind Caddy.
+TEST_BASE_URL = "https://testserver"
+
+
+def _new_client() -> TestClient:
+    return TestClient(
+        create_app(),
+        raise_server_exceptions=False,
+        base_url=TEST_BASE_URL,
+    )
+
+
 @pytest.fixture
 def fresh_client() -> TestClient:
     """A TestClient with no preset cookies — useful for replay tests."""
-    return TestClient(create_app(), raise_server_exceptions=False)
+    return _new_client()
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +155,7 @@ async def _count_revoked_tokens() -> int:
 class TestRowLevelSecurity:
     def test_two_orgs_cannot_see_each_others_assets(self, fresh_client):
         client_a = fresh_client
-        client_b = TestClient(create_app(), raise_server_exceptions=False)
+        client_b = _new_client()
 
         _register_org(client_a, "alpha")
         _register_org(client_b, "beta")
@@ -240,7 +256,7 @@ class TestRefreshTokenRotation:
         assert new_refresh != original_refresh, "refresh did not rotate the cookie"
 
         # Replay the original refresh token in a fresh client — must fail.
-        replay = TestClient(create_app(), raise_server_exceptions=False)
+        replay = _new_client()
         r2 = replay.post(
             "/api/v1/auth/refresh",
             cookies={"refresh_token": original_refresh},
@@ -266,7 +282,7 @@ class TestRefreshTokenRotation:
         )
 
         # The original refresh token cannot be reused.
-        replay = TestClient(create_app(), raise_server_exceptions=False)
+        replay = _new_client()
         r = replay.post(
             "/api/v1/auth/refresh",
             cookies={"refresh_token": original_refresh},
