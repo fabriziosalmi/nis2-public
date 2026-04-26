@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/NIS2-Posture%20Management-0f172a?style=for-the-badge&logo=shield&logoColor=white" alt="NIS2" />
   <br />
   <img src="https://img.shields.io/github/v/release/fabriziosalmi/nis2-public?style=flat-square&color=10b981" alt="Release" />
-  <img src="https://img.shields.io/github/license/fabriziosalmi/nis2-public?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License: AGPL-3.0" />
   <img src="https://img.shields.io/badge/i18n-5%20languages-3b82f6?style=flat-square" alt="i18n" />
   <img src="https://img.shields.io/badge/MCP-compatible-8b5cf6?style=flat-square" alt="MCP" />
 </p>
