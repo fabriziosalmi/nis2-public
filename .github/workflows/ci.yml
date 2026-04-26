@@ -205,7 +205,10 @@ jobs:
           pip install -e packages/scanner
           pip install -e packages/api
       - name: Audit installed Python dependencies
-        run: pip-audit --strict --disable-pip
+        # `--disable-pip` requires `-r REQUIREMENT` in newer pip-audit
+        # versions; without `-r` we let pip-audit inspect the installed
+        # editable packages directly. `--strict` makes warnings fatal.
+        run: pip-audit --strict
 
   # -----------------------------------------------------------------------
   # Web dependency vulnerability scan
@@ -255,7 +258,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Run Trivy filesystem scan
         run: |
-          TRIVY_VERSION=0.50.4
+          # Bumped from 0.50.4 — that release was removed from GitHub
+          # (asset 404). 0.70.0 keeps the same `trivy_VERSION_Linux-64bit`
+          # naming, so the URL pattern is unchanged.
+          TRIVY_VERSION=0.70.0
           curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz -C /tmp trivy
           /tmp/trivy fs --scanners vuln,secret,misconfig \
