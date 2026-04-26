@@ -201,6 +201,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install workspace and pip-audit
         run: |
+          # Upgrade pip itself first — older pip in the runner image has
+          # CVE-2026-3219, and pip-audit will flag it on the installed
+          # environment otherwise.
+          python -m pip install --upgrade pip
           pip install pip-audit
           pip install -e packages/scanner
           pip install -e packages/api
