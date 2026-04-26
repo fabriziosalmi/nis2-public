@@ -74,8 +74,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             if IS_POSTGRES:
                 org = current_org_id.get()
                 if org is not None:
+                    # `SET LOCAL` does not accept bind parameters in
+                    # Postgres; `set_config(..., is_local=true)` is the
+                    # parameterised equivalent and is transaction-scoped.
                     await session.execute(
-                        text("SET LOCAL app.current_org_id = :v"),
+                        text("SELECT set_config('app.current_org_id', :v, true)"),
                         {"v": str(org)},
                     )
             yield session
