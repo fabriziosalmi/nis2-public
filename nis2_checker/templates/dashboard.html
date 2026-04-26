@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIS2 Compliance Report</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --warning: #ca8a04;
+            --danger: #dc2626;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 1rem;
+        }
+        h1 { margin: 0; color: var(--primary); }
+        .meta { color: #64748b; font-size: 0.9rem; margin-top: 0.5rem; }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { color: #64748b; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .target-card {
+            background: var(--card);
+            margin-bottom: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .target-header {
+            padding: 1rem 1.5rem;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .target-name { font-weight: bold; font-size: 1.1rem; }
+        .target-url { color: #64748b; font-size: 0.9rem; }
+        
+        .checks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1px;
+            background: #e2e8f0;
+        }
+        .check-item {
+            background: var(--card);
+            padding: 1rem 1.5rem;
+        }
+        .check-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .check-name { font-weight: 600; }
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge-PASS { background: #dcfce7; color: var(--success); }
+        .badge-FAIL { background: #fee2e2; color: var(--danger); }
+        .badge-WARN { background: #fef9c3; color: var(--warning); }
+        
+        .check-details {
+            font-size: 0.875rem;
+            color: #475569;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>NIS2 Compliance Report</h1>
+            <div class="meta">Generated on {{ timestamp }}</div>
+        </header>
+
+        <div class="summary-grid">
+            <div class="card">
+                <div class="stat-value">{{ total_targets }}</div>
+                <div class="stat-label">Total Targets</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" style="color: var(--success)">{{ passed_targets }}</div>
+                <div class="stat-label">Compliant</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" style="color: var(--danger)">{{ total_targets - passed_targets }}</div>
+                <div class="stat-label">Non-Compliant</div>
+            </div>
+        </div>
+
+        {% for result in results %}
+        <div class="target-card">
+            <div class="target-header">
+                <div>
+                    <span class="target-name">{{ result.name }}</span>
+                    <span class="target-url">({{ result.target }})</span>
+                </div>
+                {% set all_pass = true %}
+                {% for check in result.checks.values() %}
+                    {% if check.status != 'PASS' %}{% set all_pass = false %}{% endif %}
+                {% endfor %}
+                <span class="badge badge-{{ 'PASS' if all_pass else 'FAIL' }}">
+                    {{ 'COMPLIANT' if all_pass else 'NON-COMPLIANT' }}
+                </span>
+            </div>
+            <div class="checks-grid">
+                {% for check_name, check_data in result.checks.items() %}
+                <div class="check-item">
+                    <div class="check-header">
+                        <span class="check-name">{{ check_name|replace('_', ' ')|title }}</span>
+                        <span class="badge badge-{{ check_data.status }}">{{ check_data.status }}</span>
+                    </div>
+                    <div class="check-details">{{ check_data.details }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
