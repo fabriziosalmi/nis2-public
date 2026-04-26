@@ -31,7 +31,7 @@
     "next-auth": "5.0.0-beta.25",
     "next-intl": "^3.25.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.5",
     "react-hook-form": "^7.54.0",
     "recharts": "^2.15.0",
     "sonner": "^1.7.1",
