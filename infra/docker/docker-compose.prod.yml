@@ -1,0 +1,105 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_started }
+      web: { condition: service_started }
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nis2}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-nis2}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nis2"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    env_file: ../../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  celery-worker:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    env_file: ../../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  celery-beat:
+    build:
+      context: ../..
+      dockerfile: packages/api/Dockerfile
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    env_file: ../../.env
+    depends_on:
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  web:
+    build:
+      context: ../../packages/web
+      dockerfile: Dockerfile
+      target: production
+    command: npm start
+    env_file: ../../.env
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost}
+    restart: unless-stopped
+    networks: [nis2-net]
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ../../prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports: ["9099:9090"]
+    restart: unless-stopped
+    networks: [nis2-net]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+  prometheus_data:
+
+networks:
+  nis2-net:
+    driver: bridge
