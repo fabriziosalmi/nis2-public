@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nis2-platform"
+version = "2.3.6"
+description = "NIS2 Directive (EU 2022/2555) Continuous Posture Management Platform"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+authors = [
+    { name = "Fabrizio Salmi", email = "fabrizio.salmi@gmail.com" },
+]
