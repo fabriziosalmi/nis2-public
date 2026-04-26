@@ -1,5 +1,5 @@
 # Development target
-FROM node:20-alpine AS dev
+FROM node:25-alpine AS dev
 WORKDIR /app
 COPY package*.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -8,7 +8,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 COPY package*.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # Production
-FROM node:20-alpine AS production
+FROM node:25-alpine AS production
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
