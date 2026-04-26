@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.4.2] - 2026-04-27
+
+### Fixed (RLS / integration tests — finishing what 2.4.1 started)
+- **`SET LOCAL :param` rejected by Postgres.** SQLAlchemy was rendering `SET LOCAL app.current_org_id = :v` as `SET LOCAL app.current_org_id = $1`; Postgres' SET command does not accept bind parameters, so every request that scoped a session for RLS was 500-ing with `syntax error at or near "$1"`. Replaced with `SELECT set_config('app.current_org_id', :v, true)` — the parameterised, transaction-scoped equivalent.
+- **`TestClient` cross-event-loop pool reuse.** When `INTEGRATION_DB=1`, the engine is created with `poolclass=NullPool` so each test gets a fresh asyncpg connection. The default pool retained connections attached to the first event loop pytest spun up, and `httpx`-driven follow-up tests on a new loop hit `Future attached to a different loop`.
+- **`Secure` cookies not sent over `http://testserver`.** Integration tests now construct `TestClient` with `base_url="https://testserver"` so the production-like `Secure=True` flag on auth cookies still rides through.
+- **CI postgres role for failsafe RLS testing.** The `postgres:16-alpine` image makes `POSTGRES_USER` a SUPERUSER and superusers always bypass RLS. The CI integration-tests job now provisions a dedicated `nis2_app` role with `NOSUPERUSER NOBYPASSRLS`; the API connects as that role so `FORCE ROW LEVEL SECURITY` actually binds it.
+
+### Fixed (CI gates)
+- **gitleaks** allowlist (`.gitleaks.toml`): documented test fixtures (canonical AWS docs sample key, generated RSA test keys in `packages/scanner/tests/test_features.py`) and the integration-tests JWT placeholder are no longer reported as leaks. Default rule set otherwise unchanged.
+- **trivy fs**: bumped pinned version from 0.50.4 (asset removed from GitHub) to 0.70.0; bumped `aiohttp` 3.13.2 → 3.13.5 to close CVE-2025-69223 (HTTP Parser auto_decompress zip-bomb).
+- **pip-audit**: pass `--skip-editable` so our own `pip install -e` packages don't fail PyPI lookup; upgrade `pip` itself first to clear CVE-2026-3219.
+
+### Dependencies
+- **Web**: `next` 15.1.0 → ^15.5.9 (closes critical Server Actions DoS GHSA-7m27-7ghc-44w9). Added `overrides` block forcing `lodash`/`lodash-es` to ^4.18.1 (recharts ships 4.17.23, vulnerable to GHSA-r5fr-rjxr-66jc and GHSA-f23m-r3pf-42rh; 4.18.1 is the patched release).
+- **Scanner**: `aiohttp` floor lifted to >=3.13.3 in `pyproject.toml`, pinned 3.13.5 in `requirements.txt`.
+
+### Notes
+- This is a follow-up to 2.4.1, which introduced the RLS failsafe but tripped over Postgres bind-parameter and pytest-event-loop edge cases that only surfaced once the integration suite ran against a real Postgres in CI. CI is fully green on 2.4.2 (all 10 jobs).
+
 ## [2.4.1] - 2026-04-26
 
 ### Fixed
