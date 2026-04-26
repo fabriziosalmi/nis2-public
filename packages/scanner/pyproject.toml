@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nis2scan"
+version = "2.3.1"
+description = "NIS2 Directive compliance scanner engine"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9",
+    "aiodns>=3.1",
+    "click>=8.1",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    "dnspython>=2.6",
+    "scapy>=2.5",
+    "prometheus_client>=0.19",
+    "python-whois>=0.9",
+    "Jinja2>=3.1",
+    "watchdog>=4.0",
+    "playwright>=1.49",
+]
+
+[project.scripts]
+nis2scan = "nis2scan.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["nis2scan*"]
