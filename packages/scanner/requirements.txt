@@ -1,5 +1,5 @@
 aiohttp==3.13.2
-aiodns==3.1.1
+aiodns==4.0.0
 click==8.1.7
 pyyaml==6.0.1
 rich==13.7.0
