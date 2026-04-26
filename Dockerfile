@@ -1,6 +1,6 @@
 # NIS2 Platform -- API server image
 # For full-stack deployment use infra/docker/docker-compose.prod.yml
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # System dependencies for WeasyPrint PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
