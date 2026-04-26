@@ -1,0 +1,22 @@
+project_name: "NIS2 Production Audit"
+version: "1.0"
+max_hosts: 100
+
+targets:
+  ip_ranges: []
+  domains:
+    - example.com
+    - scanme.nmap.org
+
+compliance:
+  thresholds:
+    compliance_score: 80
+  
+  # Strict production settings
+  timeout: 5
+  user_agent: "NIS2ComplianceScanner/1.0 (Production)"
+
+features:
+  dns_analysis: true
+  tls_check: true
+  http_headers: true

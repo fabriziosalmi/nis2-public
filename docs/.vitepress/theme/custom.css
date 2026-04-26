@@ -1,0 +1,259 @@
+/*
+ * NIS2 Platform — Premium documentation theme.
+ * Clean typography, gradient accents, glassmorphism,
+ * subtle depth effects, icon-driven feature cards.
+ */
+
+/* === Design tokens === */
+
+:root {
+  --vp-c-brand-1: #0071e3;
+  --vp-c-brand-2: #0077ed;
+  --vp-c-brand-3: #0071e3;
+  --vp-c-brand-soft: rgba(0, 113, 227, 0.12);
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --vp-font-family-mono: 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.dark {
+  --vp-c-brand-1: #2997ff;
+  --vp-c-brand-2: #2997ff;
+  --vp-c-brand-3: #2997ff;
+  --vp-c-brand-soft: rgba(41, 151, 255, 0.12);
+  --vp-c-bg: #000000;
+  --vp-c-bg-alt: #0a0a0a;
+  --vp-c-bg-elv: #141414;
+  --vp-c-bg-soft: #141414;
+}
+
+/* === Hero section === */
+
+.VPHero {
+  padding: 96px 24px 48px !important;
+}
+
+.VPHero .name {
+  font-size: 52px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+  line-height: 1.05 !important;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), #6e40c9) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.VPHero .text {
+  font-size: 24px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--vp-c-text-1) !important;
+  max-width: 580px !important;
+  margin: 0 auto !important;
+  line-height: 1.4 !important;
+}
+
+.VPHero .tagline {
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  color: var(--vp-c-text-2) !important;
+  max-width: 520px !important;
+  margin: 0 auto !important;
+  line-height: 1.65 !important;
+}
+
+.VPHero .image-container {
+  max-width: 80px !important;
+}
+
+.VPHero .actions {
+  justify-content: center !important;
+  gap: 12px !important;
+  margin-top: 28px !important;
+}
+
+.VPHero .action .VPButton {
+  border-radius: 980px !important;
+  padding: 10px 24px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+
+.VPHero .action .VPButton.brand {
+  background: var(--vp-c-brand-1) !important;
+  border-color: var(--vp-c-brand-1) !important;
+}
+
+.VPHero .action .VPButton.brand:hover {
+  background: var(--vp-c-brand-2) !important;
+  transform: scale(1.03) !important;
+  box-shadow: 0 4px 24px rgba(0, 113, 227, 0.35) !important;
+}
+
+.VPHero .action .VPButton.alt {
+  border-radius: 980px !important;
+}
+
+.VPHero .action .VPButton.alt:hover {
+  transform: scale(1.03) !important;
+}
+
+/* === Feature cards === */
+
+.VPFeatures {
+  padding: 32px 24px 80px !important;
+}
+
+.VPFeatures .VPFeature {
+  border-radius: 16px !important;
+  border: 1px solid var(--vp-c-divider) !important;
+  background: var(--vp-c-bg-soft) !important;
+  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+  padding: 28px !important;
+}
+
+.VPFeatures .VPFeature:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
+  border-color: var(--vp-c-brand-soft) !important;
+}
+
+.dark .VPFeatures .VPFeature:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  border-color: rgba(41, 151, 255, 0.2) !important;
+}
+
+/* Icon container inside feature cards */
+.VPFeatures .VPFeature .icon {
+  width: 40px !important;
+  height: 40px !important;
+  margin-bottom: 12px !important;
+  color: var(--vp-c-brand-1) !important;
+}
+
+.VPFeatures .VPFeature .icon img {
+  width: 40px !important;
+  height: 40px !important;
+  filter: none !important;
+}
+
+.dark .VPFeatures .VPFeature .icon img {
+  filter: brightness(0) saturate(100%) invert(55%) sepia(85%) saturate(1200%) hue-rotate(195deg) brightness(105%) contrast(101%) !important;
+}
+
+.VPFeatures .VPFeature .title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.VPFeatures .VPFeature .details {
+  font-size: 13.5px !important;
+  line-height: 1.65 !important;
+  color: var(--vp-c-text-2) !important;
+}
+
+.VPFeatures .VPFeature .link-text {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--vp-c-brand-1) !important;
+  margin-top: 8px !important;
+}
+
+/* === Navigation === */
+
+.VPNav .title {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.VPNavBar {
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+}
+
+/* === Sidebar === */
+
+.VPSidebar .group .title {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* === Content typography === */
+
+.vp-doc h1 {
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.15 !important;
+}
+
+.vp-doc h2 {
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  border-top: none !important;
+  padding-top: 28px !important;
+}
+
+.vp-doc h3 {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+}
+
+/* === Code blocks === */
+
+.vp-doc div[class*='language-'] {
+  border-radius: 10px !important;
+  border: 1px solid var(--vp-c-divider) !important;
+}
+
+/* === Tables === */
+
+.vp-doc table {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  font-size: 14px !important;
+}
+
+.vp-doc th {
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+/* === Footer === */
+
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  font-size: 13px !important;
+}
+
+/* === Misc === */
+
+html {
+  scroll-behavior: smooth !important;
+}
+
+::selection {
+  background: var(--vp-c-brand-soft) !important;
+}
+
+/* Edit link styling */
+.vp-doc .edit-link {
+  padding-top: 24px !important;
+}
+
+/* Last updated styling */
+.VPLastUpdated {
+  font-size: 13px !important;
+  color: var(--vp-c-text-3) !important;
+}

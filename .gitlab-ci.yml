@@ -1,0 +1,20 @@
+image: python:3.10
+
+stages:
+  - check
+
+nis2_check:
+  stage: check
+  script:
+    - apt-get update && apt-get install -y nmap
+    - pip install -r requirements.txt
+    - python -m unittest discover tests
+    - python -m nis2_checker.main --config config.yaml --targets targets.yaml
+  artifacts:
+    when: always
+    paths:
+      - report.json
+    expire_in: 1 week
+  only:
+    - schedules
+    - web
