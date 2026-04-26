@@ -12,6 +12,7 @@ from app.models.scan_schedule import ScanSchedule
 from app.models.vendor import Vendor
 from app.models.incident import Incident
 from app.models.bia import BusinessProcess
+from app.models.revoked_token import RevokedToken
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "Vendor",
     "Incident",
     "BusinessProcess",
+    "RevokedToken",
 ]

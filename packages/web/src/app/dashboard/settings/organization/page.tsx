@@ -24,7 +24,6 @@ const orgSchema = z.object({
 type OrgForm = z.infer<typeof orgSchema>
 
 export default function OrganizationSettingsPage() {
-  const token = useAuthStore((s) => s.token)
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
   const [org, setOrg] = useState<any>(null)
@@ -34,19 +33,19 @@ export default function OrganizationSettingsPage() {
   })
 
   useEffect(() => {
-    if (token && orgId) {
-      api.getOrg(token, orgId).then((data) => {
+    if (orgId) {
+      api.getOrg(orgId).then((data) => {
         setOrg(data)
         reset({ name: data.name })
       }).catch(() => {})
     }
-  }, [token, orgId, reset])
+  }, [orgId, reset])
 
   const onSubmit = async (data: OrgForm) => {
-    if (!token || !orgId) return
+    if (!orgId) return
     setLoading(true)
     try {
-      const updated = await api.updateOrg(token, orgId, data)
+      const updated = await api.updateOrg(orgId, data)
       setOrg(updated)
       reset({ name: updated.name })
       toast.success("Organization updated")

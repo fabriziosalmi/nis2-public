@@ -4,7 +4,6 @@
 """
 Unified report generation via Celery.
 Supports 6 formats: JSON, CSV, PDF, Markdown, JUnit XML, HTML.
-Ported from nis2_checker/report.py to the SaaS platform.
 """
 import asyncio
 import csv

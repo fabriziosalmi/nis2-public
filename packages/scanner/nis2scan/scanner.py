@@ -80,11 +80,16 @@ class Scanner:
         except ValueError:
             pass
 
-        # Assume Domain - resolve to IP (simple resolution)
+        # Domain. Prefer the IP the API pinned at validation time —
+        # avoids a TOCTOU window where DNS could be rebinded between
+        # validation and scan, redirecting us to a private address.
+        pinned = getattr(self.config, "pinned_ips", {}) or {}
+        if target in pinned:
+            logger.debug(f"Using pinned IP {pinned[target]} for {target}")
+            return [pinned[target]]
+
+        # Fallback for CLI / no pre-resolution path.
         try:
-            # We use sync gethostbyname for simplicity in resolution phase or aiodns could be used
-            # For now, let's just return the domain and resolve during connection or resolve here.
-            # A full scanner would do DNS enum. We will just scan the primary A record.
             ip = socket.gethostbyname(target)
             return [ip]
         except socket.gaierror:

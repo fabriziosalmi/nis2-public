@@ -38,7 +38,7 @@ const cronPresets = [
 ]
 
 export default function SchedulesPage() {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   const { data: assetsData } = useAssets()
   const [schedules, setSchedules] = useState<any[]>([])
   const [showCreate, setShowCreate] = useState(false)
@@ -53,24 +53,23 @@ export default function SchedulesPage() {
   })
 
   const loadSchedules = async () => {
-    if (!token) return
+    if (!user) return
     try {
-      const data = await api.listSchedules(token)
+      const data = await api.listSchedules()
       setSchedules(Array.isArray(data) ? data : [])
     } catch { /* empty */ }
   }
 
-  useEffect(() => { loadSchedules() }, [token])
+  useEffect(() => { loadSchedules() }, [user])
 
   const onSubmit = async (data: ScheduleForm) => {
-    if (!token) return
     if (selectedAssets.length === 0) {
       toast.error("Select at least one asset")
       return
     }
     setLoading(true)
     try {
-      await api.createSchedule(token, {
+      await api.createSchedule({
         ...data,
         asset_ids: selectedAssets,
         scan_type: "full",
@@ -88,9 +87,8 @@ export default function SchedulesPage() {
   }
 
   const toggleSchedule = async (id: string, isActive: boolean) => {
-    if (!token) return
     try {
-      await api.updateSchedule(token, id, { is_active: !isActive })
+      await api.updateSchedule(id, { is_active: !isActive })
       toast.success(isActive ? "Schedule paused" : "Schedule activated")
       loadSchedules()
     } catch (err: any) {
@@ -99,9 +97,8 @@ export default function SchedulesPage() {
   }
 
   const deleteSchedule = async (id: string) => {
-    if (!token) return
     try {
-      await api.deleteSchedule(token, id)
+      await api.deleteSchedule(id)
       toast.success("Schedule deleted")
       loadSchedules()
     } catch (err: any) {
@@ -110,10 +107,9 @@ export default function SchedulesPage() {
   }
 
   const triggerNow = async (id: string) => {
-    if (!token) return
     setTriggering(id)
     try {
-      await api.triggerSchedule(token, id)
+      await api.triggerSchedule(id)
       toast.success("Scan triggered! Check the Scans page for progress.")
       loadSchedules()
     } catch (err: any) {

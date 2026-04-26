@@ -5,9 +5,13 @@
 ACN Export and Compliance Deadlines API.
 
 Endpoints:
-- /acn-export: Generate ACN-compatible JSON for Determina 127437 and Art. 23
-- /deadlines: Compliance timeline with real NIS2 D.Lgs 138/2024 deadlines
-- /csirt/emergency: "Red Button" - instant CSIRT Early Warning payload generator
+- /acn-export: Preliminary ACN-compatible JSON for Determina 127437 (Art. 18)
+  and a BIA export. The official ACN modello di categorizzazione is expected
+  to be published by the Tavolo NIS in May/June 2026; this schema will be
+  re-validated and may change once the official template is released.
+- /deadlines: Compliance timeline with real NIS2 D.Lgs 138/2024 deadlines.
+- /csirt/emergency: "Red Button" - instant CSIRT Early Warning payload
+  generator. Produces an artefact ready for manual submission to csirt.gov.it.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -254,7 +258,8 @@ async def export_art18_vendors(
     org = org_result.scalar_one_or_none()
 
     export = {
-        "schema_version": "1.0",
+        "schema_version": "1.0-preliminary",
+        "schema_status": "preliminary — subject to alignment with the official ACN modello di categorizzazione once published",
         "document_type": "acn_art18_vendor_inventory",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "NIS2 Compliance Platform (nis2-public)",
@@ -320,7 +325,8 @@ async def export_bia(
     org = org_result.scalar_one_or_none()
 
     export = {
-        "schema_version": "1.0",
+        "schema_version": "1.0-preliminary",
+        "schema_status": "preliminary — internal model; alignment to the official ACN BIA template pending publication",
         "document_type": "acn_bia_export",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "NIS2 Compliance Platform (nis2-public)",

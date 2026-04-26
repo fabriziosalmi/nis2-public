@@ -6,30 +6,29 @@ import { api } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth-store'
 
 export function useFindings(params: Record<string, string> = {}) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['findings', params],
-    queryFn: () => api.listFindings(token!, params),
-    enabled: !!token,
+    queryFn: () => api.listFindings(params),
+    enabled: !!user,
     staleTime: 30_000,
   })
 }
 
 export function useFindingStats() {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['finding-stats'],
-    queryFn: () => api.getFindingStats(token!),
-    enabled: !!token,
+    queryFn: () => api.getFindingStats(),
+    enabled: !!user,
     staleTime: 60_000,
   })
 }
 
 export function useUpdateFinding() {
-  const token = useAuthStore((s) => s.token)
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => api.updateFinding(token!, id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.updateFinding(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['findings'] })
       qc.invalidateQueries({ queryKey: ['finding-stats'] })

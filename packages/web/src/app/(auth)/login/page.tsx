@@ -41,11 +41,10 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
     try {
+      // The API sets the auth cookies on this response; the body carries
+      // the user profile and org id for immediate UI hydration.
       const res = await api.login(data.email, data.password)
-      const user = await api.getMe(res.access_token)
-      // Extract org_id from JWT payload
-      const payload = JSON.parse(atob(res.access_token.split('.')[1]))
-      setAuth(res.access_token, user, payload.org_id)
+      setAuth(res.user, res.org_id || null)
       router.push("/dashboard")
     } catch (err: any) {
       toast.error("Login failed", { description: err.message || "Invalid credentials" })

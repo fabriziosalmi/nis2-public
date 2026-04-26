@@ -20,16 +20,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -47,3 +37,30 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=256)
     locale: Optional[str] = Field(None, max_length=10)
     avatar_url: Optional[str] = Field(None, max_length=1024)
+
+
+class TokenResponse(BaseModel):
+    """
+    Response shape for /login, /register, /refresh.
+
+    The web client receives `access_token` and `refresh_token` as
+    httpOnly cookies (set by the route via Set-Cookie). They are also
+    returned in the body so SDK and CLI clients can use Bearer auth.
+    `csrf_token` is the value of the readable csrf_token cookie; the
+    frontend echoes it as the `X-CSRF-Token` header on state-changing
+    requests (double-submit cookie pattern).
+    """
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    csrf_token: str
+    user: UserResponse
+    org_id: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    """
+    Body is optional now: if cookies are present, /refresh reads
+    refresh_token from the httpOnly cookie. SDKs can still POST it.
+    """
+    refresh_token: Optional[str] = None

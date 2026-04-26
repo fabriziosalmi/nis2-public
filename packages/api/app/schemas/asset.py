@@ -27,6 +27,7 @@ class AssetResponse(BaseModel):
     name: str
     target_type: str
     target_value: str
+    pinned_ip: Optional[str] = None
     tags: Optional[list[str]] = None
     is_active: bool
     created_at: datetime

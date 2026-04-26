@@ -17,9 +17,13 @@ import asyncio
 import json
 import logging
 import sys
+import uuid
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.dependencies import get_current_user_org
+from app.models.user import User
 
 logger = logging.getLogger("nis2.mcp")
 
@@ -231,7 +235,7 @@ def run_mcp_stdio():
                             "capabilities": {"tools": {}},
                             "serverInfo": {
                                 "name": "nis2-compliance",
-                                "version": "2.3.5",
+                                "version": "2.4.0",
                             },
                         },
                     }
@@ -280,19 +284,27 @@ def run_mcp_stdio():
     asyncio.run(_main())
 
 
-# FastAPI router for HTTP-based MCP (alternative to stdio)
+# FastAPI router for HTTP-based MCP (alternative to stdio).
+# All HTTP MCP routes require authentication: the stdio entry point is local
+# and trusted, but the HTTP entry point sits behind FastAPI and must be
+# tenant-scoped.
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
 @router.get("/tools")
-async def list_tools():
+async def list_tools(
+    auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
+):
     """List available MCP tools."""
     return {"tools": MCP_TOOLS}
 
 
 @router.post("/call")
-async def call_tool(request: dict):
+async def call_tool(
+    request: dict,
+    auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
+):
     """Execute an MCP tool call via HTTP."""
     name = request.get("name", "")
     arguments = request.get("arguments", {})

@@ -3,11 +3,19 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 """
 SSRF-safe target validation for scan assets.
-Prevents scanning of internal/private IP ranges from the SaaS platform.
+
+Returns a ValidationResult that pins the IP address resolved at validation
+time. The scanner must connect to that pinned IP (sending the original
+hostname as Host: header) so a DNS rebinding attack between validation
+and scan time cannot redirect the scanner to a private/internal address.
 """
+from __future__ import annotations
+
 import ipaddress
 import re
 import socket
+from dataclasses import dataclass
+from typing import Optional
 from urllib.parse import urlparse
 
 # RFC 1918 + loopback + link-local + multicast + reserved
@@ -44,8 +52,50 @@ class TargetValidationError(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class ValidationResult:
+    """Outcome of validate_*: the cleaned target, plus the IP we resolved
+    it to at validation time. The scanner must use `pinned_ip` for the
+    actual TCP connection — re-resolving the hostname at scan time would
+    open a DNS-rebinding TOCTOU window.
+
+    `pinned_ip` is None for CIDR ranges (where many IPs are involved) and
+    for domains that didn't resolve at validation time.
+    """
+    target_value: str
+    target_type: str  # "domain" | "ip" | "cidr"
+    pinned_ip: Optional[str] = None
+
+
+def _resolve_first_public_ip(domain: str) -> Optional[str]:
+    """Resolve `domain` and return the first public IP. Raise if any answer
+    is private/blocked — the caller must reject the target outright."""
+    try:
+        answers = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        return None
+    public: list[str] = []
+    for _, _, _, _, sockaddr in answers:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if _is_private_ip(ip):
+            raise TargetValidationError(
+                f"Domain {domain} resolves to private IP {ip} — SSRF blocked"
+            )
+        public.append(str(ip))
+    return public[0] if public else None
+
+
 def validate_domain(domain: str) -> str:
-    """Validate a domain name for scanning. Returns cleaned domain."""
+    """Backwards-compatible wrapper. Returns just the cleaned domain.
+
+    Most call sites should use `validate_domain_pinned` or `validate_target_pinned`
+    so they can persist the pinned IP and avoid re-resolving at scan time.
+    """
+    return validate_domain_pinned(domain).target_value
+
+
+def validate_domain_pinned(domain: str) -> ValidationResult:
+    """Validate a domain and pin the resolved IP for scanner use."""
     domain = domain.strip().lower()
 
     # Strip protocol if accidentally included
@@ -63,27 +113,28 @@ def validate_domain(domain: str) -> str:
             f"Invalid domain format: {domain}. Expected format: example.com"
         )
 
-    # DNS resolution check — ensure it doesn't resolve to a private IP
+    pinned_ip: Optional[str] = None
     try:
-        answers = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        for _, _, _, _, sockaddr in answers:
-            ip = ipaddress.ip_address(sockaddr[0])
-            if _is_private_ip(ip):
-                raise TargetValidationError(
-                    f"Domain {domain} resolves to private IP {ip} — SSRF blocked"
-                )
-    except socket.gaierror:
-        pass  # Domain doesn't resolve yet — allow (scanner will handle)
+        pinned_ip = _resolve_first_public_ip(domain)
     except TargetValidationError:
         raise
     except Exception:
-        pass
+        # Transient resolution failure — accept without a pin. The scanner
+        # will still validate the target type and re-resolve once at run
+        # time; a Phase 3 improvement is to require a pinned IP for all
+        # production scans.
+        pinned_ip = None
 
-    return domain
+    return ValidationResult(target_value=domain, target_type="domain", pinned_ip=pinned_ip)
 
 
 def validate_ip(ip_str: str) -> str:
-    """Validate an IP address for scanning. Returns cleaned IP."""
+    """Backwards-compatible wrapper around validate_ip_pinned."""
+    return validate_ip_pinned(ip_str).target_value
+
+
+def validate_ip_pinned(ip_str: str) -> ValidationResult:
+    """Validate an IP address. The pinned IP equals the validated value."""
     ip_str = ip_str.strip()
     try:
         ip = ipaddress.ip_address(ip_str)
@@ -94,11 +145,17 @@ def validate_ip(ip_str: str) -> str:
         raise TargetValidationError(
             f"Private/reserved IP blocked: {ip_str}. Only public IPs allowed."
         )
-    return str(ip)
+    cleaned = str(ip)
+    return ValidationResult(target_value=cleaned, target_type="ip", pinned_ip=cleaned)
 
 
 def validate_cidr(cidr_str: str) -> str:
-    """Validate a CIDR range for scanning. Returns cleaned CIDR."""
+    """Backwards-compatible wrapper around validate_cidr_pinned."""
+    return validate_cidr_pinned(cidr_str).target_value
+
+
+def validate_cidr_pinned(cidr_str: str) -> ValidationResult:
+    """Validate a CIDR range. CIDRs cover many hosts so no single IP is pinned."""
     cidr_str = cidr_str.strip()
     try:
         network = ipaddress.ip_network(cidr_str, strict=False)
@@ -117,15 +174,20 @@ def validate_cidr(cidr_str: str) -> str:
             raise TargetValidationError(
                 f"CIDR range {cidr_str} overlaps private/reserved network {blocked} — SSRF blocked"
             )
-    return str(network)
+    return ValidationResult(target_value=str(network), target_type="cidr", pinned_ip=None)
 
 
 def validate_target(target_type: str, target_value: str) -> str:
-    """Validate any target type. Returns cleaned value."""
+    """Backwards-compatible wrapper around validate_target_pinned."""
+    return validate_target_pinned(target_type, target_value).target_value
+
+
+def validate_target_pinned(target_type: str, target_value: str) -> ValidationResult:
+    """Validate any target type and return both the cleaned value and the pinned IP."""
     validators = {
-        "domain": validate_domain,
-        "ip": validate_ip,
-        "cidr": validate_cidr,
+        "domain": validate_domain_pinned,
+        "ip": validate_ip_pinned,
+        "cidr": validate_cidr_pinned,
     }
     validator = validators.get(target_type)
     if not validator:

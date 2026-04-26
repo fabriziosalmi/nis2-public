@@ -48,8 +48,8 @@ export function Header() {
     .join("")
     .toUpperCase() || "U"
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push("/login")
   }
 

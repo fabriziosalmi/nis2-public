@@ -11,14 +11,14 @@ import { Header } from "@/components/layout/header"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   const hydrated = useAuthHydrated()
 
   useEffect(() => {
-    if (hydrated && !token) {
+    if (hydrated && !user) {
       router.replace("/login")
     }
-  }, [hydrated, token, router])
+  }, [hydrated, user, router])
 
   if (!hydrated) {
     return (
@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
-  if (!token) {
+  if (!user) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Redirecting...</div>

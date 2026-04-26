@@ -1,19 +1,32 @@
-FROM python:3.12-slim
+# Pinned to the immutable manifest digest of python:3.12.7-slim-bookworm.
+# Refresh with: docker pull python:3.12.7-slim-bookworm && \
+#               docker inspect --format='{{index .RepoDigests 0}}' python:3.12.7-slim-bookworm
+FROM python:3.12.7-slim-bookworm@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy scanner package first (dependency)
+# Scanner is a local dependency of the API; install it first.
 COPY packages/scanner /app/packages/scanner
-RUN pip install --no-cache-dir /app/packages/scanner
+RUN pip install /app/packages/scanner
 
-# Copy API package
 COPY packages/api /app/packages/api
-RUN pip install --no-cache-dir /app/packages/api
+RUN pip install /app/packages/api
+
+# Drop privileges. /app is owned by the api user so volume-mounted source
+# in the dev compose remains readable to the container process.
+RUN groupadd --system --gid 1001 api && \
+    useradd  --system --uid 1001 --gid api --no-create-home --shell /usr/sbin/nologin api && \
+    chown -R api:api /app
+USER api
 
 WORKDIR /app/packages/api
 

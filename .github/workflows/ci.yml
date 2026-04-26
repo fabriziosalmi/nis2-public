@@ -6,8 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
 
 jobs:
@@ -33,11 +36,16 @@ jobs:
         run: python -m pytest tests/ -v --tb=short
 
   # -----------------------------------------------------------------------
-  # API Tests (no DB -- validation layer only)
+  # API Tests (no DB — unit tests only)
   # -----------------------------------------------------------------------
   api-tests:
     name: API Tests
     runs-on: ubuntu-latest
+    # Unit tests don't need real config; ENVIRONMENT=development relaxes
+    # the boot-time JWT_SECRET / CORS_ORIGINS validation so app.main
+    # imports cleanly during pytest collection.
+    env:
+      ENVIRONMENT: development
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -45,11 +53,52 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |
-          pip install -e packages/scanner 2>/dev/null || pip install -e packages/scanner
-          pip install -e packages/api 2>/dev/null || pip install -e packages/api
-          pip install pytest httpx slowapi
-      - name: Run SSRF validator tests
-        run: cd packages/api && python -m pytest tests/test_target_validator.py -v --tb=short
+          pip install -e packages/scanner
+          pip install -e packages/api
+          pip install pytest pytest-asyncio httpx slowapi
+      - name: Run API tests
+        run: cd packages/api && python -m pytest tests/ -v --tb=short --ignore=tests/test_integration.py
+
+  # -----------------------------------------------------------------------
+  # Integration Tests — exercises RLS, refresh-token rotation, audit
+  # log writes, CSRF enforcement against a real Postgres service.
+  # -----------------------------------------------------------------------
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nis2
+          POSTGRES_PASSWORD: nis2secret
+          POSTGRES_DB: nis2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nis2"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://nis2:nis2secret@localhost:5432/nis2_test
+      DATABASE_URL_SYNC: postgresql://nis2:nis2secret@localhost:5432/nis2_test
+      JWT_SECRET: integration-test-secret-must-be-at-least-32-chars-long-yes
+      CORS_ORIGINS: http://localhost:3000
+      INTEGRATION_DB: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          pip install -e packages/scanner
+          pip install -e packages/api
+          pip install pytest pytest-asyncio httpx slowapi
+      - name: Run integration tests
+        run: cd packages/api && python -m pytest tests/test_integration.py -v --tb=short
 
   # -----------------------------------------------------------------------
   # Web Build Check
@@ -91,33 +140,107 @@ jobs:
         run: ruff check packages/api/app/ --select=E,W,F --ignore=E501
 
   # -----------------------------------------------------------------------
-  # Security Checks
+  # Policy Checks (cheap repo-wide invariants)
   # -----------------------------------------------------------------------
-  security:
-    name: Security
+  policy-checks:
+    name: Policy Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Check no .env committed
+      - name: No .env committed
         run: |
           if git ls-files --error-unmatch .env 2>/dev/null; then
             echo "ERROR: .env is tracked in git!"
             exit 1
           fi
           echo "OK: .env not in git"
-      - name: Check no bare except
+      - name: No bare except
         run: |
-          BARE=$(grep -rn "^[[:space:]]*except:$" --include="*.py" packages/ nis2_checker/ 2>/dev/null | wc -l)
-          if [ "$BARE" -gt 0 ]; then
-            grep -rn "^[[:space:]]*except:$" --include="*.py" packages/ nis2_checker/
-            echo "ERROR: Found $BARE bare except: statements"
+          if grep -rn "^[[:space:]]*except:$" --include="*.py" packages/ ; then
+            echo "ERROR: bare except: statements found"
             exit 1
           fi
           echo "OK: No bare except: found"
-      - name: Check CORS not wildcard
+      - name: No CORS wildcard
         run: |
           if grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py; then
             echo "ERROR: CORS wildcard detected"
             exit 1
           fi
           echo "OK: CORS properly restricted"
+
+  # -----------------------------------------------------------------------
+  # Python dependency vulnerability scan
+  # -----------------------------------------------------------------------
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install workspace and pip-audit
+        run: |
+          pip install pip-audit
+          pip install -e packages/scanner
+          pip install -e packages/api
+      - name: Audit installed Python dependencies
+        run: pip-audit --strict --disable-pip
+
+  # -----------------------------------------------------------------------
+  # Web dependency vulnerability scan
+  # -----------------------------------------------------------------------
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/web
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit (high+)
+        run: npm audit --omit=dev --audit-level=high
+
+  # -----------------------------------------------------------------------
+  # Secret detection on full git history
+  # -----------------------------------------------------------------------
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        run: |
+          GITLEAKS_VERSION=8.18.4
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --no-banner --exit-code 1
+
+  # -----------------------------------------------------------------------
+  # Filesystem vulnerability + misconfiguration scan
+  # -----------------------------------------------------------------------
+  trivy-fs:
+    name: trivy fs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Run Trivy filesystem scan
+        run: |
+          TRIVY_VERSION=0.50.4
+          curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz -C /tmp trivy
+          /tmp/trivy fs --scanners vuln,secret,misconfig \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            .

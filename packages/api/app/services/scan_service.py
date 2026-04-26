@@ -44,6 +44,7 @@ class ScanService:
                 },
             ),
             max_hosts=config_snapshot.get("max_hosts", 100),
+            pinned_ips=config_snapshot.get("pinned_ips", {}),
         )
 
         logger.info(

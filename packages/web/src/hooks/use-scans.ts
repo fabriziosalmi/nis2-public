@@ -9,21 +9,21 @@ const STALE_30S = 30 * 1000
 const STALE_5M = 5 * 60 * 1000
 
 export function useScans(page = 1) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['scans', page],
-    queryFn: () => api.listScans(token!, page),
-    enabled: !!token,
+    queryFn: () => api.listScans(page),
+    enabled: !!user,
     staleTime: STALE_30S,
   })
 }
 
 export function useScan(id: string) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['scan', id],
-    queryFn: () => api.getScan(token!, id),
-    enabled: !!token && !!id,
+    queryFn: () => api.getScan(id),
+    enabled: !!user && !!id,
     staleTime: STALE_30S,
     refetchInterval: (query) => {
       const data = query.state.data
@@ -33,30 +33,29 @@ export function useScan(id: string) {
 }
 
 export function useScanResults(scanId: string) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['scan-results', scanId],
-    queryFn: () => api.getScanResults(token!, scanId),
-    enabled: !!token && !!scanId,
+    queryFn: () => api.getScanResults(scanId),
+    enabled: !!user && !!scanId,
     staleTime: STALE_5M,
   })
 }
 
 export function useScanFindings(scanId: string) {
-  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   return useQuery({
     queryKey: ['scan-findings', scanId],
-    queryFn: () => api.getScanFindings(token!, scanId),
-    enabled: !!token && !!scanId,
+    queryFn: () => api.getScanFindings(scanId),
+    enabled: !!user && !!scanId,
     staleTime: STALE_5M,
   })
 }
 
 export function useCreateScan() {
-  const token = useAuthStore((s) => s.token)
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: any) => api.createScan(token!, data),
+    mutationFn: (data: any) => api.createScan(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scans'] }),
   })
 }

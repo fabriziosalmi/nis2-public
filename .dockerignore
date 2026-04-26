@@ -1,7 +1,8 @@
-# Version control
+# Version control & worktree metadata
 .git
 .github
 .gitignore
+.claude/
 
 # Environment
 .env

@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import re
+import secrets
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError
 from passlib.context import CryptContext
 from slowapi import Limiter
@@ -13,10 +15,12 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.membership import Membership
 from app.models.organization import Organization
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -34,16 +38,136 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 limiter = Limiter(key_func=get_remote_address)
 
 
+# ---------------------------------------------------------------------------
+# Cookie helpers
+# ---------------------------------------------------------------------------
+# httpOnly access/refresh cookies neutralise the XSS-token-exfil class of bug
+# that Zustand-in-localStorage exposed. The csrf_token cookie is intentionally
+# JS-readable: the SPA echoes it as the X-CSRF-Token header on state-changing
+# requests so CSRFMiddleware can validate the double-submit.
+
+ACCESS_COOKIE = "access_token"
+REFRESH_COOKIE = "refresh_token"
+CSRF_COOKIE = "csrf_token"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+
+def _cookie_secure() -> bool:
+    return settings.environment == "production"
+
+
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str,
+    csrf_token: str,
+) -> None:
+    secure = _cookie_secure()
+    samesite = "lax"
+    access_max_age = settings.access_token_expire_minutes * 60
+    refresh_max_age = settings.refresh_token_expire_days * 86400
+
+    response.set_cookie(
+        ACCESS_COOKIE,
+        access_token,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        max_age=access_max_age,
+        path="/",
+    )
+    response.set_cookie(
+        REFRESH_COOKIE,
+        refresh_token,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        max_age=refresh_max_age,
+        path=REFRESH_COOKIE_PATH,
+    )
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf_token,
+        httponly=False,  # readable by JS; that's the whole point
+        secure=secure,
+        samesite=samesite,
+        max_age=access_max_age,
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(ACCESS_COOKIE, path="/")
+    response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
+    response.delete_cookie(CSRF_COOKIE, path="/")
+
+
+async def _is_jti_revoked(db: AsyncSession, jti: str) -> bool:
+    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+    return result.scalar_one_or_none() is not None
+
+
+async def _revoke_jti(
+    db: AsyncSession,
+    jti: str,
+    expires_at: datetime,
+    user_id: Optional[uuid.UUID] = None,
+    reason: str = "logout",
+) -> None:
+    """Add a refresh-token jti to the revocation list. No-op on duplicate."""
+    existing = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+    if existing.scalar_one_or_none():
+        return
+    db.add(RevokedToken(jti=jti, expires_at=expires_at, user_id=user_id, reason=reason))
+    await db.flush()
+
+
 def _slugify(name: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", name.lower().strip())
     slug = re.sub(r"[\s_]+", "-", slug)
     return slug[:128]
 
 
+def _build_token_response(
+    response: Response,
+    user: User,
+    organization_id: uuid.UUID | None,
+    role: str | None,
+) -> TokenResponse:
+    """Issue tokens, set cookies, build the JSON body."""
+    token_data: dict[str, str] = {"sub": str(user.id)}
+    if organization_id is not None:
+        token_data["org_id"] = str(organization_id)
+    if role is not None:
+        token_data["role"] = role
+
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    csrf_token = secrets.token_urlsafe(32)
+
+    _set_auth_cookies(response, access_token, refresh_token, csrf_token)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        csrf_token=csrf_token,
+        user=UserResponse.model_validate(user),
+        org_id=str(organization_id) if organization_id else None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
-async def register(request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    # Check if email already exists
+async def register(
+    request: Request,
+    response: Response,
+    payload: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -51,7 +175,6 @@ async def register(request: Request, payload: RegisterRequest, db: AsyncSession 
             detail="Email already registered",
         )
 
-    # Create user
     user = User(
         email=payload.email,
         password_hash=pwd_context.hash(payload.password),
@@ -60,7 +183,6 @@ async def register(request: Request, payload: RegisterRequest, db: AsyncSession 
     db.add(user)
     await db.flush()
 
-    # Create organization
     base_slug = _slugify(payload.org_name)
     slug = base_slug
     suffix = 0
@@ -77,7 +199,6 @@ async def register(request: Request, payload: RegisterRequest, db: AsyncSession 
     db.add(org)
     await db.flush()
 
-    # Create membership
     membership = Membership(
         user_id=user.id,
         organization_id=org.id,
@@ -87,20 +208,18 @@ async def register(request: Request, payload: RegisterRequest, db: AsyncSession 
     db.add(membership)
     await db.flush()
 
-    # Generate tokens
-    token_data = {"sub": str(user.id), "org_id": str(org.id), "role": "admin"}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
-
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return _build_token_response(response, user, org.id, "admin")
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
-async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(
-        select(User).where(User.email == payload.email)
-    )
+async def login(
+    request: Request,
+    response: Response,
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
     if not user or not user.password_hash:
@@ -121,32 +240,39 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
             detail="Account is deactivated",
         )
 
-    # Update last login
     user.last_login_at = datetime.now(timezone.utc)
     await db.flush()
 
-    # Get first membership for default org
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
     )
     membership = memberships_result.scalars().first()
 
-    token_data = {"sub": str(user.id)}
-    if membership:
-        token_data["org_id"] = str(membership.organization_id)
-        token_data["role"] = membership.role
-
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
-
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    org_id = membership.organization_id if membership else None
+    role = membership.role if membership else None
+    return _build_token_response(response, user, org_id, role)
 
 
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit("20/minute")
-async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def refresh(
+    request: Request,
+    response: Response,
+    payload: RefreshRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    # Prefer the httpOnly cookie (web flow); fall back to body (SDK flow).
+    refresh_token = request.cookies.get(REFRESH_COOKIE)
+    if not refresh_token and payload is not None:
+        refresh_token = payload.refresh_token
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing refresh token",
+        )
+
     try:
-        token_payload = decode_token(payload.refresh_token)
+        token_payload = decode_token(refresh_token)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -157,6 +283,21 @@ async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type",
+        )
+
+    jti = token_payload.get("jti")
+    if not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload (missing jti)",
+        )
+    if await _is_jti_revoked(db, jti):
+        # Reuse of an already-rotated or logged-out refresh token. The token
+        # is cryptographically valid but has been retired; reject and force
+        # the client back through /login.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
         )
 
     user_id = token_payload.get("sub")
@@ -173,6 +314,7 @@ async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = 
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
+
     result = await db.execute(select(User).where(User.id == parsed_id))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
@@ -181,21 +323,68 @@ async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = 
             detail="User not found or inactive",
         )
 
-    # Rebuild token data
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
     )
     membership = memberships_result.scalars().first()
+    org_id = membership.organization_id if membership else None
+    role = membership.role if membership else None
 
-    token_data = {"sub": str(user.id)}
-    if membership:
-        token_data["org_id"] = str(membership.organization_id)
-        token_data["role"] = membership.role
+    # Refresh-token rotation: revoke the token we just consumed before
+    # minting the new pair. This guarantees that if the same refresh token
+    # is replayed (e.g. by an attacker who stole it), the second use is
+    # rejected and the legitimate session — which now holds the rotated
+    # token — keeps working.
+    exp_unix = token_payload.get("exp")
+    if exp_unix:
+        await _revoke_jti(
+            db,
+            jti,
+            datetime.fromtimestamp(exp_unix, tz=timezone.utc),
+            user_id=parsed_id,
+            reason="rotated",
+        )
 
-    access_token = create_access_token(token_data)
-    new_refresh_token = create_refresh_token(token_data)
+    return _build_token_response(response, user, org_id, role)
 
-    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Clear all auth cookies and revoke the current refresh token, if any.
+
+    Idempotent — safe to call when not logged in (returns 204 either way).
+    """
+    refresh_token = request.cookies.get(REFRESH_COOKIE)
+    if refresh_token:
+        try:
+            payload = decode_token(refresh_token)
+            jti = payload.get("jti")
+            exp_unix = payload.get("exp")
+            sub = payload.get("sub")
+            user_id: Optional[uuid.UUID] = None
+            if sub:
+                try:
+                    user_id = uuid.UUID(sub)
+                except (ValueError, AttributeError):
+                    user_id = None
+            if jti and exp_unix:
+                await _revoke_jti(
+                    db,
+                    jti,
+                    datetime.fromtimestamp(exp_unix, tz=timezone.utc),
+                    user_id=user_id,
+                    reason="logout",
+                )
+        except JWTError:
+            pass  # already-invalid token; nothing to revoke, just clear cookies
+
+    _clear_auth_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.get("/me", response_model=UserResponse)

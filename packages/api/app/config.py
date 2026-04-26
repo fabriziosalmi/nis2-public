@@ -1,21 +1,74 @@
 # Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import logging
+import secrets
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
+
+
+_INSECURE_JWT_DEFAULTS = {
+    "",
+    "change-me",
+    "GENERATE_ME_openssl_rand_base64_32",
+    "secret",
+    "changeme",
+}
 
 
 class Settings(BaseSettings):
+    environment: str = "production"
     database_url: str = "postgresql+asyncpg://nis2:nis2secret@localhost:5432/nis2"
     database_url_sync: str = "postgresql://nis2:nis2secret@localhost:5432/nis2"
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
-    jwt_secret: str = "change-me"
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    cors_origins: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @model_validator(mode="after")
+    def _validate_runtime_config(self) -> "Settings":
+        if self.environment != "production":
+            # Dev convenience: generate an ephemeral secret so `make dev` boots
+            # cleanly. Tokens won't survive a restart — that's intentional, so
+            # local sessions don't leak into production by accident.
+            if self.jwt_secret in _INSECURE_JWT_DEFAULTS or len(self.jwt_secret) < 32:
+                self.jwt_secret = secrets.token_urlsafe(32)
+                logger.warning(
+                    "[dev] JWT_SECRET missing or weak; using an ephemeral random "
+                    "secret. Tokens will not survive restart. Set JWT_SECRET in "
+                    ".env to persist sessions."
+                )
+            return self
+
+        problems: list[str] = []
+        if self.jwt_secret in _INSECURE_JWT_DEFAULTS:
+            problems.append(
+                "JWT_SECRET is unset or uses an insecure placeholder. "
+                "Generate one with `openssl rand -base64 32`."
+            )
+        elif len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET must be at least 32 characters in production.")
+        if not self.cors_origins.strip():
+            problems.append(
+                "CORS_ORIGINS must be set explicitly in production "
+                "(comma-separated allow-list, no wildcards)."
+            )
+        if problems:
+            raise RuntimeError(
+                "Refusing to start: insecure configuration detected.\n  - "
+                + "\n  - ".join(problems)
+                + "\n\nSet ENVIRONMENT=development to relax these checks for local work."
+            )
+        return self
 
 
 settings = Settings()

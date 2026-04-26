@@ -44,9 +44,7 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       const res = await api.register(data)
-      const user = await api.getMe(res.access_token)
-      const payload = JSON.parse(atob(res.access_token.split('.')[1]))
-      setAuth(res.access_token, user, payload.org_id)
+      setAuth(res.user, res.org_id || null)
       toast.success("Account created successfully")
       router.push("/dashboard")
     } catch (err: any) {
