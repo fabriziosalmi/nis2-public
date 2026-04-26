@@ -12,11 +12,11 @@ from jose import JWTError
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import IS_POSTGRES, get_db
 from app.dependencies import get_current_user
 from app.models.membership import Membership
 from app.models.organization import Organization
@@ -122,6 +122,23 @@ async def _revoke_jti(
     await db.flush()
 
 
+async def _bypass_rls_for_bootstrap(db: AsyncSession | None) -> None:
+    """Auth bootstrap routes (register/login/refresh) run before the user has
+    a session, so IdentityMiddleware has not set `app.current_org_id`. The
+    tenant_isolation policy's `WITH CHECK` would then block writes to
+    `memberships` (and any other tenant-scoped table touched here) and the
+    `USING` clause would silently filter SELECTs to zero rows. We bypass
+    RLS for these specific routes — the application-layer logic is fully
+    in control of which user/org is being touched.
+
+    No-ops on SQLite (RLS is Postgres-only) and on unit-test sessions
+    where `db` is overridden to None.
+    """
+    if not IS_POSTGRES or db is None:
+        return
+    await db.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+
+
 def _slugify(name: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", name.lower().strip())
     slug = re.sub(r"[\s_]+", "-", slug)
@@ -168,6 +185,7 @@ async def register(
     payload: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    await _bypass_rls_for_bootstrap(db)
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -219,6 +237,7 @@ async def login(
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    await _bypass_rls_for_bootstrap(db)
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
@@ -261,6 +280,7 @@ async def refresh(
     payload: RefreshRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    await _bypass_rls_for_bootstrap(db)
     # Prefer the httpOnly cookie (web flow); fall back to body (SDK flow).
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if not refresh_token and payload is not None:
@@ -358,6 +378,9 @@ async def logout(
 
     Idempotent — safe to call when not logged in (returns 204 either way).
     """
+    # revoked_tokens has no organization_id column so RLS doesn't apply,
+    # but bypassing keeps behaviour identical regardless of session state.
+    await _bypass_rls_for_bootstrap(db)
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if refresh_token:
         try:
