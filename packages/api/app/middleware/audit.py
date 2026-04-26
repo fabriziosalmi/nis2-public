@@ -134,10 +134,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 # The audit middleware runs in its own session, separate from
                 # the request's get_db() session. We must scope it to the
                 # tenant ourselves so the RLS WITH CHECK on audit_logs
-                # accepts the INSERT.
+                # accepts the INSERT. `SET LOCAL` does not accept bind
+                # parameters; `set_config(..., is_local=true)` does.
                 if IS_POSTGRES:
                     await session.execute(
-                        text("SET LOCAL app.current_org_id = :v"),
+                        text("SELECT set_config('app.current_org_id', :v, true)"),
                         {"v": str(org_id)},
                     )
                 session.add(
