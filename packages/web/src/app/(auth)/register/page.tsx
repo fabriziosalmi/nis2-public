@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { Logo } from "@/components/brand/logo"
 
 const registerSchema = z.object({
   full_name: z.string().min(2, "Name must be at least 2 characters"),
@@ -58,9 +59,7 @@ export default function RegisterPage() {
     <Card>
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-            N2
-          </div>
+          <Logo size={40} />
         </div>
         <CardTitle className="text-2xl">Create an account</CardTitle>
         <CardDescription>Get started with NIS2 compliance monitoring</CardDescription>

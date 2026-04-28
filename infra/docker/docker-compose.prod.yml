@@ -9,7 +9,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      api: { condition: service_started }
+      # service_healthy (not service_started) so Caddy doesn't proxy to
+      # an API that's still warming up — the difference between a clean
+      # start and a few minutes of intermittent 502s on cold deploys.
+      api: { condition: service_healthy }
       web: { condition: service_started }
     restart: unless-stopped
     networks: [nis2-net]
@@ -49,6 +52,15 @@ services:
       redis: { condition: service_healthy }
     restart: unless-stopped
     networks: [nis2-net]
+    # Caddy sits in front and proxies /api/* to this service; without a
+    # healthcheck Caddy can race the API and serve 502s during the
+    # 5–30s startup window (RLS bootstrap + schema sync).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
 
   celery-worker:
     build:
@@ -66,7 +78,15 @@ services:
     build:
       context: ../..
       dockerfile: packages/api/Dockerfile
-    command: celery -A app.tasks.celery_app beat --loglevel=info
+    # See the dev compose for context: the default beat scheduler writes
+    # a SQLite-shelve file to the working directory, and that file
+    # cannot survive a host bind-mount through WSL2's `/mnt/c` proxy.
+    # In prod we don't have a bind-mount, but we still want the beat
+    # schedule to survive container restarts so cron-style triggers
+    # don't double-fire after a deploy — hence the named volume.
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/var/celerybeat/schedule
+    volumes:
+      - celerybeat_data:/var/celerybeat
     env_file: ../../.env
     depends_on:
       redis: { condition: service_healthy }
@@ -78,7 +98,14 @@ services:
       context: ../../packages/web
       dockerfile: Dockerfile
       target: production
-    command: npm start
+    # The production stage builds Next.js as a *standalone* bundle: only
+    # `.next/standalone/server.js`, `.next/static/` and `public/` are
+    # copied into the final image — no `node_modules`, no `package.json`,
+    # no `next` binary. The Dockerfile CMD is already `node server.js`.
+    # The previous `command: npm start` invoked `next start`, which then
+    # crashed with `sh: next: not found` and the container restart-looped
+    # forever (reported by Davide F. on Docker Desktop / WSL2). Letting
+    # the Dockerfile CMD run is the only correct option.
     env_file: ../../.env
     environment:
       # Browser-side: the public domain (in front of Caddy).
@@ -104,6 +131,7 @@ volumes:
   caddy_data:
   caddy_config:
   prometheus_data:
+  celerybeat_data:
 
 networks:
   nis2-net:
