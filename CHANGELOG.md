@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.4.3] - 2026-04-27
+
+### Fixed (first-user feedback)
+- **`make prod` web build failed** with `failed to compute cache key ... "/app/public": not found`. The web Dockerfile production stage `COPY --from=builder /app/public ./public` required the directory to exist, but `packages/web/public/` was never tracked in the repo. Added `packages/web/public/.gitkeep` so the directory ships even when empty. Drop in any static assets (favicon, og-image, robots.txt) here as they appear.
+- **`make dev` left the browser on a "Loading..." white screen.** Two distinct causes, both fixed:
+  - `next.config.ts` rewrites used `NEXT_PUBLIC_API_URL` as the proxy target. That env var is the *browser-facing* URL (`http://localhost:8000`); from inside the web container, `localhost` resolves to the container itself, so server-side rewrites silently failed. Added `INTERNAL_API_URL` (e.g. `http://api:8000`) which the rewrites prefer when set; falls back to `NEXT_PUBLIC_API_URL` for non-docker setups.
+  - On Windows + Docker Desktop + WSL2, native filesystem events do not propagate from the host-mounted volume into the container, so Next.js' incremental dev compiler never completes the first build. Added `WATCHPACK_POLLING=true` and `CHOKIDAR_USEPOLLING=true` to the dev compose web service to force polling-based watching.
+
+Reported by Davide Foresti (Essedieffe). Thanks Davide.
+
 ## [2.4.2] - 2026-04-27
 
 ### Fixed (RLS / integration tests — finishing what 2.4.1 started)

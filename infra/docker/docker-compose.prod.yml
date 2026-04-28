@@ -81,7 +81,12 @@ services:
     command: npm start
     env_file: ../../.env
     environment:
+      # Browser-side: the public domain (in front of Caddy).
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost}
+      # Server-side: where the Next.js process inside this container
+      # reaches the API for rewrites. Internal docker DNS, not the
+      # public URL.
+      - INTERNAL_API_URL=http://api:8000
     restart: unless-stopped
     networks: [nis2-net]
 
