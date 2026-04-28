@@ -42,3 +42,10 @@ class MemberResponse(BaseModel):
 class InviteMemberRequest(BaseModel):
     email: EmailStr
     role: str = Field(default="viewer", pattern="^(admin|auditor|viewer)$")
+
+
+# v2.4.12: role-change moved from Query("?role=admin") to a JSON body
+# so the frontend's `body: JSON.stringify({role})` actually works.
+# Audit B08.
+class RoleUpdateRequest(BaseModel):
+    role: str = Field(..., pattern="^(admin|auditor|viewer)$")

@@ -299,3 +299,151 @@ class TestLogout:
             assert me_after.status_code in (401, 403), (
                 f"after logout /me must reject; got {me_after.status_code}"
             )
+
+
+# ---------------------------------------------------------------------------
+# User management — covers v2.4.12 fixes for B08–B12 in the audit.
+# These hit /api/v1/organizations/{id}/members and /api/v1/api-keys.
+# We don't have multi-org setup in this suite (single-org test user),
+# so the multi-org JWT desync (B10) is exercised indirectly: a happy-
+# path single-org user must keep working after the dependency rewrite.
+# ---------------------------------------------------------------------------
+
+class TestUserManagement:
+    @pytest.fixture(scope="class")
+    def org_id(self, client: httpx.Client, auth: dict) -> str:
+        return auth["org_id"]
+
+    @pytest.fixture(scope="class")
+    def my_member_id(self, client: httpx.Client, auth: dict, org_id: str) -> str:
+        resp = client.get(f"/api/v1/organizations/{org_id}/members")
+        assert resp.status_code == 200, resp.text
+        members = resp.json()
+        assert isinstance(members, list) and len(members) >= 1
+        # Find current user's own membership
+        my_id = auth["user_id"]
+        my_membership = next((m for m in members if m["user_id"] == my_id), None)
+        assert my_membership is not None, "current user is not in members list"
+        return my_membership["id"]
+
+    def test_list_members_returns_at_least_self(
+        self, client: httpx.Client, auth: dict, org_id: str
+    ):
+        # Single-org happy path. After the get_current_org rewrite the
+        # endpoint must still resolve the right org — if the JWT-vs-
+        # memberships[0] desync regresses, this returns 0 rows or 403.
+        resp = client.get(f"/api/v1/organizations/{org_id}/members")
+        assert resp.status_code == 200
+        assert len(resp.json()) >= 1
+
+    def test_self_demotion_rejected(
+        self, client: httpx.Client, auth: dict, org_id: str, my_member_id: str
+    ):
+        # B09: an admin demoting themselves is refused with 400 to
+        # prevent locking the org out (current test user is admin).
+        resp = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{my_member_id}",
+            json={"role": "viewer"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 400, f"{resp.status_code}: {resp.text}"
+        assert "yourself" in resp.text.lower() or "demote" in resp.text.lower()
+
+    def test_role_change_uses_body_not_query(
+        self, client: httpx.Client, auth: dict, org_id: str, my_member_id: str
+    ):
+        # B08: server expects body, not ?role=. Sending the body to a
+        # no-op (admin → admin) should 200, not 422.
+        resp = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{my_member_id}",
+            json={"role": "admin"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+        assert resp.json()["role"] == "admin"
+
+    def test_role_change_invalid_enum_rejected(
+        self, client: httpx.Client, auth: dict, org_id: str, my_member_id: str
+    ):
+        # The Pydantic Literal pattern blocks "member" / "owner" / etc.
+        resp = client.patch(
+            f"/api/v1/organizations/{org_id}/members/{my_member_id}",
+            json={"role": "member"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 422, resp.text
+
+
+class TestApiKeysCRUD:
+    """Validate the wired (no-longer-mocked) API key flow + role checks."""
+
+    @pytest.fixture(scope="class")
+    def created_key_id(self) -> list[str]:
+        return []
+
+    def test_create_key_returns_raw_once(
+        self, client: httpx.Client, auth: dict, created_key_id: list[str]
+    ):
+        resp = client.post(
+            "/api/v1/api-keys",
+            json={"name": "e2e-test-key"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 201, f"{resp.status_code}: {resp.text}"
+        body = resp.json()
+        # ApiKeyCreated extends ApiKeyResponse with raw_key — shown once.
+        assert "raw_key" in body and body["raw_key"].startswith("nis2_")
+        assert "key_hash" not in body  # hash must NEVER leave the server
+        created_key_id.append(body["id"])
+
+    def test_list_keys_includes_created(
+        self, client: httpx.Client, auth: dict, created_key_id: list[str]
+    ):
+        resp = client.get("/api/v1/api-keys")
+        assert resp.status_code == 200
+        ids = {k["id"] for k in resp.json()["items"]}
+        for cid in created_key_id:
+            assert cid in ids
+
+    def test_list_keys_response_omits_hash(self, client: httpx.Client, auth: dict):
+        resp = client.get("/api/v1/api-keys")
+        for k in resp.json()["items"]:
+            assert "key_hash" not in k, "hash leaked in list response"
+            assert "raw_key" not in k, "raw_key leaked in list response"
+
+    def test_revoke_key(
+        self, client: httpx.Client, auth: dict, created_key_id: list[str]
+    ):
+        for cid in created_key_id:
+            resp = client.delete(f"/api/v1/api-keys/{cid}", headers=_csrf_headers(auth))
+            assert resp.status_code == 204, f"{cid}: {resp.status_code} {resp.text}"
+
+    def test_revoked_key_marked_inactive(
+        self, client: httpx.Client, auth: dict, created_key_id: list[str]
+    ):
+        resp = client.get("/api/v1/api-keys")
+        ids_to_state = {k["id"]: k["is_active"] for k in resp.json()["items"]}
+        for cid in created_key_id:
+            assert ids_to_state.get(cid) is False
+
+
+class TestAuditLogs:
+    """B03: audit-log endpoint exists and the actions emitted by the
+    routers above show up in the read view."""
+
+    def test_audit_log_lists(self, client: httpx.Client, auth: dict):
+        resp = client.get("/api/v1/audit-logs?page_size=10")
+        assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert "items" in body and "total" in body
+
+    def test_audit_log_filter_by_action(self, client: httpx.Client, auth: dict):
+        # Earlier tests in this run created and revoked an API key.
+        # Filtering by `api_key.created` must surface at least those
+        # entries (or be empty if the test file is run in isolation —
+        # accept both, just check the contract works).
+        resp = client.get("/api/v1/audit-logs?action=api_key.created")
+        assert resp.status_code == 200
+        # Every returned row must carry the requested action.
+        for row in resp.json()["items"]:
+            assert row["action"] == "api_key.created"

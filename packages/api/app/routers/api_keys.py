@@ -18,7 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, require_role
+from app.middleware.audit import log_action
 from app.models.api_key import ApiKey
 from app.models.membership import Membership
 from app.models.user import User
@@ -54,7 +55,14 @@ class ApiKeyListResponse(BaseModel):
 
 # --- Router ---
 
-@router.get("", response_model=ApiKeyListResponse)
+@router.get(
+    "",
+    response_model=ApiKeyListResponse,
+    # Audit B12: viewers should not see the org's CI/CD integration
+    # inventory. The key prefix + last_used_at + name are still
+    # useful info-leak material for an attacker scoping the org.
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def list_api_keys(
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
@@ -71,15 +79,18 @@ async def list_api_keys(
     )
 
 
-@router.post("", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ApiKeyCreated,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin"))],
+)
 async def create_api_key(
     payload: ApiKeyCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ) -> ApiKeyCreated:
     user, membership = current_org
-    if membership.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can create API keys")
 
     # Generate key: nis2_<40 random chars>
     raw_key = f"nis2_{secrets.token_urlsafe(30)}"
@@ -97,21 +108,39 @@ async def create_api_key(
     )
     db.add(api_key)
     await db.flush()
+    # Refresh so DB-side defaults (created_at) are present before
+    # Pydantic serialises — same lazy-load greenlet bug as scans.create.
+    await db.refresh(api_key)
 
-    response = ApiKeyCreated.model_validate(api_key)
-    response.raw_key = raw_key
-    return response
+    await log_action(
+        db,
+        org_id=membership.organization_id,
+        user_id=user.id,
+        action="api_key.created",
+        resource_type="api_key",
+        resource_id=str(api_key.id),
+        details={"name": payload.name, "prefix": key_prefix, "scopes": payload.scopes},
+    )
+
+    # Pydantic v2 doesn't accept `update=` on `model_validate`. Build the
+    # response by validating into the base shape, then constructing the
+    # extended one with the raw_key. This is the only place the plaintext
+    # is allowed to leave the server.
+    base = ApiKeyResponse.model_validate(api_key)
+    return ApiKeyCreated(**base.model_dump(), raw_key=raw_key)
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{key_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
 async def revoke_api_key(
     key_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     user, membership = current_org
-    if membership.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can revoke API keys")
 
     api_key = await db.get(ApiKey, key_id)
     if not api_key or api_key.organization_id != membership.organization_id:
@@ -119,3 +148,13 @@ async def revoke_api_key(
 
     api_key.is_active = False
     await db.flush()
+
+    await log_action(
+        db,
+        org_id=membership.organization_id,
+        user_id=user.id,
+        action="api_key.revoked",
+        resource_type="api_key",
+        resource_id=str(api_key.id),
+        details={"name": api_key.name, "prefix": api_key.key_prefix},
+    )

@@ -11,7 +11,8 @@ import { toast } from "sonner"
 import { Plus, Loader2, Copy, ArrowLeft, Key, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { format as formatDate } from "date-fns"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -24,30 +25,32 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useApiKeys, useCreateApiKey, useRevokeApiKey } from "@/hooks/use-api-keys"
 
 const createKeySchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "apiKeysPage.nameRequired").max(256),
 })
 
 type CreateKeyForm = z.infer<typeof createKeySchema>
 
-const sampleKeys = [
-  { id: "1", name: "CI/CD Pipeline", prefix: "nis2_pk_live_abc1", created: "2026-01-15", last_used: "2026-03-27", status: "active" },
-  { id: "2", name: "Monitoring Integration", prefix: "nis2_pk_live_def2", created: "2026-02-20", last_used: "2026-03-26", status: "active" },
-  { id: "3", name: "Development Testing", prefix: "nis2_pk_test_ghi3", created: "2025-11-10", last_used: "2026-03-20", status: "active" },
-  { id: "4", name: "Legacy Integration", prefix: "nis2_pk_live_jkl4", created: "2025-06-01", last_used: "2025-12-15", status: "revoked" },
-]
-
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeysPage")
   const tc = useTranslations("common")
+  const { data: keysData, isLoading } = useApiKeys()
+  const createKey = useCreateApiKey()
+  const revokeKey = useRevokeApiKey()
+
   const [createOpen, setCreateOpen] = useState(false)
+  // The plaintext key returned by the API on creation. Held in
+  // component state and shown ONCE — server-side we only store the
+  // sha256 hash, so once the dialog closes the user cannot retrieve
+  // it again. Cleared on close.
   const [newKey, setNewKey] = useState<string | null>(null)
   const [revokeId, setRevokeId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+
+  const keys = keysData?.items || []
 
   const {
     register,
@@ -59,17 +62,15 @@ export default function ApiKeysPage() {
   })
 
   const onSubmit = async (data: CreateKeyForm) => {
-    setLoading(true)
     try {
-      // api.createApiKey would be called here
-      const generatedKey = `nis2_pk_live_${Math.random().toString(36).substring(2, 34)}`
-      setNewKey(generatedKey)
+      const created = await createKey.mutateAsync(data)
+      // The API returns ApiKeyCreated which extends ApiKeyResponse with
+      // raw_key — this is the plaintext shown once.
+      setNewKey(created.raw_key)
       toast.success(t("keyCreated"))
       reset()
     } catch (err: any) {
       toast.error(t("keyCreateFailed"), { description: err.message })
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -80,9 +81,14 @@ export default function ApiKeysPage() {
     }
   }
 
-  const handleRevoke = (id: string) => {
-    toast.success(t("keyRevoked"))
-    setRevokeId(null)
+  const handleRevoke = async (id: string) => {
+    try {
+      await revokeKey.mutateAsync(id)
+      toast.success(t("keyRevoked"))
+      setRevokeId(null)
+    } catch (err: any) {
+      toast.error(t("keyRevokeFailed"), { description: err.message })
+    }
   }
 
   const handleCloseCreate = () => {
@@ -103,7 +109,13 @@ export default function ApiKeysPage() {
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Dialog open={createOpen} onOpenChange={(open) => { if (!open) handleCloseCreate(); else setCreateOpen(true); }}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            if (!open) handleCloseCreate()
+            else setCreateOpen(true)
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -141,15 +153,17 @@ export default function ApiKeysPage() {
                   <div className="space-y-2">
                     <Label htmlFor="name">{t("keyName")}</Label>
                     <Input id="name" placeholder={t("keyNamePlaceholder")} {...register("name")} />
-                    {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+                    {errors.name && (
+                      <p className="text-xs text-destructive">{t(errors.name.message as any)}</p>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={handleCloseCreate}>
                     {tc("cancel")}
                   </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" disabled={createKey.isPending}>
+                    {createKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {t("createKey")}
                   </Button>
                 </DialogFooter>
@@ -161,63 +175,87 @@ export default function ApiKeysPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("name")}</TableHead>
-                <TableHead>{t("keyPrefix")}</TableHead>
-                <TableHead>{t("created")}</TableHead>
-                <TableHead>{t("lastUsed")}</TableHead>
-                <TableHead>{t("status")}</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sampleKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell className="font-medium">{key.name}</TableCell>
-                  <TableCell>
-                    <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{key.prefix}...</code>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{key.created}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{key.last_used}</TableCell>
-                  <TableCell>
-                    <Badge variant={key.status === "active" ? "secondary" : "outline"} className={key.status === "revoked" ? "text-red-600" : ""}>
-                      {key.status === "active" ? t("active") : key.status === "revoked" ? t("revoked") : key.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {key.status === "active" && (
-                      <>
-                        {revokeId === key.id ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : keys.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <Key className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-1">{t("noKeys")}</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">{t("noKeysDescription")}</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("keyPrefix")}</TableHead>
+                  <TableHead>{t("created")}</TableHead>
+                  <TableHead>{t("lastUsed")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {keys.map((key: any) => (
+                  <TableRow key={key.id}>
+                    <TableCell className="font-medium">{key.name}</TableCell>
+                    <TableCell>
+                      <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                        {key.key_prefix}…
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {key.created_at ? formatDate(new Date(key.created_at), "yyyy-MM-dd") : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {key.last_used_at
+                        ? formatDate(new Date(key.last_used_at), "yyyy-MM-dd HH:mm")
+                        : t("neverUsed")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={key.is_active ? "secondary" : "outline"}
+                        className={!key.is_active ? "text-red-600" : ""}
+                      >
+                        {key.is_active ? t("active") : t("revoked")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {key.is_active && (
+                        revokeId === key.id ? (
                           <div className="flex items-center gap-1">
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => handleRevoke(key.id)}
+                              disabled={revokeKey.isPending}
                             >
                               {t("confirm")}
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setRevokeId(null)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setRevokeId(null)}
+                            >
                               {tc("cancel")}
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setRevokeId(key.id)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => setRevokeId(key.id)}>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
-                        )}
-                      </>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        )
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
