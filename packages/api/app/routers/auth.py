@@ -4,7 +4,7 @@
 import re
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -23,6 +23,7 @@ from app.models.organization import Organization
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
@@ -150,16 +151,25 @@ def _build_token_response(
     user: User,
     organization_id: uuid.UUID | None,
     role: str | None,
+    iat_override: datetime | None = None,
 ) -> TokenResponse:
-    """Issue tokens, set cookies, build the JSON body."""
+    """Issue tokens, set cookies, build the JSON body.
+
+    `iat_override` is used by /change-password to ensure the freshly
+    minted tokens carry an `iat` >= the just-stamped
+    `user.password_changed_at`, even when both happen in the same
+    wall-clock second. Without it, a strictly-less-than check on the
+    same-second case would fail half the time depending on microsecond
+    rounding.
+    """
     token_data: dict[str, str] = {"sub": str(user.id)}
     if organization_id is not None:
         token_data["org_id"] = str(organization_id)
     if role is not None:
         token_data["role"] = role
 
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
+    access_token = create_access_token(token_data, iat_override=iat_override)
+    refresh_token = create_refresh_token(token_data, iat_override=iat_override)
     csrf_token = secrets.token_urlsafe(32)
 
     _set_auth_cookies(response, access_token, refresh_token, csrf_token)
@@ -343,6 +353,22 @@ async def refresh(
             detail="User not found or inactive",
         )
 
+    # Password-change watermark check: a refresh token issued before
+    # the user changed their password must not produce a new access
+    # token. Same intent as the equivalent check in get_current_user;
+    # without it, a stolen old-password refresh-token cookie could
+    # outlive the password rotation by up to refresh_token_expire_days.
+    # Compare in epoch seconds — see dependencies.py for the rationale.
+    iat_raw = token_payload.get("iat")
+    if iat_raw is not None and user.password_changed_at is not None:
+        iat_seconds = int(iat_raw) if isinstance(iat_raw, (int, float)) else int(iat_raw.timestamp())
+        pwc_seconds = int(user.password_changed_at.timestamp())
+        if iat_seconds < pwc_seconds:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token invalidated by password change",
+            )
+
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
     )
@@ -426,3 +452,109 @@ async def update_me(
         setattr(current_user, field, value)
     await db.flush()
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")  # protect against credential brute-force
+async def change_password(
+    request: Request,
+    response: Response,
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Audit B04: a real password change.
+
+    Previous behaviour: the FE sent {current_password, new_password} to
+    PATCH /auth/me, which routed through `UserUpdate` — a schema that
+    only declared {full_name, locale, avatar_url}. Pydantic dropped
+    the password fields, the route returned 200, and the toast lied
+    that the password was updated. The hash never changed.
+
+    Now: a dedicated endpoint that
+      1. verifies the current password with passlib (401 on mismatch),
+      2. rejects when the new password equals the old one (no rotation
+         is also a footgun — users assume something happened),
+      3. hashes and persists the new password,
+      4. stamps `password_changed_at = now()`. The JWT decode path then
+         rejects every still-active access/refresh token with `iat`
+         older than this stamp — every other session for this user is
+         immediately invalidated, no per-jti tracking needed.
+      5. emits an audit log entry (`user.password_changed`) so the
+         compliance team can answer "when did Alice last rotate her
+         password" without grepping postgres logs,
+      6. rotates the *current* session's cookies so the user keeps
+         using the app from the tab where they made the change. Other
+         tabs / devices get bounced to /login on their next request.
+    """
+    # 1. Verify current password. is_active was already checked by
+    #    get_current_user; an inactive account can't reach this route.
+    if not current_user.password_hash or not pwd_context.verify(
+        payload.current_password, current_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    # 2. Refuse no-op rotations. Someone confused about the form should
+    #    get a clear "you typed the same password twice" instead of a
+    #    silent success that locks all other sessions for nothing.
+    if pwd_context.verify(payload.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must differ from the current password",
+        )
+
+    # 3 + 4. Persist new hash and bump the watermark.
+    #
+    # The watermark and the iat of the just-minted tokens must agree
+    # to the second so that:
+    #   * tokens issued BEFORE this change (any iat <= now) are
+    #     strictly less than the watermark and get 401'd,
+    #   * tokens issued in this very response are >= the watermark
+    #     and pass.
+    # We pick `next_second = floor(now) + 1` as both the watermark and
+    # the override iat for the new tokens. Without this dance, a token
+    # minted in the same wall-clock second as another token in flight
+    # could be invalidated by accident — exactly the rounding bug we
+    # hit during e2e bring-up.
+    now_floor = datetime.now(timezone.utc).replace(microsecond=0)
+    next_second = now_floor + timedelta(seconds=1)
+    current_user.password_hash = pwd_context.hash(payload.new_password)
+    current_user.password_changed_at = next_second
+    await db.flush()
+
+    # 5. Audit. Imported lazily here to dodge a circular import — auth
+    #    is imported by app.main early; the audit middleware imports
+    #    auth bits transitively for token decode.
+    from app.middleware.audit import log_action
+
+    membership = current_user.memberships[0] if current_user.memberships else None
+    if membership:
+        await log_action(
+            db,
+            org_id=membership.organization_id,
+            user_id=current_user.id,
+            action="user.password_changed",
+            resource_type="user",
+            resource_id=str(current_user.id),
+            details={"self_initiated": True},
+            request=request,
+        )
+
+    # 6. Re-issue this session's tokens on the *injected* response so
+    #    the active tab keeps working. Without this, the very next
+    #    request from this tab would 401 on the iat-watermark check
+    #    and bounce the user to /login — surprising and inconsistent
+    #    with the "you just confirmed your password" mental model.
+    #
+    #    Returning None lets FastAPI use the route's status_code=204
+    #    while preserving the Set-Cookie headers we just attached.
+    #    Constructing a fresh Response(...) with `headers=response.headers`
+    #    drops them on the floor in some Starlette versions — never do
+    #    that here.
+    org_id = membership.organization_id if membership else None
+    role = membership.role if membership else None
+    _build_token_response(response, current_user, org_id, role, iat_override=next_second)
+    return None

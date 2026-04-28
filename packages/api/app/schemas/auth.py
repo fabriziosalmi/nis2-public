@@ -39,6 +39,18 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=1024)
 
 
+class ChangePasswordRequest(BaseModel):
+    """
+    Audit B04: previously the FE sent `current_password` + `new_password`
+    to PATCH /auth/me, where `UserUpdate` silently dropped both unknown
+    fields and the password was never changed. The toast still said
+    "passwordUpdated". This dedicated schema makes the contract explicit
+    and lets the route validate before any DB mutation.
+    """
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     """
     Response shape for /login, /register, /refresh.

@@ -37,6 +37,17 @@ class User(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # When the user last changed their password. Used as a watermark by
+    # the JWT decode path: any access/refresh token whose `iat` predates
+    # this timestamp is rejected, so a password change immediately
+    # invalidates every other still-active session for this user without
+    # tracking individual jtis. Nullable so legacy users (created before
+    # this column existed) read as "never changed" — `iat is None or iat
+    # >= None` is a no-op check.
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Relationships
     memberships: Mapped[list[Membership]] = relationship(
         "Membership",

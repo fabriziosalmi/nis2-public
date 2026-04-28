@@ -109,6 +109,31 @@ async def get_current_user(
             detail="User account is deactivated",
         )
 
+    # Password-change watermark check (B04 follow-up). Token's `iat` is
+    # the moment it was issued; if the user changed their password later,
+    # this token belongs to a previous session and must be rejected even
+    # though its `exp` hasn't lapsed. Tokens minted before v2.4.13 don't
+    # carry `iat`; we treat that as an old-format token and accept it
+    # (the access-token TTL is 30min so they age out fast anyway).
+    #
+    # Comparison is done in epoch *seconds* on both sides to avoid the
+    # sub-second drift between `int(time())` (what jose stores in iat)
+    # and `datetime.now()` with microseconds (what we'd get if we built
+    # a datetime from `password_changed_at`). With `password_changed_at`
+    # set to `floor(now) + 1` in /change-password, this guarantees:
+    #   * tokens minted before the change (iat <= floor(now)) → 401
+    #   * tokens minted at or after the change (iat >= floor(now)+1) → pass
+    iat_raw = payload.get("iat")
+    if iat_raw is not None and user.password_changed_at is not None:
+        iat_seconds = int(iat_raw) if isinstance(iat_raw, (int, float)) else int(iat_raw.timestamp())
+        pwc_seconds = int(user.password_changed_at.timestamp())
+        if iat_seconds < pwc_seconds:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token invalidated by password change; please re-login",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     # Stash the JWT payload on the request state so dependencies that
     # run later in the chain (get_current_org, get_current_user_org)
     # can read the org_id claim without re-decoding the token.

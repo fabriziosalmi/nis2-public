@@ -161,6 +161,22 @@ class ApiClient {
     return this.request<any>('/api/v1/auth/me', { method: 'PATCH', body: JSON.stringify(data) })
   }
 
+  /**
+   * Audit B04: dedicated endpoint for password rotation. Previously
+   * `updateMe({current_password, new_password})` was called and the
+   * fields were silently dropped by the UserUpdate Pydantic model.
+   * The new POST /auth/change-password verifies the current password
+   * with passlib, hashes the new one, stamps `password_changed_at`
+   * (which invalidates every other session via JWT iat watermark),
+   * and re-issues this session's cookies. Returns 204.
+   */
+  async changePassword(data: { current_password: string; new_password: string }) {
+    return this.request<void>('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   // ------------------------------------------------------------------- Scans
   async listScans(page = 1, limit = 20) {
     return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`)

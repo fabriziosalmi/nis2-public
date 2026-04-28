@@ -390,7 +390,13 @@
     "confirmNewPassword": "Conferma Nuova Password",
     "updatePassword": "Aggiorna Password",
     "profileUpdated": "Profilo aggiornato",
-    "passwordUpdated": "Password aggiornata",
+    "passwordUpdated": "Password modificata",
+    "passwordUpdatedDescription": "Gli altri dispositivi e tab dovranno effettuare di nuovo l'accesso.",
+    "passwordChangeFailed": "Modifica password fallita",
+    "currentPasswordRequired": "Inserisci la password attuale",
+    "currentPasswordIncorrect": "La password attuale non è corretta",
+    "passwordsDontMatch": "Le nuove password non coincidono",
+    "newSameAsCurrent": "La nuova password deve essere diversa da quella attuale",
     "updateFailed": "Aggiornamento fallito"
   },
   "organizationPage": {
