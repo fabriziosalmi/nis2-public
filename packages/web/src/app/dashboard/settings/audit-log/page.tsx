@@ -5,6 +5,7 @@
 
 import { useState } from "react"
 import { ScrollText, Filter } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -30,14 +31,15 @@ const actionColors: Record<string, "default" | "secondary" | "outline" | "destru
 }
 
 export default function AuditLogPage() {
+  const t = useTranslations("auditLogPage")
   const [logs] = useState(sampleLogs)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Audit Log</h1>
-          <p className="text-muted-foreground">Track all actions taken in your organization</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
