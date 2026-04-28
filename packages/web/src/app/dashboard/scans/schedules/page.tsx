@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import {
   Clock, Plus, Trash2, Play, Pause, Loader2, CalendarClock, AlertCircle,
 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,15 +30,19 @@ const scheduleSchema = z.object({
 
 type ScheduleForm = z.infer<typeof scheduleSchema>
 
-const cronPresets = [
-  { label: "Daily at 9 AM", value: "0 9 * * *" },
-  { label: "Weekly Monday 9 AM", value: "0 9 * * 1" },
-  { label: "Bi-weekly Monday", value: "0 9 1,15 * *" },
-  { label: "Monthly 1st at 9 AM", value: "0 9 1 * *" },
-  { label: "Weekdays at 8 AM", value: "0 8 * * 1-5" },
-]
+// Preset value strings (cron expressions) are stable; the labels are
+// resolved through i18n at render time.
+const cronPresetKeys = [
+  { key: "dailyAt9", value: "0 9 * * *" },
+  { key: "weeklyMonday", value: "0 9 * * 1" },
+  { key: "biweekly", value: "0 9 1,15 * *" },
+  { key: "monthlyFirst", value: "0 9 1 * *" },
+  { key: "weekdaysAt8", value: "0 8 * * 1-5" },
+] as const
 
 export default function SchedulesPage() {
+  const t = useTranslations("schedulesPage")
+  const tc = useTranslations("common")
   const user = useAuthStore((s) => s.user)
   const { data: assetsData } = useAssets()
   const [schedules, setSchedules] = useState<any[]>([])
@@ -64,7 +69,7 @@ export default function SchedulesPage() {
 
   const onSubmit = async (data: ScheduleForm) => {
     if (selectedAssets.length === 0) {
-      toast.error("Select at least one asset")
+      toast.error(t("selectAtLeastOne"))
       return
     }
     setLoading(true)
@@ -74,13 +79,13 @@ export default function SchedulesPage() {
         asset_ids: selectedAssets,
         scan_type: "full",
       })
-      toast.success("Schedule created")
+      toast.success(t("created"))
       reset()
       setSelectedAssets([])
       setShowCreate(false)
       loadSchedules()
     } catch (err: any) {
-      toast.error("Failed to create schedule", { description: err.message })
+      toast.error(t("createFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
@@ -89,20 +94,20 @@ export default function SchedulesPage() {
   const toggleSchedule = async (id: string, isActive: boolean) => {
     try {
       await api.updateSchedule(id, { is_active: !isActive })
-      toast.success(isActive ? "Schedule paused" : "Schedule activated")
+      toast.success(isActive ? t("pausedToast") : t("activatedToast"))
       loadSchedules()
     } catch (err: any) {
-      toast.error("Update failed", { description: err.message })
+      toast.error(t("updateFailed"), { description: err.message })
     }
   }
 
   const deleteSchedule = async (id: string) => {
     try {
       await api.deleteSchedule(id)
-      toast.success("Schedule deleted")
+      toast.success(t("deleted"))
       loadSchedules()
     } catch (err: any) {
-      toast.error("Delete failed", { description: err.message })
+      toast.error(t("deleteFailed"), { description: err.message })
     }
   }
 
@@ -110,10 +115,10 @@ export default function SchedulesPage() {
     setTriggering(id)
     try {
       await api.triggerSchedule(id)
-      toast.success("Scan triggered! Check the Scans page for progress.")
+      toast.success(t("triggered"))
       loadSchedules()
     } catch (err: any) {
-      toast.error("Trigger failed", { description: err.message })
+      toast.error(t("triggerFailed"), { description: err.message })
     } finally {
       setTriggering(null)
     }
@@ -129,51 +134,51 @@ export default function SchedulesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Scheduled Scans</h1>
-          <p className="text-muted-foreground">Automate recurring compliance scans</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowCreate(!showCreate)}>
           <Plus className="mr-2 h-4 w-4" />
-          New Schedule
+          {t("newSchedule")}
         </Button>
       </div>
 
       {showCreate && (
         <Card>
           <CardHeader>
-            <CardTitle>Create Schedule</CardTitle>
-            <CardDescription>Define when and what to scan automatically</CardDescription>
+            <CardTitle>{t("createTitle")}</CardTitle>
+            <CardDescription>{t("createDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
-                <Label>Schedule Name</Label>
-                <Input placeholder="e.g. Weekly Production Audit" {...register("name")} />
+                <Label>{t("scheduleName")}</Label>
+                <Input placeholder={t("scheduleNamePlaceholder")} {...register("name")} />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label>Cron Expression</Label>
+                <Label>{t("cronExpression")}</Label>
                 <Input placeholder="0 9 * * 1" {...register("cron_expression")} />
                 {errors.cron_expression && <p className="text-xs text-destructive">{errors.cron_expression.message}</p>}
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {cronPresets.map((p) => (
+                  {cronPresetKeys.map((p) => (
                     <Badge
                       key={p.value}
                       variant="outline"
                       className="cursor-pointer hover:bg-muted"
                       onClick={() => setValue("cron_expression", p.value)}
                     >
-                      {p.label}
+                      {t(`presets.${p.key}` as any)}
                     </Badge>
                   ))}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Assets to scan</Label>
+                <Label>{t("assetsToScan")}</Label>
                 {assets.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No assets yet. Add assets first.</p>
+                  <p className="text-sm text-muted-foreground">{t("noAssetsYet")}</p>
                 ) : (
                   <div className="grid gap-2 md:grid-cols-2">
                     {assets.map((asset: any) => (
@@ -202,10 +207,10 @@ export default function SchedulesPage() {
 
               <Separator />
               <div className="flex gap-2 justify-end">
-                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>{tc("cancel")}</Button>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create Schedule
+                  {t("create")}
                 </Button>
               </div>
             </form>
@@ -217,24 +222,24 @@ export default function SchedulesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5" />
-            Active Schedules
+            {t("activeSchedules")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {schedules.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No scheduled scans yet.</p>
+              <p>{t("noSchedulesYet")}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Run</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("schedule")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("lastRun")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,11 +251,11 @@ export default function SchedulesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={s.is_active ? "default" : "secondary"}>
-                        {s.is_active ? "Active" : "Paused"}
+                        {s.is_active ? t("active") : t("paused")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {s.last_run_at ? new Date(s.last_run_at).toLocaleString() : "Never"}
+                      {s.last_run_at ? new Date(s.last_run_at).toLocaleString() : t("never")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">

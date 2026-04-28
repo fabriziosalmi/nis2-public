@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +40,8 @@ const typeColors: Record<string, string> = {
 }
 
 export default function AssetsPage() {
+  const t = useTranslations("assets")
+  const tc = useTranslations("common")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { data, isLoading } = useAssets()
@@ -59,21 +62,21 @@ export default function AssetsPage() {
         target_value: formData.target,
         tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
       } as any)
-      toast.success("Asset added")
+      toast.success(t("added"))
       reset()
       setDialogOpen(false)
     } catch (err: any) {
-      toast.error("Failed to add asset", { description: err.message })
+      toast.error(t("addFailed"), { description: err.message })
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
       await deleteAsset.mutateAsync(id)
-      toast.success("Asset removed")
+      toast.success(t("removed"))
       setDeleteId(null)
     } catch (err: any) {
-      toast.error("Failed to delete", { description: err.message })
+      toast.error(t("deleteFailed"), { description: err.message })
     }
   }
 
@@ -81,52 +84,52 @@ export default function AssetsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Assets</h1>
-          <p className="text-muted-foreground">Manage your monitored assets and targets</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Asset</Button>
+            <Button><Plus className="mr-2 h-4 w-4" />{t("addAsset")}</Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>Add New Asset</DialogTitle>
-                <DialogDescription>Add a domain, IP, or CIDR block to scan for NIS2 compliance</DialogDescription>
+                <DialogTitle>{t("addNewAsset")}</DialogTitle>
+                <DialogDescription>{t("dialogDescription")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" placeholder="e.g. Production Web Server" {...register("name")} />
+                  <Label htmlFor="name">{t("name")}</Label>
+                  <Input id="name" placeholder={t("namePlaceholder")} {...register("name")} />
                   {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label>{t("type")}</Label>
                   <Select onValueChange={(v) => setValue("type", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t("selectType")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="domain">Domain</SelectItem>
-                      <SelectItem value="ip">IP Address</SelectItem>
-                      <SelectItem value="cidr">CIDR Block</SelectItem>
+                      <SelectItem value="domain">{t("domain")}</SelectItem>
+                      <SelectItem value="ip">{t("ip")}</SelectItem>
+                      <SelectItem value="cidr">{t("cidr")}</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="target">Target</Label>
-                  <Input id="target" placeholder="e.g. example.com or 10.0.0.0/24" {...register("target")} />
+                  <Label htmlFor="target">{t("target")}</Label>
+                  <Input id="target" placeholder={t("targetPlaceholder")} {...register("target")} />
                   {errors.target && <p className="text-xs text-destructive">{errors.target.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="tags">Tags (comma-separated)</Label>
-                  <Input id="tags" placeholder="e.g. production, web, critical" {...register("tags")} />
+                  <Label htmlFor="tags">{t("tagsLabel")}</Label>
+                  <Input id="tags" placeholder={t("tagsPlaceholder")} {...register("tags")} />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>{tc("cancel")}</Button>
                 <Button type="submit" disabled={createAsset.isPending}>
                   {createAsset.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add Asset
+                  {t("addAsset")}
                 </Button>
               </DialogFooter>
             </form>
@@ -145,24 +148,22 @@ export default function AssetsPage() {
               <div className="rounded-full bg-muted p-4 mb-4">
                 <Server className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No assets configured</h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                Add domains, IPs, or CIDR ranges to monitor. Assets are the targets you scan for NIS2 compliance.
-              </p>
+              <h3 className="text-lg font-medium mb-1">{t("emptyTitle")}</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm">{t("emptyDescription")}</p>
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Your First Asset
+                {t("addFirstAsset")}
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("type")}</TableHead>
+                  <TableHead>{t("target")}</TableHead>
+                  <TableHead>{t("tags")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -185,14 +186,14 @@ export default function AssetsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={asset.is_active ? "secondary" : "outline"}>
-                        {asset.is_active ? "active" : "inactive"}
+                        {asset.is_active ? t("active") : t("inactive")}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {deleteId === asset.id ? (
                         <div className="flex items-center gap-1">
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(asset.id)} disabled={deleteAsset.isPending}>Yes</Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>No</Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(asset.id)} disabled={deleteAsset.isPending}>{t("yes")}</Button>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>{t("no")}</Button>
                         </div>
                       ) : (
                         <Button variant="ghost" size="icon" onClick={() => setDeleteId(asset.id)}>

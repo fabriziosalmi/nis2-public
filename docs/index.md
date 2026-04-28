@@ -6,8 +6,8 @@ hero:
   text: "Bridge governance documentation and network reality."
   tagline: "Open-source GRC platform for NIS2 Directive (EU 2022/2555). Governance framework, technical validation, incident response, supply chain risk. Self-hosted, air-gapped compatible."
   image:
-    src: /logo.svg
-    alt: NIS2 Platform
+    src: /screenshot.png
+    alt: "NIS2 Platform dashboard: total scans, compliance score, findings, monitored assets, and the welcome onboarding panel"
   actions:
     - theme: brand
       text: Get Started

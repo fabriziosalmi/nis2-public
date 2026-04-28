@@ -7,6 +7,10 @@
   <img src="https://img.shields.io/badge/MCP-compatible-8b5cf6?style=flat-square" alt="MCP" />
 </p>
 
+<p align="center">
+  <img src="docs/public/screenshot.png" alt="NIS2 Platform dashboard: total scans, compliance score, findings, monitored assets, and the welcome onboarding panel" width="900" />
+</p>
+
 # NIS2 Continuous Posture Management and Remediation Platform
 
 Open-source platform for **NIS2 Directive (EU 2022/2555) continuous posture management**. Governance framework, technical validation engine, remediation playbooks, incident response workflows, and supply chain risk management.
