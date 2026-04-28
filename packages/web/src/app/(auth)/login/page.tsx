@@ -4,13 +4,14 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,15 +20,27 @@ import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { Logo } from "@/components/brand/logo"
 
+// Schema messages stay English here — zod resolves them at form-init time,
+// before useTranslations is available. The useTranslations layer below
+// re-translates them via the `t(error.message)` lookup (errors are stable
+// keys like "auth.invalidEmail" that map into the auth namespace).
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("auth.invalidEmail"),
+  password: z.string().min(1, "auth.passwordRequired"),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
+  const t = useTranslations()
   const router = useRouter()
+  // `?session=expired` is set by Providers#SessionExpiredHandler when
+  // the api-client gives up on a stale cookie. Showing the banner here
+  // (rather than firing the toast that already showed at redirect time)
+  // makes the reason visible after the user navigates away from the
+  // toast or refreshes /login directly.
+  const searchParams = useSearchParams()
+  const sessionExpired = searchParams?.get("session") === "expired"
   const setAuth = useAuthStore((s) => s.setAuth)
   const [loading, setLoading] = useState(false)
 
@@ -48,7 +61,7 @@ export default function LoginPage() {
       setAuth(res.user, res.org_id || null)
       router.push("/dashboard")
     } catch (err: any) {
-      toast.error("Login failed", { description: err.message || "Invalid credentials" })
+      toast.error(t("auth.loginFailed"), { description: err.message || t("auth.invalidCredentials") })
     } finally {
       setLoading(false)
     }
@@ -60,41 +73,46 @@ export default function LoginPage() {
         <div className="flex justify-center mb-2">
           <Logo size={40} />
         </div>
-        <CardTitle className="text-2xl">Sign in to NIS2 Platform</CardTitle>
-        <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+        <CardTitle className="text-2xl">{t("auth.signInTitle")}</CardTitle>
+        <CardDescription>{t("auth.signInDescription")}</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
+          {sessionExpired && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              {t("auth.sessionExpired")}
+            </div>
+          )}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("auth.email")}</Label>
             <Input
               id="email"
               type="email"
-              placeholder="name@company.com"
+              placeholder={t("auth.emailPlaceholder")}
               {...register("email")}
             />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            {errors.email && <p className="text-xs text-destructive">{t(errors.email.message as any)}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("auth.password")}</Label>
             <Input
               id="password"
               type="password"
-              placeholder="Enter your password"
+              placeholder={t("auth.passwordPlaceholder")}
               {...register("password")}
             />
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            {errors.password && <p className="text-xs text-destructive">{t(errors.password.message as any)}</p>}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
+            {t("auth.signIn")}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
+            {t("auth.noAccount")}{" "}
             <Link href="/register" className="font-medium text-primary hover:underline">
-              Sign up
+              {t("auth.signUp")}
             </Link>
           </p>
         </CardFooter>

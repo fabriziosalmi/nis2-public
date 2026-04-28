@@ -31,3 +31,17 @@ export function useDeleteAsset() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
   })
 }
+
+// Update an existing asset. Backend exposes PATCH /api/v1/assets/{id}
+// (see app/routers/assets.py:update_asset). Only `name`, `tags`, and
+// `is_active` are accepted there — target_type / target_value are
+// immutable by design (changing target_value would invalidate every
+// historical scan result that references it).
+export function useUpdateAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; tags?: string[]; is_active?: boolean } }) =>
+      api.updateAsset(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+  })
+}

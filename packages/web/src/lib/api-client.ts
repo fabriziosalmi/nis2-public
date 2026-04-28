@@ -18,20 +18,69 @@ interface FetchOptions extends RequestInit {}
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
+// Endpoints that legitimately return 401 as part of their normal flow
+// — login on bad password, refresh on a stale refresh-token, etc. We
+// MUST NOT treat these as "session expired" or we'll boot the user out
+// of /login when they typo their password.
+const AUTH_PUBLIC_PATHS = new Set([
+  '/api/v1/auth/login',
+  '/api/v1/auth/register',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/logout',
+])
+
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null
   const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'))
   return match ? decodeURIComponent(match[1]) : null
 }
 
+/**
+ * Fired by the api client when a request to a protected endpoint comes
+ * back 401 AND a one-shot refresh-token attempt also failed. Any layer
+ * that cares (auth-store, providers, error overlays) can listen and
+ * decide what to do — typically: clear local state and redirect to
+ * /login?session=expired. Using a window event keeps the api-client
+ * agnostic of the auth-store and the router.
+ */
+export const SESSION_EXPIRED_EVENT = 'nis2:session-expired'
+
 class ApiClient {
   private baseUrl: string
+  // In-flight single-flight refresh promise. Without it, when the page
+  // mounts and 5 hooks fire simultaneously they all see 401 and all kick
+  // off /auth/refresh. The first refresh rotates the token; the next
+  // four hit a now-revoked refresh token and 401 → cascade logout.
+  private refreshing: Promise<boolean> | null = null
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
   }
 
-  private async request<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  private async tryRefresh(): Promise<boolean> {
+    if (this.refreshing) return this.refreshing
+    this.refreshing = (async () => {
+      try {
+        const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          // Server reads the refresh token from the httpOnly cookie;
+          // body is empty by design, so no Content-Type needed.
+        })
+        return res.ok
+      } catch {
+        return false
+      } finally {
+        // Clear immediately on resolution so the *next* 401 (e.g. 30 min
+        // later when the new access token also expires) gets a fresh
+        // attempt instead of returning the cached old result.
+        this.refreshing = null
+      }
+    })()
+    return this.refreshing
+  }
+
+  private async request<T>(path: string, options: FetchOptions = {}, _retry = false): Promise<T> {
     const method = (options.method || 'GET').toUpperCase()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -47,6 +96,26 @@ class ApiClient {
       headers,
       credentials: 'include',
     })
+
+    // 401 on a protected path = access token expired (or wrong cookie
+    // on this browser). Try ONE silent refresh, then replay the
+    // request. If refresh also 401s, surface a session-expired event
+    // and let the auth-store boot the user.
+    //
+    // We deliberately exclude the public auth paths from this dance —
+    // their 401 is the user's password being wrong, not a session
+    // problem.
+    if (res.status === 401 && !_retry && !AUTH_PUBLIC_PATHS.has(path.split('?')[0])) {
+      const refreshed = await this.tryRefresh()
+      if (refreshed) {
+        return this.request<T>(path, options, true)
+      }
+      // Refresh failed → genuinely expired. Tell anyone who's listening.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+      }
+      throw new Error('Session expired')
+    }
 
     if (res.status === 204) {
       return undefined as T
@@ -138,6 +207,10 @@ class ApiClient {
 
   async createAsset(data: any) {
     return this.request<any>('/api/v1/assets', { method: 'POST', body: JSON.stringify(data) })
+  }
+
+  async updateAsset(id: string, data: any) {
+    return this.request<any>(`/api/v1/assets/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
   }
 
   async deleteAsset(id: string) {

@@ -4,7 +4,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Trash2, Loader2, Server } from "lucide-react"
+import { Plus, Trash2, Loader2, Server, Pencil } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -22,7 +22,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useAssets, useCreateAsset, useDeleteAsset } from "@/hooks/use-assets"
+import { useAssets, useCreateAsset, useDeleteAsset, useUpdateAsset } from "@/hooks/use-assets"
 
 const assetSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -44,8 +44,13 @@ export default function AssetsPage() {
   const tc = useTranslations("common")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  // editingAsset null = create mode; non-null = edit mode pre-populating
+  // the same dialog. We only allow editing `name` and `tags` — type +
+  // target_value are immutable to keep historical scan_results referrable.
+  const [editingAsset, setEditingAsset] = useState<any | null>(null)
   const { data, isLoading } = useAssets()
   const createAsset = useCreateAsset()
+  const updateAsset = useUpdateAsset()
   const deleteAsset = useDeleteAsset()
 
   const assets = data?.items || []
@@ -56,18 +61,44 @@ export default function AssetsPage() {
 
   const onSubmit = async (formData: AssetForm) => {
     try {
-      await createAsset.mutateAsync({
-        name: formData.name,
-        target_type: formData.type,
-        target_value: formData.target,
-        tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
-      } as any)
-      toast.success(t("added"))
+      if (editingAsset) {
+        // Edit path: only name + tags are mutable. Sending target_type /
+        // target_value would be a no-op for the backend (PATCH ignores
+        // them) but it's clearer to omit.
+        await updateAsset.mutateAsync({
+          id: editingAsset.id,
+          data: {
+            name: formData.name,
+            tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
+          },
+        })
+        toast.success(t("updated"))
+      } else {
+        await createAsset.mutateAsync({
+          name: formData.name,
+          target_type: formData.type,
+          target_value: formData.target,
+          tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()) : [],
+        } as any)
+        toast.success(t("added"))
+      }
       reset()
+      setEditingAsset(null)
       setDialogOpen(false)
     } catch (err: any) {
-      toast.error(t("addFailed"), { description: err.message })
+      toast.error(editingAsset ? t("updateFailed") : t("addFailed"), { description: err.message })
     }
+  }
+
+  const startEdit = (asset: any) => {
+    setEditingAsset(asset)
+    reset({
+      name: asset.name,
+      type: asset.target_type,
+      target: asset.target_value,
+      tags: (asset.tags || []).join(", "),
+    })
+    setDialogOpen(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -87,15 +118,30 @@ export default function AssetsPage() {
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open)
+            // Closing the dialog should also drop edit state so the next
+            // "+ Add Asset" click is in clean create mode again.
+            if (!open) {
+              setEditingAsset(null)
+              reset({ name: "", type: "", target: "", tags: "" })
+            }
+          }}
+        >
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />{t("addAsset")}</Button>
+            <Button onClick={() => { setEditingAsset(null); reset({ name: "", type: "", target: "", tags: "" }) }}>
+              <Plus className="mr-2 h-4 w-4" />{t("addAsset")}
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{t("addNewAsset")}</DialogTitle>
-                <DialogDescription>{t("dialogDescription")}</DialogDescription>
+                <DialogTitle>{editingAsset ? t("editAsset") : t("addNewAsset")}</DialogTitle>
+                <DialogDescription>
+                  {editingAsset ? t("editDescription") : t("dialogDescription")}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -105,7 +151,11 @@ export default function AssetsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>{t("type")}</Label>
-                  <Select onValueChange={(v) => setValue("type", v)}>
+                  <Select
+                    value={editingAsset?.target_type}
+                    onValueChange={(v) => setValue("type", v)}
+                    disabled={!!editingAsset}
+                  >
                     <SelectTrigger><SelectValue placeholder={t("selectType")} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="domain">{t("domain")}</SelectItem>
@@ -114,11 +164,22 @@ export default function AssetsPage() {
                     </SelectContent>
                   </Select>
                   {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
+                  {editingAsset && (
+                    <p className="text-xs text-muted-foreground">{t("typeImmutable")}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="target">{t("target")}</Label>
-                  <Input id="target" placeholder={t("targetPlaceholder")} {...register("target")} />
+                  <Input
+                    id="target"
+                    placeholder={t("targetPlaceholder")}
+                    {...register("target")}
+                    disabled={!!editingAsset}
+                  />
                   {errors.target && <p className="text-xs text-destructive">{errors.target.message}</p>}
+                  {editingAsset && (
+                    <p className="text-xs text-muted-foreground">{t("targetImmutable")}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tags">{t("tagsLabel")}</Label>
@@ -127,9 +188,11 @@ export default function AssetsPage() {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>{tc("cancel")}</Button>
-                <Button type="submit" disabled={createAsset.isPending}>
-                  {createAsset.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t("addAsset")}
+                <Button type="submit" disabled={createAsset.isPending || updateAsset.isPending}>
+                  {(createAsset.isPending || updateAsset.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingAsset ? t("save") : t("addAsset")}
                 </Button>
               </DialogFooter>
             </form>
@@ -196,9 +259,19 @@ export default function AssetsPage() {
                           <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>{t("no")}</Button>
                         </div>
                       ) : (
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteId(asset.id)}>
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startEdit(asset)}
+                            aria-label={t("editAsset")}
+                          >
+                            <Pencil className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(asset.id)} aria-label={tc("delete")}>
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

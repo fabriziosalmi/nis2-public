@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.4.11] - 2026-04-28
+
+### Fixed (Davide F. — round 3)
+- **`make clean-all` failed on Windows cmd.** `find -exec`, `2>/dev/null`, `|| true`, `xargs` are all Unix-only. Replaced the shell pipeline with a cross-platform `scripts/clean.py` (stdlib `pathlib` + `subprocess`); the Makefile targets now just call `python scripts/clean.py [--all]`. Linux / macOS / WSL / Windows cmd all produce the same output.
+- **`make prod` redis container marked unhealthy on WSL/Windows.** Two stacked issues: (1) `${REDIS_PASSWORD}` had no default, so a missing `.env` left `redis-server --requirepass ""` which exits with "wrong number of arguments"; (2) the healthcheck used compose-time variable expansion which races with container env on some setups. Added `${REDIS_PASSWORD:-changeme}` default + healthcheck moved to `CMD-SHELL` so the password is read from the container's env (`$$REDIS_PASSWORD`). `start_period: 5s` for the cold start.
+- **Token-expired UX**: page stayed navigable but every mutation silently 401'd. The api-client now intercepts 401 on protected paths, attempts ONE silent `/auth/refresh`, and on failure dispatches a `nis2:session-expired` window event. A new `SessionExpiredHandler` in `Providers` clears the auth-store, fires a toast, and redirects to `/login?session=expired` with an inline banner. Single-flight refresh promise prevents the cascading-logout race when many hooks 401 in parallel.
+- **Scan creation 500 on external domain — root cause: `MissingGreenlet` on `Scan.updated_at`.** Pydantic's `ScanResponse.model_validate(scan)` triggered a lazy-load of `updated_at` after `db.flush()` in an async context that no longer had a greenlet, dying with `greenlet_spawn has not been called`. Added `await db.refresh(scan)` before the response. Fixes both "Failed to create scan" and the consequence "failed scan disappears from list" — the scan was never persisted in the first place.
+- **Scan create FE↔BE schema mismatch.** The form sent `timeout` (BE expects `scan_timeout`) and `features.{dns,web,ports,whois}` (BE expects `dns_checks/web_checks/port_scan/whois_checks`). Pydantic silently dropped the unknown fields, so the user's settings were ignored. Aligned both. Removed the `sampleAssets` placeholder list (id="1"…) that let users select non-existent UUIDs and then 400 on submit.
+- **Cannot edit existing asset.** The `PATCH /assets/{id}` endpoint existed in the API but no UI surface called it. Added `useUpdateAsset` hook + `api.updateAsset`, an edit-pencil icon in the Assets table row, and a dual-mode dialog (create vs edit). Type and target_value are deliberately immutable when editing — changing them would orphan every historical scan_result that references the value.
+- **Theme switcher absent.** Added `next-themes` (already had the i18n strings — `header.lightMode/darkMode/systemMode` — but no UI). New `<ThemeToggle>` in the header with light / dark / system tri-state. `<ThemeProvider>` wraps the providers tree. Sidebar background now respects `dark:` variants (added the missing `--color-sidebar-*` tokens to `.dark` in globals.css — without them the sidebar stayed light-on-dark).
+- **Browser locale not detected; compliance hardcoded Italian.** `i18n.ts` now negotiates `Accept-Language` (RFC 7231 q-values + prefix-match `it-IT → it`) when the `locale` cookie is absent. The compliance page wireup uses a new `compliancePage` namespace; legal references (D.Lgs 138/2024 article titles) stay Italian as the canonical text.
+
+### Added (audit B13)
+- **Login + Register pages fully translated.** Title, subtitle, all field labels, all placeholder strings, error toasts, and zod validation messages now go through `useTranslations`. Zod messages use stable i18n keys (`auth.invalidEmail`, `auth.passwordMin8`, …) so the same schema works across locales without re-instantiation.
+- **Net translation footprint:** `+30 leaf strings × 5 locales = 150` new translations; structural alignment validated (`jq` count: 497 every locale).
+
+### Added (operational)
+- **`make dev-up-fresh`** target: `docker compose up --build --force-recreate --renew-anon-volumes`. Use this whenever a node dependency was added/removed in `packages/web` — without `--renew-anon-volumes`, the container keeps using the stale `node_modules` from the previous anonymous volume and the new module shows up as `Module not found` even after `--build`. Plain `make dev` is fine for code-only changes.
+
+### Verified
+- 7/7 dashboard routes still 200 after the recreate (`login`, `register`, `dashboard`, `dashboard/assets`, `dashboard/scans/new`, `dashboard/compliance`, `dashboard/settings/team`).
+- API container `healthy` after restart; `/api/v1/health` 200.
+
+### Note
+- A draconian audit of the user/membership/permissions/api-keys subsystem was run during this release and surfaced **13 blockers + 9 serious + 5 nits** (most notably: settings/team, settings/api-keys, settings/audit-log are 100% mock data, no API wiring; password-change UI silently does nothing; invite flow auto-binds users without consent). These are scheduled for v2.4.12 (mock-removal + role/permission overhaul) and v2.4.13 (proper invite flow with email tokens). Full report kept internally.
+
 ## [2.4.10] - 2026-04-28
 
 ### Security (Dependabot drain — closes 9 open alerts, 2 high + 7 medium)

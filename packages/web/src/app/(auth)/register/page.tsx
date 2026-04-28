@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,16 +20,18 @@ import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { Logo } from "@/components/brand/logo"
 
+// Like login: zod messages are i18n keys resolved via t(...) at render.
 const registerSchema = z.object({
-  full_name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  org_name: z.string().min(2, "Organization name is required"),
+  full_name: z.string().min(2, "auth.fullNameRequired"),
+  email: z.string().email("auth.invalidEmail"),
+  password: z.string().min(8, "auth.passwordMin8"),
+  org_name: z.string().min(2, "auth.orgNameRequired"),
 })
 
 type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
+  const t = useTranslations()
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [loading, setLoading] = useState(false)
@@ -46,10 +49,10 @@ export default function RegisterPage() {
     try {
       const res = await api.register(data)
       setAuth(res.user, res.org_id || null)
-      toast.success("Account created successfully")
+      toast.success(t("auth.registerSuccess"))
       router.push("/dashboard")
     } catch (err: any) {
-      toast.error("Registration failed", { description: err.message })
+      toast.error(t("auth.registerFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
@@ -61,41 +64,41 @@ export default function RegisterPage() {
         <div className="flex justify-center mb-2">
           <Logo size={40} />
         </div>
-        <CardTitle className="text-2xl">Create an account</CardTitle>
-        <CardDescription>Get started with NIS2 compliance monitoring</CardDescription>
+        <CardTitle className="text-2xl">{t("auth.registerTitle")}</CardTitle>
+        <CardDescription>{t("auth.registerDescription")}</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input id="full_name" placeholder="John Doe" {...register("full_name")} />
-            {errors.full_name && <p className="text-xs text-destructive">{errors.full_name.message}</p>}
+            <Label htmlFor="full_name">{t("auth.fullName")}</Label>
+            <Input id="full_name" placeholder={t("auth.fullNamePlaceholder")} {...register("full_name")} />
+            {errors.full_name && <p className="text-xs text-destructive">{t(errors.full_name.message as any)}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="name@company.com" {...register("email")} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            <Label htmlFor="email">{t("auth.email")}</Label>
+            <Input id="email" type="email" placeholder={t("auth.emailPlaceholder")} {...register("email")} />
+            {errors.email && <p className="text-xs text-destructive">{t(errors.email.message as any)}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" placeholder="Min. 8 characters" {...register("password")} />
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            <Label htmlFor="password">{t("auth.password")}</Label>
+            <Input id="password" type="password" placeholder={t("auth.passwordMin8")} {...register("password")} />
+            {errors.password && <p className="text-xs text-destructive">{t(errors.password.message as any)}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="org_name">Organization Name</Label>
-            <Input id="org_name" placeholder="Acme Corp" {...register("org_name")} />
-            {errors.org_name && <p className="text-xs text-destructive">{errors.org_name.message}</p>}
+            <Label htmlFor="org_name">{t("auth.orgName")}</Label>
+            <Input id="org_name" placeholder={t("auth.orgNamePlaceholder")} {...register("org_name")} />
+            {errors.org_name && <p className="text-xs text-destructive">{t(errors.org_name.message as any)}</p>}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Account
+            {t("auth.register")}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
+            {t("auth.hasAccount")}{" "}
             <Link href="/login" className="font-medium text-primary hover:underline">
-              Sign in
+              {t("auth.signIn")}
             </Link>
           </p>
         </CardFooter>
