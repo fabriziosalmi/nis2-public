@@ -553,6 +553,31 @@
     "fullNameRequired": "Full name is required",
     "orgNameRequired": "Organization name is required"
   },
+  "forgotPasswordPage": {
+    "title": "Forgot your password?",
+    "description": "Enter your email and we'll send you a link to reset it.",
+    "submit": "Send reset link",
+    "backToLogin": "Back to sign in",
+    "successTitle": "Check your inbox",
+    "successDescription": "If an account exists for {email}, we've sent a password reset link to it.",
+    "checkSpam": "The link expires in 30 minutes. Check your spam folder if you don't see it within a couple of minutes."
+  },
+  "resetPasswordPage": {
+    "title": "Set a new password",
+    "description": "Choose a new password for your account.",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "submit": "Reset password",
+    "backToLogin": "Back to sign in",
+    "invalidLinkTitle": "Invalid reset link",
+    "invalidLinkDescription": "This link is missing the reset token. Request a new one to continue.",
+    "requestNewLink": "Request a new link",
+    "invalidOrExpired": "This reset link is invalid, expired, or has already been used. Request a new one.",
+    "successTitle": "Password updated",
+    "successDescription": "Your password has been reset. You can now sign in with the new one.",
+    "redirecting": "Redirecting to sign in…",
+    "success": "Password reset successfully"
+  },
   "header": {
     "searchPlaceholder": "Search scans, findings, assets...",
     "lightMode": "Light",

@@ -161,10 +161,13 @@ These automated checks verify whether the security measures documented in your g
 
 | Router | Endpoints | Purpose |
 |--------|-----------|---------|
-| `/api/v1/auth` | 4 | JWT authentication, registration |
-| `/api/v1/scans` | 6 | Scan management, results, comparison |
-| `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved) |
-| `/api/v1/assets` | 4 | Asset inventory management |
+| `/api/v1/auth` | 9 | JWT authentication, registration, change-password, forgot/reset password |
+| `/api/v1/scans` | 8 | Scan management, results, comparison. Read endpoints accept API-key Bearer auth |
+| `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved). Read endpoints accept API-key Bearer auth |
+| `/api/v1/assets` | 6 | Asset inventory management. Read endpoints accept API-key Bearer auth |
+| `/api/v1/api-keys` | 3 | Long-lived `nis2_*` Bearer tokens for CI/CD pipelines (raw value shown once) |
+| `/api/v1/audit-logs` | 1 | Read-only org-scoped audit trail (90-day retention) |
+| `/api/v1/organizations` | 7 | Org settings, members, role management |
 | `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
 | `/api/v1/bia` | 5 | Business Impact Analysis |
 | `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT) |

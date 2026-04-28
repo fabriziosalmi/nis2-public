@@ -1,6 +1,8 @@
 # Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import hashlib
+import logging
 import re
 import secrets
 import uuid
@@ -20,13 +22,17 @@ from app.database import IS_POSTGRES, get_db
 from app.dependencies import get_current_user
 from app.models.membership import Membership
 from app.models.organization import Organization
+from app.models.password_reset_token import PasswordResetToken
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
+from app.utils.email import get_dev_outbox, send_email
 from app.schemas.auth import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserResponse,
     UserUpdate,
@@ -37,6 +43,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
+
+
+def _hash_reset_token(raw: str) -> str:
+    """sha256 hex digest. The DB never sees the raw token; an attacker
+    with read access to password_reset_tokens still cannot reset accounts."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -558,3 +571,223 @@ async def change_password(
     role = membership.role if membership else None
     _build_token_response(response, current_user, org_id, role, iat_override=next_second)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Forgot / reset password (audit B05)
+# ---------------------------------------------------------------------------
+
+def _reset_email_text(reset_url: str, ttl_minutes: int) -> tuple[str, str]:
+    """Plain-text and HTML bodies for the reset email. Kept inline here
+    rather than in a Jinja template — there's exactly one transactional
+    template in the system right now and the indirection cost outweighs
+    the templating value. When invites land (B06+B07) we'll factor both
+    into a `templates/email/` directory."""
+    text = (
+        "Hello,\n\n"
+        "You (or someone using your email) requested a password reset for "
+        "the NIS2 Compliance Platform.\n\n"
+        f"Use the link below within {ttl_minutes} minutes to choose a new "
+        "password:\n\n"
+        f"  {reset_url}\n\n"
+        "If you did not request this reset, you can safely ignore this "
+        "email — your password remains unchanged.\n"
+    )
+    html = (
+        "<p>Hello,</p>"
+        "<p>You (or someone using your email) requested a password reset for "
+        "the <strong>NIS2 Compliance Platform</strong>.</p>"
+        f"<p>Use the link below within <strong>{ttl_minutes} minutes</strong> "
+        "to choose a new password:</p>"
+        f'<p><a href="{reset_url}">{reset_url}</a></p>'
+        "<p>If you did not request this reset, you can safely ignore this "
+        "email — your password remains unchanged.</p>"
+    )
+    return text, html
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Audit B05 (entry-point).
+
+    Always returns 204 regardless of whether the email exists or the
+    email was actually delivered. This eliminates the single most useful
+    primitive an attacker has for enumerating registered users
+    (response-time / response-body diffs between known and unknown
+    addresses).
+
+    Side-effects, in order:
+      1. lookup user by email (case-insensitive); if missing, return 204
+      2. if found, mint a 32-byte URL-safe token, store its sha256 hash
+         with `expires_at = now + reset_token_ttl_minutes`
+      3. send the email (or queue it in the dev outbox); a send failure
+         is logged but does not change the response — we'd rather have a
+         retry than tell the user "we know you exist, but our MTA is down"
+      4. neither the audit log nor the response body distinguishes
+         "sent" from "would-have-sent-if-this-email-was-known". The
+         only signal a legit user gets is the email itself; that's the
+         intended UX.
+
+    Bypass RLS for the bookkeeping: same rationale as register/login
+    (the user has no session yet, the password_reset_tokens table is
+    not tenant-scoped anyway).
+    """
+    await _bypass_rls_for_bootstrap(db)
+
+    email = payload.email.strip().lower()
+
+    # 1. Lookup. Pydantic EmailStr lowercases the domain part for us
+    #    but not the local part; we lowercase the whole thing here to
+    #    match the casing convention in /register and /login.
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        # No row to write. Returning here keeps response time roughly
+        # constant — bcrypt timing attacks (which would exist if we
+        # hashed something here) aren't relevant for an enumeration
+        # primitive on email lookup, but the principle holds: do as
+        # little as possible work-wise on the unknown-email path.
+        return None
+
+    # 2. Mint and persist.
+    raw_token = secrets.token_urlsafe(32)  # ~43 chars, well above the 20 schema floor
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.reset_token_ttl_minutes
+    )
+    token_row = PasswordResetToken(
+        user_id=user.id,
+        token_hash=_hash_reset_token(raw_token),
+        expires_at=expires_at,
+    )
+    db.add(token_row)
+    await db.flush()
+
+    # 3. Send. The link points at the FE route; the FE then POSTs
+    #    {token, new_password} back to /reset-password.
+    reset_url = f"{settings.public_url.rstrip('/')}/reset-password?token={raw_token}"
+    text, html = _reset_email_text(reset_url, settings.reset_token_ttl_minutes)
+    try:
+        await send_email(
+            to=user.email,
+            subject="Reset your NIS2 Platform password",
+            text=text,
+            html=html,
+        )
+    except Exception:
+        # Don't leak the failure to the client — but log it so an
+        # operator notices a misconfigured MTA before users do.
+        logger.exception("forgot-password: failed to send email to %s", user.email)
+
+    return None
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Audit B05 (completion).
+
+    Verifies the emailed token, sets the new password, marks the token
+    used, and stamps `password_changed_at` so every other still-active
+    session for this user is invalidated. Does NOT auto-login: that
+    surface would require us to also issue cookies on a route that
+    just took an email-link. Cleaner UX is "go to /login and use your
+    new password" — the FE redirects there.
+
+    Token semantics:
+      * single-use (used_at non-null = spent)
+      * 30-minute TTL by default (settings.reset_token_ttl_minutes)
+      * not tenant-scoped (forgot flow runs without org context)
+      * removed on success only via used_at; expired rows are pruned
+        out-of-band by a future Celery sweep (table is small, cheap)
+    """
+    await _bypass_rls_for_bootstrap(db)
+
+    token_hash = _hash_reset_token(payload.token)
+    token_result = await db.execute(
+        select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+    )
+    token_row = token_result.scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+    # Single 400 for any of {unknown, used, expired}: don't tell the
+    # attacker which of the three is true — same enumeration discipline
+    # as forgot-password.
+    if (
+        token_row is None
+        or token_row.used_at is not None
+        or token_row.expires_at <= now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token is invalid or has expired",
+        )
+
+    user_result = await db.execute(select(User).where(User.id == token_row.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token is invalid or has expired",
+        )
+
+    # Persist new password and bump the watermark — same dance as
+    # change-password (see that route for the floor(now)+1 rationale).
+    next_second = now.replace(microsecond=0) + timedelta(seconds=1)
+    user.password_hash = pwd_context.hash(payload.new_password)
+    user.password_changed_at = next_second
+    token_row.used_at = now
+    await db.flush()
+
+    # Audit log so an admin can see "password reset by token at T from IP".
+    from app.middleware.audit import log_action
+
+    membership = user.memberships[0] if user.memberships else None
+    if membership:
+        await log_action(
+            db,
+            org_id=membership.organization_id,
+            user_id=user.id,
+            action="user.password_reset",
+            resource_type="user",
+            resource_id=str(user.id),
+            details={"via": "email_token"},
+            request=request,
+        )
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Development-only debug helper
+# ---------------------------------------------------------------------------
+
+if settings.environment != "production":
+    @router.get(
+        "/debug/last-email",
+        # tags lower so the prod OpenAPI doc isn't polluted
+        include_in_schema=False,
+    )
+    async def debug_last_email() -> dict:
+        """Returns the most recently captured outgoing email when the
+        in-memory dev outbox is active (i.e. SMTP_HOST is unset).
+
+        Exists for the e2e tests: they trigger /forgot-password, then
+        read the reset link out of here. Strictly mounted only when
+        environment != "production"; the build refuses to start in
+        production with SMTP_HOST empty (utils/email.py raises), so
+        this surface can never coexist with a real MTA.
+        """
+        outbox = get_dev_outbox()
+        if not outbox:
+            raise HTTPException(status_code=404, detail="No emails captured")
+        return outbox[-1]

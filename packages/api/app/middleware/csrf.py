@@ -29,6 +29,17 @@ EXEMPT_PATHS = {
     "/api/v1/auth/register",
     "/api/v1/auth/refresh",
     "/api/v1/auth/logout",
+    # Forgot/reset (B05) run before the user has a session (the entire
+    # flow exists because they CAN'T log in), so they have no csrf
+    # cookie to double-submit. Exempting them is safe because:
+    #  - forgot-password is rate-limited (5/min/IP) and always returns
+    #    204 regardless of input, so CSRF + this endpoint can't be
+    #    composed into an enumeration primitive either.
+    #  - reset-password requires a single-use token delivered
+    #    out-of-band by email; an attacker without read access to the
+    #    user's inbox can't produce one.
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
 }
 
 

@@ -27,6 +27,22 @@ All configuration is managed through environment variables defined in `.env`. Co
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime in days |
 
+## Password reset (B05)
+
+The forgot/reset flow needs a public URL to put in the email link and an SMTP relay (or the dev outbox) to deliver it. In `make dev` and the e2e suite, leaving `SMTP_HOST` empty activates the in-memory dev outbox — the email is logged at INFO and captured for `GET /api/v1/auth/debug/last-email` (mounted only when `ENVIRONMENT != "production"`). Production with `SMTP_HOST` empty refuses to deliver: the route turns the `RuntimeError` into a 5xx rather than silently dropping the email.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PUBLIC_URL` | `http://localhost:8077` | Base URL the reset link points to. The user clicks `${PUBLIC_URL}/reset-password?token=…` |
+| `RESET_TOKEN_TTL_MINUTES` | `30` | Lifetime of the reset token. Tokens are single-use; once consumed (`used_at` non-null) they're rejected even within the TTL |
+| `SMTP_HOST` | `` (dev outbox) | SMTP relay hostname. Leave empty in dev / e2e — the email is captured in-process instead |
+| `SMTP_PORT` | `587` | SMTP relay port |
+| `SMTP_USER` | `` | SMTP auth username (omit if your relay doesn't require auth) |
+| `SMTP_PASSWORD` | `` | SMTP auth password |
+| `SMTP_FROM` | `noreply@nis2.local` | `From:` header on outgoing emails |
+| `SMTP_STARTTLS` | `true` | Issue `STARTTLS` after `EHLO` (the common case for ports 25 / 587) |
+| `SMTP_SSL` | `false` | Wrap the entire connection in TLS (port 465 style). Mutually exclusive with `SMTP_STARTTLS` |
+
 ## Celery
 
 | Variable | Default | Description |

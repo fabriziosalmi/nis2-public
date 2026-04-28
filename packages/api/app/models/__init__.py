@@ -13,6 +13,7 @@ from app.models.vendor import Vendor
 from app.models.incident import Incident
 from app.models.bia import BusinessProcess
 from app.models.revoked_token import RevokedToken
+from app.models.password_reset_token import PasswordResetToken
 
 __all__ = [
     "User",
@@ -30,4 +31,5 @@ __all__ = [
     "Incident",
     "BusinessProcess",
     "RevokedToken",
+    "PasswordResetToken",
 ]

@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.4.14] - 2026-04-28
+
+### Fixed (CI)
+
+- **`ruff` lint failure on `main`**: `app/routers/audit.py` carried an unused `from sqlalchemy.orm import selectinload` left over from an earlier refactor. The `Lint API` job in CI exited 1; the rest of the pipeline (api/integration/scanner/policy/trivy/gitleaks/pip-audit) was already green. Removed the import.
+
+### Added (audit blocker B05) — Forgot-password / Reset-password
+
+The "I forgot my password" flow finally exists. Before this release a user who couldn't log in had no recovery path: there was a `forgotPassword` i18n key on the login screen but no link, no route, and no backend. Now:
+
+- **`POST /api/v1/auth/forgot-password`** (`5/min/IP` slowapi limit). Always returns 204, regardless of whether the email is on file. The same response on every input is the only structural protection against using this endpoint as a registered-email enumeration oracle.
+- **`POST /api/v1/auth/reset-password`** (`10/min/IP`). Verifies a single-use token, sets the new password (passlib bcrypt, 8-char minimum mirroring `RegisterRequest` and `ChangePasswordRequest`), bumps `password_changed_at = floor(now) + 1s` so every other still-active session for this user gets bounced on its next request (same JWT iat watermark mechanism as v2.4.13's change-password).
+- **Single-use semantics.** Tokens are stored as `sha256(raw_token).hexdigest()` — the DB never sees the raw value. `used_at` is stamped on first acceptance; subsequent attempts collapse into a single 400 with the same generic message as unknown / expired so attackers can't tell which class their token fell into.
+- **30-minute TTL** (`RESET_TOKEN_TTL_MINUTES=30` default). Configurable via env.
+- **`PasswordResetToken` model**: `user_id` (FK CASCADE), `token_hash` (sha256, unique, indexed), `expires_at`, `used_at`. Not tenant-scoped — the forgot flow runs without org context.
+- **Email plumbing via stdlib `smtplib`** (`packages/api/app/utils/email.py`). No new runtime dependency. Sends are offloaded to `asyncio.to_thread` so the event loop never blocks. When `SMTP_HOST` is unset AND `ENVIRONMENT != "production"`, the message is captured into a process-local `_DEV_OUTBOX` (max 100) instead — read back by the e2e suite via the dev-only `GET /api/v1/auth/debug/last-email`. Production with no SMTP raises rather than silently dropping.
+- **CSRF**: forgot/reset are added to `EXEMPT_PATHS` (no session yet at that point — there's no cookie to double-submit).
+- **Audit log entry** `user.password_reset` so an admin can see "password reset by token at T from IP".
+
+### Added — Frontend pages
+
+- **`/forgot-password`** — entry point. Single email input, success state mirrors the API contract: identical UI on submitted whether the email was known or not. Toast / banner do **not** branch on whether the API call succeeded; the only signal a legitimate user gets is the email landing in their inbox.
+- **`/reset-password?token=…`** — completion. Pre-flight 400 if the token is missing from the URL ("link is broken" path), single error bucket for "invalid / expired / used" matching the server's response discipline. Successful reset shows a green confirmation card and bounces to `/login` after 1.5s.
+- **Login page** now has a "Forgot Password?" link next to the password field (was an i18n key with no rendered consumer).
+- **`api.forgotPassword(email)` / `api.resetPassword(token, newPassword)`** in `lib/api-client.ts`.
+- **i18n**: 21 new leaf keys × 5 locales = **105 new translations** under `forgotPasswordPage` and `resetPasswordPage` namespaces.
+
+### Wired (audit blocker B11 follow-up) — API-key auth on read endpoints
+
+The `get_api_key_org` dependency from v2.4.12 was sound but had no consumers — keys could be issued and revoked, but never authenticated anything. v2.4.14 wires it in:
+
+- **`get_org_id_dual_auth`** (new dependency): resolves the active organization_id from either a JWT cookie session OR a `nis2_*` Bearer token. Falls through to `get_current_user → get_current_org` for the JWT path; calls `get_api_key_org` for the API-key path. Routes that just need an org_id for RLS scoping (read endpoints) can swap one dep for the other without touching their bodies.
+- **Read endpoints converted**: `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `/results`, `/findings`, `/compare/{other}` (5 in scans), `GET /api/v1/findings`, `/stats`, `/{id}` (3 in findings), `GET /api/v1/assets`, `/{id}` (2 in assets) — **10 endpoints** total.
+- **Mutation endpoints (POST / PATCH / DELETE) intentionally stay JWT-only.** They write into the audit log + `created_by` columns; an API key has no user identity to attribute the change to without a deeper schema change. Pipelines that need to *create* scans still use a service-account login. We can revisit this if the demand surfaces.
+- **Cookie + API-key collision guard**: if both an `access_token` cookie AND a `nis2_*` Bearer token are present, the JWT path wins. This prevents a stale API key on the browser tab from accidentally downgrading the auth path.
+
+### Verified
+
+- 75 unit + **46** e2e (was 36 — added 6-test `TestApiKeyAuth` covering list-scans/findings/assets via API key, invalid-key 401, revoked-key 401, last_used_at stamping; plus 5-test `TestForgotPassword` + `TestResetPassword` covering silent-on-unknown-email, valid-token resets, single-use, invalid-token rejected) = **121 green**.
+- `TestApiKeyAuth` is positioned **before** the password-rotation block in `test_e2e_live.py` because the rotation tests stamp `password_changed_at` and invalidate the module-scoped `client` fixture's cookies — running API-key tests after them would 401 every cookie-auth setup call.
+- Local lint clean: `ruff check packages/scanner/nis2scan/ --select=E,W,F --ignore=E501` + same for `packages/api/app/` both pass with "All checks passed!".
+
+### Translations
+
++21 leaf keys × 5 locales = **105 new translations**. All locale files validate clean.
+
+### Postponed to a later release (per user direction)
+
+- **B06 + B07** proper invite tokens + email + accept-after-register flow. The current `inviteMember` endpoint silently auto-binds the invitee to the org without their consent. The fix is non-trivial (new model, accept-token route, email template, edge cases for invitees who already have an account) and was deferred so v2.4.14 could ship the more user-visible B05 + API-key wiring first.
+
 ## [2.4.13] - 2026-04-28
 
 ### Fixed (audit blocker B04)
