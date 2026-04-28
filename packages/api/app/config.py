@@ -32,6 +32,27 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     cors_origins: str = ""
 
+    # Password-reset (B05). The link emailed to users points at
+    # ${public_url}/reset-password?token=<raw>. In production the
+    # operator sets public_url to the customer domain; in dev we fall
+    # back to the local web port so `make dev` works without extra
+    # env vars.
+    public_url: str = "http://localhost:8077"
+    reset_token_ttl_minutes: int = 30
+
+    # SMTP (optional). When smtp_host is empty the email utility
+    # logs the message body and stores it in an in-memory queue
+    # instead of dialling an MTA — that's how `make dev` and the e2e
+    # suite avoid needing a real mailserver. Production deploys must
+    # set host/port/from at minimum.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@nis2.local"
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False  # Mutually exclusive with starttls (port 465 typical)
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     @model_validator(mode="after")

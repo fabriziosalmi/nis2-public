@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, get_org_id_dual_auth
 from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User
@@ -32,11 +32,12 @@ async def list_findings(
     category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> FindingListResponse:
-    user, membership = current_org
-    org_id = membership.organization_id
+    # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
+    # endpoints below stay on get_current_org because they want a user
+    # identity to write into the audit log.
 
     query = select(Finding).where(Finding.organization_id == org_id)
     count_query = select(func.count(Finding.id)).where(Finding.organization_id == org_id)
@@ -70,12 +71,10 @@ async def list_findings(
 
 @router.get("/stats", response_model=FindingStats)
 async def findings_stats(
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> FindingStats:
-    user, membership = current_org
-    org_id = membership.organization_id
-
+    # Dual-auth read — see list_findings for the wiring note.
     select(Finding).where(Finding.organization_id == org_id)
 
     # Total count
@@ -120,13 +119,12 @@ async def findings_stats(
 @router.get("/{finding_id}", response_model=FindingResponse)
 async def get_finding(
     finding_id: uuid.UUID,
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> FindingResponse:
-    user, membership = current_org
-
+    # Dual-auth read — see list_findings for the wiring note.
     finding = await db.get(Finding, finding_id)
-    if not finding or finding.organization_id != membership.organization_id:
+    if not finding or finding.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
 
     return FindingResponse.model_validate(finding)

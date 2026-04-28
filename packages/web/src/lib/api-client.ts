@@ -177,6 +177,32 @@ class ApiClient {
     })
   }
 
+  /**
+   * Audit B05: kicks off the reset-by-email flow. The API ALWAYS
+   * returns 204 regardless of whether the email exists, so the FE
+   * must show the same success state on every call (otherwise the
+   * differing UI becomes an enumeration oracle).
+   */
+  async forgotPassword(email: string) {
+    return this.request<void>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  /**
+   * Audit B05: completes the reset flow. Token comes from the URL
+   * query string of the emailed link. On success the API returns 204
+   * and stamps the JWT iat watermark — any prior session this user
+   * had open is now invalid, so we route them through /login.
+   */
+  async resetPassword(token: string, newPassword: string) {
+    return this.request<void>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    })
+  }
+
   // ------------------------------------------------------------------- Scans
   async listScans(page = 1, limit = 20) {
     return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`)

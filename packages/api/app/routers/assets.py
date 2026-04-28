@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, get_org_id_dual_auth
 from app.models.asset import Asset
 from app.models.membership import Membership
 from app.models.user import User
@@ -24,11 +24,12 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 async def list_assets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> AssetListResponse:
-    user, membership = current_org
-    org_id = membership.organization_id
+    # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
+    # endpoints below stay on get_current_org because they want a user
+    # identity for the audit log + created_by attribution.
 
     count_query = select(func.count(Asset.id)).where(Asset.organization_id == org_id)
     total_result = await db.execute(count_query)
@@ -98,13 +99,12 @@ async def create_asset(
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: uuid.UUID,
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> AssetResponse:
-    user, membership = current_org
-
+    # Dual-auth read — see list_assets for the wiring note.
     asset = await db.get(Asset, asset_id)
-    if not asset or asset.organization_id != membership.organization_id:
+    if not asset or asset.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
 
     return AssetResponse.model_validate(asset)

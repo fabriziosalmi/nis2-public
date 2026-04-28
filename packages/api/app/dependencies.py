@@ -306,3 +306,42 @@ async def get_api_key_org(
     await db.flush()
 
     return api_key, api_key.organization_id
+
+
+async def get_org_id_dual_auth(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    """Resolve the active organization_id via either a JWT session OR
+    an API key — whichever the caller presented.
+
+    Applied to read-only endpoints in scans / findings / assets so that
+    CI/CD pipelines and SDK consumers can authenticate with a long-lived
+    `nis2_*` Bearer token while the web UI keeps using cookie sessions.
+    Mutation endpoints stay on `get_current_org` because they want a
+    user identity to attribute the change to (audit log, created_by).
+
+    Resolution order:
+      1. Bearer token starting with "nis2_" AND no access_token cookie
+         → API key path (calls get_api_key_org for expiry / revocation).
+         The "no cookie" guard exists so a cookie session that happens
+         to also send a stale `nis2_*` API key doesn't accidentally
+         downgrade authentication to the API-key code path.
+      2. Otherwise → JWT path (cookie or `Bearer <jwt>`), going through
+         get_current_user → get_current_org. This means the same
+         per-route 401/403 behavior as JWT-only endpoints.
+
+    Returns the organization_id only — read endpoints just need it for
+    RLS scoping; they don't need the user's identity.
+    """
+    raw = credentials.credentials if credentials else None
+    has_cookie = request.cookies.get("access_token") is not None
+
+    if raw and raw.startswith("nis2_") and not has_cookie:
+        _, org_id = await get_api_key_org(db=db, credentials=credentials)
+        return org_id
+
+    user = await get_current_user(request=request, credentials=credentials, db=db)
+    _, membership = await get_current_org(request=request, current_user=user)
+    return membership.organization_id
