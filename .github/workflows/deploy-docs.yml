@@ -3,9 +3,9 @@ name: Deploy Documentation
 on:
   push:
     branches: [main]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/deploy-docs.yml'
+    # Trigger on any push to main: docs reference README/CHANGELOG/SECURITY
+    # so changes there must redeploy too. The build is ~30s anyway.
+  workflow_dispatch:
 
 permissions:
   contents: read

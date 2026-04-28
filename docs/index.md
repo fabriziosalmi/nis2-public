@@ -23,7 +23,7 @@ features:
   - icon:
       src: /icons/governance.svg
     title: Governance Framework
-    details: 30-item weighted checklist mapped to all 10 subsections of NIS2 Art. 21. Compliance scoring, trend analysis, multi-tenant RBAC.
+    details: 30-item checklist cross-referenced to NIS2 Art. 21 sub-paragraphs (a)-(j), machine-readable. Compliance scoring, trend analysis, multi-tenant RBAC.
     link: /governance/checklist
     linkText: View checklist
   - icon:
@@ -53,7 +53,7 @@ features:
   - icon:
       src: /icons/scanner.svg
     title: Technical Validation
-    details: 50+ automated checks on TLS, DNS, HTTP headers, ports, certificates, and secrets. The probe that verifies if your policies are enforced.
+    details: 30+ automated checks on TLS, DNS, HTTP headers, ports, certificates, and secrets. The probe that verifies if your policies are enforced on the network.
     link: /reference/scanner-checks
     linkText: View all checks
 ---

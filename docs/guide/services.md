@@ -6,7 +6,7 @@ Platform developed and maintained by **Fabrizio Salmi**, independent consultant 
 
 ### NIS2 Readiness Assessment
 
-Full gap analysis across all 10 subsections of Art. 21:
+Full gap analysis across all 10 sub-paragraphs (a)-(j) of Art. 21:
 - Mapping existing controls to regulatory requirements
 - Risk assessment with CVSS-based severity scoring
 - Prioritized remediation roadmap with effort and cost estimates

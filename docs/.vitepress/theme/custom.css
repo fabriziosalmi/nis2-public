@@ -213,9 +213,15 @@
 
 /* === Tables === */
 
+/* Wrap every doc table so it scrolls horizontally on narrow screens
+   instead of clipping cells. The default VitePress overflow:hidden
+   makes long API-reference tables unreadable on phones. */
 .vp-doc table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
   border-radius: 8px !important;
-  overflow: hidden !important;
   font-size: 14px !important;
 }
 

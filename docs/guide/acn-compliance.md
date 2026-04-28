@@ -8,12 +8,12 @@ This page documents the Italian national transposition module. The NIS2 Directiv
 |-----------|-------------|----------------|
 | **D.Lgs 138/2024** | Italian NIS2 transposition | Supported |
 | **Determina ACN 127434/2026** | Technical security baseline measures (deadline: July 2027) | Supported |
-| **Determina ACN 127437/2026** | Relevant vendor inventory (Art. 18) | Supported |
-| **ACN BIA template** | Standardized Business Impact Analysis | Supported (ready for ACN template at publication) |
+| **Determina ACN 127437/2026** | Relevant vendor inventory (Art. 18) | Implemented (preliminary schema — pending official ACN *modello di categorizzazione*, expected May/June 2026) |
+| **ACN BIA template** | Standardized Business Impact Analysis | Internal model in place; alignment to the official ACN model pending publication |
 
 ## Art. 21 mapping (D.Lgs 138/2024)
 
-The governance checklist covers all 10 subsections of Art. 21 with 30 weighted items:
+The governance checklist references all 10 sub-paragraphs (a)-(j) of Art. 21 explicitly via a `subparagraph` enum. Each item carries its tag and the API exposes `/governance/by-subparagraph` for grouped reporting. Several sub-paragraphs are fundamentally non-automatable (e.g. board responsibility, training, HR security) and are tracked as *manual verification required* in the checklist.
 
 | Art. 21 subsection | Scope | Items |
 |--------------------|-------|-------|
@@ -43,18 +43,23 @@ The platform provides continuous automated verification of the following technic
 | Monitoring and detection | Secrets exposure, version disclosure, WAF/CDN detection |
 | Data-in-transit protection | TLS enforcement, weak protocol probing, certificate pinning |
 
-### Operational deadlines
+### Operational deadlines (D.Lgs 138/2024 + Determine ACN)
 
 | Deadline | Requirement |
 |----------|------------|
-| **July 2027** | Baseline security measures implementation |
+| **31 December 2026** | Designation of the CSIRT referent for incident-reporting communications (Art. 23) |
+| **1 January 2027** | Start of the 24-hour Early Warning notification obligation (Art. 23) |
+| **July 2027** | Baseline security measures implementation (Determina 127434) |
+| **July 2027** | Vendor inventory completion + BIA + Risk Assessment |
 | **Continuous** | Periodic effectiveness verification |
+
+The platform exposes `GET /api/v1/deadlines` with live countdown timers and urgency flags for each of these dates.
 
 ## Determina 127437/2026 -- Relevant vendors (Art. 18)
 
 Determina 127437 requires the inventory of vendors relevant to supply chain security.
 
-### Status: Implemented
+### Status: Implemented (preliminary export schema)
 
 The Vendor Risk Management module is live with the following features:
 
@@ -65,6 +70,8 @@ The Vendor Risk Management module is live with the following features:
 - Certification tracking (ISO 27001, SOC2, CSA STAR)
 - ACN Art. 18 relevance flagging
 - ACN-compatible JSON export: `GET /api/v1/acn-export/art18`
+
+> **Schema status: preliminary.** The export response is tagged `"schema_version": "1.0-preliminary"`. The official ACN *modello di categorizzazione* is expected to be published by the Tavolo NIS in May/June 2026. The current export is a best-effort structural mapping based on Determina 127437/2026 and will be re-validated once the official template is released.
 
 The governance checklist also includes 3 items for Art. 21(d) supply chain policy.
 

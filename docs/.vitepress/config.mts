@@ -1,5 +1,32 @@
 import { defineConfig } from 'vitepress'
 
+const SITE_URL = 'https://fabriziosalmi.github.io/nis2-public/'
+const OG_IMAGE = `${SITE_URL}og.png`
+
+const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'NIS2 Platform',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Linux',
+    description: 'Open-source GRC platform for NIS2 Directive (EU 2022/2555) — governance framework, technical validation, incident response, supply chain risk.',
+    url: SITE_URL,
+    image: OG_IMAGE,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+    license: 'https://www.gnu.org/licenses/agpl-3.0.html',
+    softwareVersion: '2.4.4',
+    author: {
+        '@type': 'Person',
+        name: 'Fabrizio Salmi',
+        url: 'https://github.com/fabriziosalmi',
+    },
+    publisher: {
+        '@type': 'Person',
+        name: 'Fabrizio Salmi',
+    },
+    keywords: 'NIS2, EU 2022/2555, GRC, Art 21, ACN, D.Lgs 138/2024, CSIRT, BIA, supply chain',
+}
+
 export default defineConfig({
     title: "NIS2 Platform",
     description: "Open-source GRC platform for NIS2 Directive (EU 2022/2555). Governance framework, technical validation engine, incident response, and supply chain risk management.",
@@ -9,15 +36,26 @@ export default defineConfig({
     lastUpdated: true,
     head: [
         ['meta', { name: 'author', content: 'Fabrizio Salmi' }],
-        ['meta', { name: 'keywords', content: 'NIS2, EU 2022/2555, GRC, governance, compliance, remediation, BIA, Art 21, CSIRT, supply chain, self-hosted' }],
+        ['meta', { name: 'keywords', content: 'NIS2, EU 2022/2555, GRC, governance, compliance, remediation, BIA, Art 21, CSIRT, supply chain, self-hosted, ACN, D.Lgs 138/2024' }],
+        ['meta', { name: 'theme-color', content: '#0071e3' }],
         ['link', { rel: 'icon', type: 'image/svg+xml', href: '/nis2-public/favicon.svg' }],
+        // Open Graph (LinkedIn, Slack, Telegram preview)
         ['meta', { property: 'og:title', content: 'NIS2 Platform' }],
         ['meta', { property: 'og:description', content: 'Open-source GRC platform for NIS2 Directive compliance. Governance, remediation, incident response, supply chain risk.' }],
         ['meta', { property: 'og:type', content: 'website' }],
-        ['meta', { property: 'og:url', content: 'https://fabriziosalmi.github.io/nis2-public/' }],
-        ['meta', { name: 'twitter:card', content: 'summary' }],
+        ['meta', { property: 'og:url', content: SITE_URL }],
+        ['meta', { property: 'og:image', content: OG_IMAGE }],
+        ['meta', { property: 'og:image:width', content: '1200' }],
+        ['meta', { property: 'og:image:height', content: '630' }],
+        ['meta', { property: 'og:image:alt', content: 'NIS2 Platform — open-source GRC for NIS2 Directive (EU 2022/2555)' }],
+        ['meta', { property: 'og:locale', content: 'en_US' }],
+        // Twitter card with large image
+        ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
         ['meta', { name: 'twitter:title', content: 'NIS2 Platform' }],
         ['meta', { name: 'twitter:description', content: 'Open-source GRC platform for NIS2 Directive compliance.' }],
+        ['meta', { name: 'twitter:image', content: OG_IMAGE }],
+        // Structured data for rich search results
+        ['script', { type: 'application/ld+json' }, JSON.stringify(jsonLd)],
     ],
     themeConfig: {
         logo: '/logo.svg',
@@ -28,7 +66,15 @@ export default defineConfig({
             { text: 'Guide', link: '/guide/getting-started' },
             { text: 'National Modules', link: '/guide/acn-compliance' },
             { text: 'API', link: '/reference/api' },
-            { text: 'Services', link: '/guide/services' }
+            { text: 'Services', link: '/guide/services' },
+            {
+                text: 'v2.4',
+                items: [
+                    { text: 'Releases', link: 'https://github.com/fabriziosalmi/nis2-public/releases' },
+                    { text: 'Changelog', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md' },
+                    { text: 'Security policy', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md' },
+                ],
+            },
         ],
 
         sidebar: [
@@ -63,7 +109,8 @@ export default defineConfig({
         ],
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-public' }
+            { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-public' },
+            { icon: 'linkedin', link: 'https://www.linkedin.com/in/fabriziosalmi/' },
         ],
 
         search: {
@@ -76,8 +123,8 @@ export default defineConfig({
         },
 
         footer: {
-            message: 'AGPL-3.0 | Commercial license available | <a href="mailto:fabrizio.salmi@gmail.com">fabrizio.salmi@gmail.com</a>',
-            copyright: 'Copyright 2024-2026 Fabrizio Salmi'
+            message: 'AGPL-3.0 · <a href="https://github.com/fabriziosalmi/nis2-public/releases">Releases</a> · <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md">Security policy</a> · Commercial license: <a href="mailto:fabrizio.salmi@gmail.com">contact</a>',
+            copyright: '© 2024–2026 Fabrizio Salmi · built from Italy 🇮🇹'
         }
     }
 })

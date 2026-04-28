@@ -1,0 +1,11 @@
+# RFC 9116 -- security.txt for the NIS2 Platform documentation site.
+# Mirrored from packages/api/.well-known/security.txt (when the API is
+# deployed) so that the same canonical contact appears on every public
+# surface of the project.
+
+Contact: mailto:fabrizio.salmi@gmail.com
+Expires: 2027-04-30T00:00:00.000Z
+Preferred-Languages: en, it
+Canonical: https://fabriziosalmi.github.io/nis2-public/.well-known/security.txt
+Policy: https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md
+Acknowledgments: https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md
