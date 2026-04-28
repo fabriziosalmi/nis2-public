@@ -198,9 +198,10 @@
     "role": "Rôle",
     "selectRole": "Sélectionnez un rôle",
     "admin": "Admin",
-    "member": "Membre",
+    "auditor": "Auditeur",
     "viewer": "Visualisateur",
     "owner": "Propriétaire",
+    "you": "vous",
     "sendInvitation": "Envoyer l'Invitation",
     "headerMember": "Membre",
     "headerRole": "Rôle",
@@ -209,13 +210,19 @@
     "active": "actif",
     "pending": "en attente",
     "setAsAdmin": "Définir comme Admin",
-    "setAsMember": "Définir comme Membre",
+    "setAsAuditor": "Définir comme Auditeur",
     "setAsViewer": "Définir comme Visualisateur",
     "removeMember": "Supprimer le Membre",
+    "noMembers": "Aucun membre",
+    "noMembersDescription": "Invitez votre premier collègue pour commencer à collaborer sur la conformité NIS2.",
     "invitationSent": "Invitation envoyée à {email}",
     "invitationFailed": "Échec d'envoi de l'invitation",
     "roleUpdated": "Rôle mis à jour vers {role}",
-    "memberRemoved": "{name} a été supprimé de l'équipe"
+    "roleUpdateFailed": "Échec de la mise à jour du rôle",
+    "memberRemoved": "{name} a été supprimé de l'équipe",
+    "removeFailed": "Échec de la suppression du membre",
+    "invalidEmail": "Veuillez saisir une adresse e-mail valide",
+    "roleRequired": "Veuillez choisir un rôle"
   },
   "notificationsPage": {
     "title": "Notifications",
@@ -467,7 +474,12 @@
     "keyCreated": "Clé API créée",
     "keyCreateFailed": "Échec de création de la clé API",
     "keyCopied": "Clé API copiée dans le presse-papiers",
-    "keyRevoked": "Clé API révoquée"
+    "keyRevoked": "Clé API révoquée",
+    "keyRevokeFailed": "Échec de la révocation de la clé API",
+    "noKeys": "Aucune clé API",
+    "noKeysDescription": "Créez une clé pour authentifier les pipelines CI/CD, les intégrations de monitoring, ou tout système externe qui appelle l'API.",
+    "neverUsed": "jamais",
+    "nameRequired": "Veuillez saisir un nom de clé"
   },
   "compliancePage": {
     "title": "Matrice de Conformité NIS2",
@@ -501,7 +513,8 @@
     "ip": "Adresse IP",
     "noEntries": "Aucune entrée d'audit",
     "noEntriesShort": "Aucune entrée d'audit pour le moment",
-    "noEntriesDescription": "Les entrées d'audit apparaissent ici chaque fois qu'un utilisateur crée, met à jour ou supprime des ressources."
+    "noEntriesDescription": "Les entrées d'audit apparaissent ici chaque fois qu'un utilisateur crée, met à jour ou supprime des ressources.",
+    "system": "système"
   },
   "auth": {
     "login": "Connexion",

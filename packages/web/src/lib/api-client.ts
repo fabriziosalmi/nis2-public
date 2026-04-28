@@ -267,6 +267,24 @@ class ApiClient {
     return this.request<any>(`/api/v1/api-keys/${id}`, { method: 'DELETE' })
   }
 
+  // -------------------------------------------------------------- Audit Log
+  async listAuditLogs(params: {
+    page?: number
+    page_size?: number
+    action?: string
+    resource_type?: string
+    user_id?: string
+  } = {}) {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', String(params.page))
+    if (params.page_size) qs.set('page_size', String(params.page_size))
+    if (params.action) qs.set('action', params.action)
+    if (params.resource_type) qs.set('resource_type', params.resource_type)
+    if (params.user_id) qs.set('user_id', params.user_id)
+    const tail = qs.toString() ? `?${qs.toString()}` : ''
+    return this.request<any>(`/api/v1/audit-logs${tail}`)
+  }
+
   // ----------------------------------------------------------------- Reports
   async generateReport(scanId: string, format: string) {
     // The FastAPI endpoint takes scan_id and format as *query parameters*,

@@ -198,9 +198,10 @@
     "role": "Ruolo",
     "selectRole": "Seleziona ruolo",
     "admin": "Admin",
-    "member": "Membro",
+    "auditor": "Auditor",
     "viewer": "Visualizzatore",
     "owner": "Proprietario",
+    "you": "tu",
     "sendInvitation": "Invia Invito",
     "headerMember": "Membro",
     "headerRole": "Ruolo",
@@ -209,13 +210,19 @@
     "active": "attivo",
     "pending": "in attesa",
     "setAsAdmin": "Imposta come Admin",
-    "setAsMember": "Imposta come Membro",
+    "setAsAuditor": "Imposta come Auditor",
     "setAsViewer": "Imposta come Visualizzatore",
     "removeMember": "Rimuovi Membro",
+    "noMembers": "Nessun membro",
+    "noMembersDescription": "Invita il primo collega per iniziare a collaborare sulla conformità NIS2.",
     "invitationSent": "Invito inviato a {email}",
     "invitationFailed": "Invio invito fallito",
     "roleUpdated": "Ruolo aggiornato a {role}",
-    "memberRemoved": "{name} è stato rimosso dal team"
+    "roleUpdateFailed": "Aggiornamento ruolo fallito",
+    "memberRemoved": "{name} è stato rimosso dal team",
+    "removeFailed": "Rimozione membro fallita",
+    "invalidEmail": "Inserisci un indirizzo email valido",
+    "roleRequired": "Seleziona un ruolo"
   },
   "notificationsPage": {
     "title": "Notifiche",
@@ -467,7 +474,12 @@
     "keyCreated": "Chiave API creata",
     "keyCreateFailed": "Creazione chiave API fallita",
     "keyCopied": "Chiave API copiata negli appunti",
-    "keyRevoked": "Chiave API revocata"
+    "keyRevoked": "Chiave API revocata",
+    "keyRevokeFailed": "Revoca chiave API fallita",
+    "noKeys": "Nessuna chiave API",
+    "noKeysDescription": "Crea una chiave per autenticare pipeline CI/CD, integrazioni di monitoring o qualsiasi sistema esterno che debba chiamare l'API.",
+    "neverUsed": "mai",
+    "nameRequired": "Inserisci un nome per la chiave"
   },
   "compliancePage": {
     "title": "Matrice di Conformità NIS2",
@@ -501,7 +513,8 @@
     "ip": "Indirizzo IP",
     "noEntries": "Nessuna voce di audit",
     "noEntriesShort": "Nessuna voce di audit",
-    "noEntriesDescription": "Le voci di audit compaiono qui ogni volta che un utente crea, aggiorna o elimina risorse."
+    "noEntriesDescription": "Le voci di audit compaiono qui ogni volta che un utente crea, aggiorna o elimina risorse.",
+    "system": "sistema"
   },
   "auth": {
     "login": "Accedi",

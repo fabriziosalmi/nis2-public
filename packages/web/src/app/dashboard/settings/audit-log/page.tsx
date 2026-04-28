@@ -4,35 +4,34 @@
 "use client"
 
 import { useState } from "react"
-import { ScrollText, Filter } from "lucide-react"
+import { ScrollText, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { format as formatDate } from "date-fns"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAuditLogs } from "@/hooks/use-audit-logs"
 
-const sampleLogs = [
-  { id: "1", action: "user.login", user: "admin@nis2platform.eu", resource: "auth", details: "Login from 192.168.1.100", created_at: "2026-03-28T21:09:00Z" },
-  { id: "2", action: "scan.created", user: "admin@nis2platform.eu", resource: "scan", details: "Created scan 'Production Audit'", created_at: "2026-03-28T21:10:00Z" },
-  { id: "3", action: "asset.created", user: "admin@nis2platform.eu", resource: "asset", details: "Added example.com", created_at: "2026-03-28T21:11:00Z" },
-  { id: "4", action: "scan.completed", user: "system", resource: "scan", details: "Scan completed with score 73", created_at: "2026-03-28T21:25:00Z" },
-  { id: "5", action: "finding.updated", user: "admin@nis2platform.eu", resource: "finding", details: "Status changed to acknowledged", created_at: "2026-03-28T21:30:00Z" },
-  { id: "6", action: "member.invited", user: "admin@nis2platform.eu", resource: "team", details: "Invited auditor@company.com as auditor", created_at: "2026-03-28T21:35:00Z" },
-  { id: "7", action: "api_key.created", user: "admin@nis2platform.eu", resource: "api_key", details: "Created key 'CI Pipeline'", created_at: "2026-03-28T21:40:00Z" },
-]
-
-const actionColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  "user.login": "secondary",
-  "scan.created": "default",
-  "scan.completed": "default",
-  "asset.created": "outline",
-  "finding.updated": "secondary",
-  "member.invited": "outline",
-  "api_key.created": "outline",
+// Severity-ish colour buckets for the action namespace prefix.
+// Doesn't try to be exhaustive — anything unknown falls back to muted.
+const actionColors: Record<string, string> = {
+  user: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  scan: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  asset: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  finding: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  member: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  api_key: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 }
 
 export default function AuditLogPage() {
   const t = useTranslations("auditLogPage")
-  const [logs] = useState(sampleLogs)
+  const tc = useTranslations("common")
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useAuditLogs({ page, page_size: 50 })
+
+  const items = data?.items || []
+  const total = data?.total || 0
 
   return (
     <div className="space-y-6">
@@ -52,42 +51,85 @@ export default function AuditLogPage() {
           <CardDescription>{t("activityDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("action")}</TableHead>
-                <TableHead>{t("user")}</TableHead>
-                <TableHead>{t("details")}</TableHead>
-                <TableHead>{t("time")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <h3 className="text-lg font-medium mb-1">{t("noEntries")}</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">{t("noEntriesDescription")}</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    {t("noEntriesShort")}
-                  </TableCell>
+                  <TableHead>{t("action")}</TableHead>
+                  <TableHead>{t("user")}</TableHead>
+                  <TableHead>{t("details")}</TableHead>
+                  <TableHead>{t("ip")}</TableHead>
+                  <TableHead>{t("time")}</TableHead>
                 </TableRow>
-              ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>
-                      <Badge variant={actionColors[log.action] || "secondary"} className="font-mono text-xs">
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{log.user}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{log.details}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {items.map((row: any) => {
+                  // `member.role_changed` → bucket "member". Anything
+                  // before the first dot is the namespace.
+                  const namespace = row.action.split(".")[0]
+                  const colourClass = actionColors[namespace] || ""
+                  // Compress the `details` JSON into a one-line preview.
+                  // Full inspection happens in a future detail view; right
+                  // now we just want the auditor to see what changed at a
+                  // glance.
+                  const detailsPreview = row.details && Object.keys(row.details).length > 0
+                    ? Object.entries(row.details)
+                        .slice(0, 3)
+                        .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+                        .join(", ")
+                    : ""
+                  const actorLabel = row.actor?.email || row.actor?.full_name || t("system")
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <Badge variant="secondary" className={`font-mono text-xs ${colourClass}`}>
+                          {row.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{actorLabel}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-md truncate">
+                        {detailsPreview || row.resource_type}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">
+                        {row.ip_address || "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {formatDate(new Date(row.created_at), "yyyy-MM-dd HH:mm:ss")}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
+
+      {total > 50 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            {tc("back")}
+          </Button>
+          <span className="text-sm text-muted-foreground">{tc("page" as any) || `Page ${page}`} {page}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={items.length < 50}
+            onClick={() => setPage(page + 1)}
+          >
+            {tc("next")}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

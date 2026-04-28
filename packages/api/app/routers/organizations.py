@@ -3,13 +3,14 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.middleware.audit import log_action
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
@@ -18,6 +19,7 @@ from app.schemas.organization import (
     MemberResponse,
     OrgResponse,
     OrgUpdate,
+    RoleUpdateRequest,
 )
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -147,6 +149,20 @@ async def invite_member(
     db.add(new_membership)
     await db.flush()
 
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=current_user.id,
+        action="member.invited",
+        resource_type="membership",
+        resource_id=str(new_membership.id),
+        details={
+            "target_user_id": str(target_user.id),
+            "target_email": payload.email,
+            "role": payload.role,
+        },
+    )
+
     # Reload with user relation
     result = await db.execute(
         select(Membership)
@@ -162,10 +178,22 @@ async def invite_member(
 async def update_member_role(
     org_id: uuid.UUID,
     member_id: uuid.UUID,
-    role: str = Query(..., pattern="^(admin|auditor|viewer)$"),
+    payload: RoleUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MemberResponse:
+    """Change a member's role.
+
+    Audit B08: previous version took `role` from a Query param while the
+    frontend sent it in the JSON body, so every call 422'd. Moved to a
+    Pydantic body model.
+
+    Audit B09: previous version had no last-admin guard symmetric to
+    `remove_member`. The sole admin could PATCH themselves to viewer
+    and orphan the org with zero recovery path. Added the same admin-
+    count check + an explicit self-demotion refusal (the actor cannot
+    demote themselves; ask another admin or use a leave endpoint).
+    """
     my_membership = await _get_membership(db, current_user.id, org_id)
     if not my_membership or my_membership.role != "admin":
         raise HTTPException(
@@ -177,8 +205,62 @@ async def update_member_role(
     if not target_membership or target_membership.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
 
-    target_membership.role = role
+    new_role = payload.role
+    old_role = target_membership.role
+
+    # No-op: the FE may resubmit on edit click; just return the row.
+    if new_role == old_role:
+        return MemberResponse.model_validate(target_membership)
+
+    # Self-demotion is special. We refuse it explicitly: a single admin
+    # acting on themselves bypasses the "last admin" intuition (their
+    # own future self is the demoted one). Force them to either ask
+    # another admin or leave the org via the dedicated endpoint.
+    if (
+        target_membership.user_id == current_user.id
+        and old_role == "admin"
+        and new_role != "admin"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot demote yourself. Ask another admin or use the leave endpoint.",
+        )
+
+    # Demoting (or removing) an admin? Make sure at least one other
+    # remains. Symmetric with remove_member's guard.
+    if old_role == "admin" and new_role != "admin":
+        admin_count_result = await db.execute(
+            select(Membership).where(
+                Membership.organization_id == org_id,
+                Membership.role == "admin",
+            )
+        )
+        admins = admin_count_result.scalars().all()
+        if len(admins) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the last admin of an organization",
+            )
+
+    target_membership.role = new_role
     await db.flush()
+    await db.refresh(target_membership)
+
+    # Audit S02: record before/after so the audit-log view can answer
+    # "who demoted Bob from admin yesterday".
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=current_user.id,
+        action="member.role_changed",
+        resource_type="membership",
+        resource_id=str(member_id),
+        details={
+            "before": old_role,
+            "after": new_role,
+            "target_user_id": str(target_membership.user_id),
+        },
+    )
 
     return MemberResponse.model_validate(target_membership)
 
@@ -216,8 +298,23 @@ async def remove_member(
                 detail="Cannot remove the last admin of an organization",
             )
 
+    target_user_id = target_membership.user_id
+    target_role = target_membership.role
     await db.delete(target_membership)
     await db.flush()
+
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=current_user.id,
+        action="member.removed",
+        resource_type="membership",
+        resource_id=str(member_id),
+        details={
+            "target_user_id": str(target_user_id),
+            "removed_role": target_role,
+        },
+    )
 
 
 async def _get_membership(

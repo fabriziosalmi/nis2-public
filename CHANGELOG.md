@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.4.12] - 2026-04-28
+
+### Fixed (audit blockers B01–B03 + B08–B12)
+
+This release closes 8 blocker issues from the user-management audit run during v2.4.11. The settings/team, settings/api-keys, and settings/audit-log pages are no longer Potemkin villages — they call the real API and persist real data. Multi-org tenants no longer return zero rows because of a `memberships[0]` ordering bug. API keys now actually authenticate (and expire). Role changes accept the body shape the FE has been sending all along.
+
+- **B10 — Multi-org JWT desync.** `get_current_org` previously returned `current_user.memberships[0]`, an unsorted SQLAlchemy collection. For a user in two orgs, RLS scoped to the JWT's org X but the dependency returned membership Y, producing zero-row queries across the platform. `dependencies.py` now decodes the JWT once in `get_current_user`, stashes the payload on `request.state`, and `get_current_org` reads `org_id` from there to find the matching membership. 403 if no match (the user was removed since the token was issued); legacy tokens without `org_id` fall back to single-membership users only.
+
+- **B11 — API key dependency was dead code, `expires_at` ignored.** `get_api_key_org` existed but was wired into zero routers, so keys could be issued and revoked but never authenticated anything. Now imports cleanly and (a) honours `expires_at` (also flips `is_active=False` on first expired use so subsequent reads see the right state without a cron); (b) keeps updating `last_used_at`.
+
+- **B12 — viewer could see CI-key inventory.** `list_api_keys` had no role check. Even though only prefix + name leak (the hash never leaves the server), enumeration of integration names is reconnaissance. Locked to `admin/auditor` via the new `require_role` dependency factory.
+
+- **B08 — `update_member_role` body vs query mismatch.** Server expected `?role=admin` query param while every client sent `body: JSON.stringify({role})`. Plus the server's `Literal` was `admin/auditor/viewer` while the FE Select offered `admin/member/viewer`, so even with the right wire format `member` would 422. Schema is now `RoleUpdateRequest` (Pydantic body model) with `admin/auditor/viewer`; the FE Select aligned.
+
+- **B09 — last-admin demotion + self-demotion bypass.** `update_member_role` had no symmetric guard to `remove_member`'s last-admin protection. A solo admin could PATCH themselves to viewer and orphan the org. Added: explicit self-demotion refusal (`400` with "ask another admin or use the leave endpoint") + admin-count guard on `admin → !admin` transitions.
+
+- **B01 — `settings/team` was 100% mocked.** Hardcoded `sampleMembers`, `onSubmit` only fired `toast.success`. Wired through `useMembers` / `useInviteMember` / `useUpdateMemberRole` / `useRemoveMember` hooks. Self-actions (remove me / demote me) hidden in the row dropdown to keep the UX honest about what the API will allow. Role enum aligned with backend (`admin/auditor/viewer`).
+
+- **B02 — `settings/api-keys` was 100% mocked.** `Math.random().toString(36)` posed as a "new key" the user could paste into a CI/CD pipeline. Wired through `useApiKeys` / `useCreateApiKey` / `useRevokeApiKey`. The actual `raw_key` from the server now appears once in the post-create dialog with a "store this securely" warning. List response is verified to omit `key_hash`.
+
+- **B03 — `settings/audit-log` had no API behind it.** New `routers/audit.py` exposes `GET /api/v1/audit-logs` (paginated, org-scoped, filterable by `action`, `resource_type`, `user_id`). Hydrates actor (user) info in one batch query — no per-row lazy-load. `admin/auditor` only. The frontend renders real data with action namespace colours.
+
+### Added (instrumentation, supports B03)
+
+- **`log_action(...)` calls in organizations.py and api_keys.py** for the actions an auditor needs to answer "who changed what":
+  - `member.invited` (target email + role)
+  - `member.role_changed` (before / after / target_user_id)
+  - `member.removed` (removed_role + target_user_id)
+  - `api_key.created` (name + prefix + scopes)
+  - `api_key.revoked` (name + prefix)
+
+  Same pattern from S02 in the audit; minimum viable set to make the audit-log view useful.
+
+### Internal
+
+- **`require_role(...)` dependency factory** in `app/dependencies.py`. Stops the role check from being a hand-rolled `if membership.role != "admin"` repeated in every endpoint (which is how B12 went unnoticed for so long).
+- **Pydantic v2 fix** for `ApiKeyCreated`: `model_validate(... update={...})` is not a valid signature in v2. Build the response by validating the base shape and constructing the extended one with `**base.model_dump()`.
+
+### Translation footprint
+
++13 new leaf strings × 5 locales = **65 new translations** for the un-mocked pages. All five files validate at **510 leaf strings** each (`jq '[.. | scalars] | length'`).
+
+### Verified
+
+- 42 unit + **32** e2e (was 21 — added a `TestUserManagement`, `TestApiKeysCRUD`, `TestAuditLogs` block) = **74 green**.
+- 4/4 settings pages compile to 200 after recreate.
+- Multi-org JWT path tested via the single-org happy case (full multi-org test would need a second org — added for v2.4.13 alongside the proper invite flow).
+
+### Still pending (audit follow-up)
+
+- **v2.4.13**: B04 (password change), B05 (forgot-password), B06+B07 (proper invite tokens + email + accept-after-register, no more silent auto-binding), the **9 serious** issues (S01–S09), and the **5 nits**.
+- **v2.4.14+**: completion of i18n for `compliance` legal blocks (kept Italian for now per S01 rationale) and the remaining major-bump Dependabot PRs (lucide-react 1.x, recharts 3.x, etc).
+
 ## [2.4.11] - 2026-04-28
 
 ### Fixed (Davide F. — round 3)

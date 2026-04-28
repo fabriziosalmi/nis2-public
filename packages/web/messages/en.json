@@ -198,9 +198,10 @@
     "role": "Role",
     "selectRole": "Select role",
     "admin": "Admin",
-    "member": "Member",
+    "auditor": "Auditor",
     "viewer": "Viewer",
     "owner": "Owner",
+    "you": "you",
     "sendInvitation": "Send Invitation",
     "headerMember": "Member",
     "headerRole": "Role",
@@ -209,13 +210,19 @@
     "active": "active",
     "pending": "pending",
     "setAsAdmin": "Set as Admin",
-    "setAsMember": "Set as Member",
+    "setAsAuditor": "Set as Auditor",
     "setAsViewer": "Set as Viewer",
     "removeMember": "Remove Member",
+    "noMembers": "No members yet",
+    "noMembersDescription": "Invite your first colleague to start collaborating on NIS2 compliance.",
     "invitationSent": "Invitation sent to {email}",
     "invitationFailed": "Failed to send invitation",
     "roleUpdated": "Role updated to {role}",
-    "memberRemoved": "{name} has been removed from the team"
+    "roleUpdateFailed": "Failed to update role",
+    "memberRemoved": "{name} has been removed from the team",
+    "removeFailed": "Failed to remove member",
+    "invalidEmail": "Please enter a valid email address",
+    "roleRequired": "Please choose a role"
   },
   "notificationsPage": {
     "title": "Notifications",
@@ -467,7 +474,12 @@
     "keyCreated": "API key created",
     "keyCreateFailed": "Failed to create API key",
     "keyCopied": "API key copied to clipboard",
-    "keyRevoked": "API key revoked"
+    "keyRevoked": "API key revoked",
+    "keyRevokeFailed": "Failed to revoke API key",
+    "noKeys": "No API keys yet",
+    "noKeysDescription": "Create a key to authenticate CI/CD pipelines, monitoring integrations, or any external system that needs to call the API.",
+    "neverUsed": "never",
+    "nameRequired": "Please enter a key name"
   },
   "compliancePage": {
     "title": "NIS2 Compliance Matrix",
@@ -501,7 +513,8 @@
     "ip": "IP Address",
     "noEntries": "No audit entries",
     "noEntriesShort": "No audit log entries yet",
-    "noEntriesDescription": "Audit entries appear here whenever a user creates, updates or deletes resources."
+    "noEntriesDescription": "Audit entries appear here whenever a user creates, updates or deletes resources.",
+    "system": "system"
   },
   "auth": {
     "login": "Sign In",

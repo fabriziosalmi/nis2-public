@@ -15,13 +15,13 @@ from app.database import ensure_schema, setup_row_level_security
 from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
-from app.routers import acn, api_keys, assets, auth, bia, certificates, findings, governance, health, incidents, organizations, remediation, reports, scans, schedules, vendors
+from app.routers import acn, api_keys, assets, audit, auth, bia, certificates, findings, governance, health, incidents, organizations, remediation, reports, scans, schedules, vendors
 from app.mcp_server import router as mcp_router
 from app.routers.auth import limiter
 
 logger = logging.getLogger(__name__)
 
-API_VERSION = "2.4.11"
+API_VERSION = "2.4.12"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.
@@ -114,6 +114,7 @@ def create_app() -> FastAPI:
     application.include_router(incidents.router, prefix="/api/v1")
     application.include_router(governance.router, prefix="/api/v1")
     application.include_router(api_keys.router, prefix="/api/v1")
+    application.include_router(audit.router, prefix="/api/v1")
     application.include_router(certificates.router, prefix="/api/v1")
     application.include_router(remediation.router, prefix="/api/v1")
     application.include_router(vendors.router, prefix="/api/v1")
