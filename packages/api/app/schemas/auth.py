@@ -51,6 +51,23 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Audit B05: kicks off the reset-by-email flow. The route ALWAYS
+    returns 204 regardless of whether the email exists, so this is the
+    only data we accept on the wire — no extra metadata that could be
+    used to enumerate registered emails."""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Audit B05: completes the reset flow with the raw token from the
+    emailed link plus the user's chosen new password. Floor of 8 chars
+    matches RegisterRequest and ChangePasswordRequest so all three
+    password-setting surfaces enforce the same minimum."""
+    token: str = Field(..., min_length=20, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     """
     Response shape for /login, /register, /refresh.

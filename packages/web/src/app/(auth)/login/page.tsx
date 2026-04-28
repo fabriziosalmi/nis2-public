@@ -94,7 +94,18 @@ export default function LoginPage() {
             {errors.email && <p className="text-xs text-destructive">{t(errors.email.message as any)}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">{t("auth.password")}</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">{t("auth.password")}</Label>
+              {/* B05 forgot/reset flow: this is the only entry point —
+                  putting it next to the password field keeps it discoverable
+                  the moment a user starts wondering if they typoed it. */}
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-primary hover:underline"
+              >
+                {t("auth.forgotPassword")}
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"

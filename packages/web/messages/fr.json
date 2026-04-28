@@ -553,6 +553,31 @@
     "fullNameRequired": "Le nom complet est obligatoire",
     "orgNameRequired": "Le nom de l'organisation est obligatoire"
   },
+  "forgotPasswordPage": {
+    "title": "Mot de passe oublié ?",
+    "description": "Entrez votre adresse e-mail et nous vous enverrons un lien pour le réinitialiser.",
+    "submit": "Envoyer le lien de réinitialisation",
+    "backToLogin": "Retour à la connexion",
+    "successTitle": "Vérifiez votre boîte de réception",
+    "successDescription": "Si un compte existe pour {email}, nous avons envoyé un lien de réinitialisation.",
+    "checkSpam": "Le lien expire dans 30 minutes. Vérifiez votre dossier spam si vous ne le voyez pas d'ici quelques minutes."
+  },
+  "resetPasswordPage": {
+    "title": "Définir un nouveau mot de passe",
+    "description": "Choisissez un nouveau mot de passe pour votre compte.",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le nouveau mot de passe",
+    "submit": "Réinitialiser le mot de passe",
+    "backToLogin": "Retour à la connexion",
+    "invalidLinkTitle": "Lien de réinitialisation invalide",
+    "invalidLinkDescription": "Le jeton de réinitialisation est manquant dans ce lien. Demandez-en un nouveau pour continuer.",
+    "requestNewLink": "Demander un nouveau lien",
+    "invalidOrExpired": "Ce lien de réinitialisation est invalide, expiré ou déjà utilisé. Demandez-en un nouveau.",
+    "successTitle": "Mot de passe mis à jour",
+    "successDescription": "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter avec le nouveau.",
+    "redirecting": "Redirection vers la connexion…",
+    "success": "Mot de passe réinitialisé avec succès"
+  },
   "header": {
     "searchPlaceholder": "Rechercher analyses, résultats, actifs...",
     "lightMode": "Clair",

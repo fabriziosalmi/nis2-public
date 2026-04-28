@@ -2,51 +2,62 @@
 
 The NIS2 Platform exposes a REST API at `http://localhost:8000`. All routes are prefixed with `/api/v1/`. Interactive OpenAPI documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
 
-All endpoints return JSON. Authenticated endpoints require a `Bearer` token in the `Authorization` header.
+All endpoints return JSON. Two authentication paths are accepted on every protected route:
+
+- **Cookie session (web)** — `access_token` httpOnly cookie set by `/auth/login` or `/auth/register`. State-changing requests must echo the `csrf_token` cookie back as the `X-CSRF-Token` header (double-submit pattern).
+- **Bearer token (SDK / CLI)** — `Authorization: Bearer <jwt>` header. Mints from `/auth/login` are valid; the same access token from the cookie can be used here.
+
+Read-only endpoints under **scans / findings / assets** additionally accept a long-lived **API key** as `Authorization: Bearer nis2_…` (no cookie required). Keys are minted via `POST /api/v1/api-keys` (admin only) and the raw value is shown exactly once. Mutation endpoints (POST / PATCH / DELETE) on those resources still require a session — the audit log + `created_by` columns want a user identity to attribute the change to.
 
 ## Authentication
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| POST | `/api/v1/auth/register` | Register a new user and create an organization. Returns access and refresh tokens | No |
+| POST | `/api/v1/auth/register` | Register a new user and create an organization. Returns access and refresh tokens (also set as httpOnly cookies for the web client) | No |
 | POST | `/api/v1/auth/login` | Obtain access and refresh tokens | No |
-| POST | `/api/v1/auth/refresh` | Refresh an expired access token using a refresh token | No |
+| POST | `/api/v1/auth/refresh` | Rotate the access token using the refresh token cookie. Refresh tokens themselves are single-use (jti tracked in `revoked_tokens`); reusing one revokes the entire family | No |
+| POST | `/api/v1/auth/logout` | Clear cookies and revoke the refresh token | Yes |
 | GET | `/api/v1/auth/me` | Get current user profile | Yes |
-| PATCH | `/api/v1/auth/me` | Update current user profile | Yes |
+| PATCH | `/api/v1/auth/me` | Update current user profile (name / locale / avatar). **Does not** accept `current_password` / `new_password` — see `/auth/change-password` | Yes |
+| POST | `/api/v1/auth/change-password` | Rotate the user's password. Verifies `current_password`, hashes `new_password`, stamps `password_changed_at` so every other still-active session is invalidated on its next request, re-issues this session's cookies. `5/min/IP` rate-limited | Yes |
+| POST | `/api/v1/auth/forgot-password` | Kick off the email-based reset flow. Always returns 204 regardless of whether the email exists, so the response can't be used to enumerate registered users. `5/min/IP` rate-limited | No |
+| POST | `/api/v1/auth/reset-password` | Complete the reset flow with a single-use token (delivered out-of-band by email) and a new password. Tokens are sha256-hashed at rest, expire after `RESET_TOKEN_TTL_MINUTES` (default 30), and a single 400 covers `{unknown, expired, used}` — no oracle on which one applies. `10/min/IP` rate-limited | No |
 
 ## Scans
 
+`Auth` column legend: **Session** = cookie or `Bearer <jwt>`. **API key** = `Bearer nis2_…` also accepted (no cookie required).
+
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/v1/scans` | List scans for current organization. Filterable by `status`. Paginated | Yes |
-| POST | `/api/v1/scans` | Create and queue a new scan | Yes |
-| GET | `/api/v1/scans/{scan_id}` | Get scan details and status | Yes |
-| DELETE | `/api/v1/scans/{scan_id}` | Delete a scan and its findings (admin only) | Yes |
-| GET | `/api/v1/scans/{scan_id}/results` | List raw scan results for a scan. Paginated | Yes |
-| GET | `/api/v1/scans/{scan_id}/findings` | List findings for a scan. Paginated | Yes |
-| POST | `/api/v1/scans/{scan_id}/cancel` | Cancel a pending or running scan | Yes |
-| GET | `/api/v1/scans/{scan_id}/compare/{other_id}` | Compare two scans: score delta, new/resolved/persistent findings | Yes |
+| GET | `/api/v1/scans` | List scans for current organization. Filterable by `status`. Paginated | Session or API key |
+| POST | `/api/v1/scans` | Create and queue a new scan | Session |
+| GET | `/api/v1/scans/{scan_id}` | Get scan details and status | Session or API key |
+| DELETE | `/api/v1/scans/{scan_id}` | Delete a scan and its findings (admin only) | Session |
+| GET | `/api/v1/scans/{scan_id}/results` | List raw scan results for a scan. Paginated | Session or API key |
+| GET | `/api/v1/scans/{scan_id}/findings` | List findings for a scan. Paginated | Session or API key |
+| POST | `/api/v1/scans/{scan_id}/cancel` | Cancel a pending or running scan | Session |
+| GET | `/api/v1/scans/{scan_id}/compare/{other_id}` | Compare two scans: score delta, new/resolved/persistent findings | Session or API key |
 
 ## Findings
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/v1/findings` | List all findings. Filterable by `severity`, `status`, `category`. Paginated | Yes |
-| GET | `/api/v1/findings/stats` | Get finding counts grouped by severity and status | Yes |
-| GET | `/api/v1/findings/{finding_id}` | Get finding details | Yes |
-| PATCH | `/api/v1/findings/{finding_id}` | Update finding status or resolution note | Yes |
-| POST | `/api/v1/findings/bulk-update` | Bulk update status for multiple findings | Yes |
+| GET | `/api/v1/findings` | List all findings. Filterable by `severity`, `status`, `category`. Paginated | Session or API key |
+| GET | `/api/v1/findings/stats` | Get finding counts grouped by severity and status | Session or API key |
+| GET | `/api/v1/findings/{finding_id}` | Get finding details | Session or API key |
+| PATCH | `/api/v1/findings/{finding_id}` | Update finding status or resolution note | Session |
+| POST | `/api/v1/findings/bulk-update` | Bulk update status for multiple findings | Session |
 
 ## Assets
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/v1/assets` | List assets for current organization. Paginated | Yes |
-| POST | `/api/v1/assets` | Create a new asset | Yes |
-| GET | `/api/v1/assets/{asset_id}` | Get asset details | Yes |
-| PATCH | `/api/v1/assets/{asset_id}` | Update an asset | Yes |
-| DELETE | `/api/v1/assets/{asset_id}` | Delete an asset | Yes |
-| POST | `/api/v1/assets/import` | Import assets from a CSV file | Yes |
+| GET | `/api/v1/assets` | List assets for current organization. Paginated | Session or API key |
+| POST | `/api/v1/assets` | Create a new asset | Session |
+| GET | `/api/v1/assets/{asset_id}` | Get asset details | Session or API key |
+| PATCH | `/api/v1/assets/{asset_id}` | Update an asset | Session |
+| DELETE | `/api/v1/assets/{asset_id}` | Delete an asset | Session |
+| POST | `/api/v1/assets/import` | Import assets from a CSV file | Session |
 
 ## Schedules
 
@@ -75,7 +86,7 @@ All endpoints return JSON. Authenticated endpoints require a `Bearer` token in t
 | PATCH | `/api/v1/organizations/{org_id}` | Update organization settings (admin only) | Yes |
 | GET | `/api/v1/organizations/{org_id}/members` | List organization members | Yes |
 | POST | `/api/v1/organizations/{org_id}/members` | Invite a member by email (admin only) | Yes |
-| PATCH | `/api/v1/organizations/{org_id}/members/{member_id}` | Update a member's role (admin only). Query param: `role` (admin, auditor, viewer) | Yes |
+| PATCH | `/api/v1/organizations/{org_id}/members/{member_id}` | Update a member's role (admin only). Body: `{"role": "admin" \| "auditor" \| "viewer"}`. Self-demotion and last-admin demotion are refused with 400 | Yes |
 | DELETE | `/api/v1/organizations/{org_id}/members/{member_id}` | Remove a member (admin only). Cannot remove the last admin | Yes |
 
 ## Health
@@ -123,11 +134,23 @@ All endpoints return JSON. Authenticated endpoints require a `Bearer` token in t
 
 ## API Keys
 
+API keys are long-lived `Bearer` tokens (`nis2_*` prefix) for CI/CD pipelines and SDK consumers. The raw value is shown **exactly once** in the create response — store it securely; only the prefix and sha256 hash are kept server-side. Keys honor `expires_at` (the route flips `is_active=False` on first expired use, so the list view stays consistent without a sweeper cron). Successful authentications stamp `last_used_at`.
+
+Keys authenticate the **read endpoints** of scans / findings / assets (see those sections above). Mutation endpoints still require a session.
+
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/v1/api-keys` | List API keys for the organization | Yes |
-| POST | `/api/v1/api-keys` | Create a new API key (admin only) | Yes |
+| GET | `/api/v1/api-keys` | List API keys for the organization (admin or auditor) | Yes |
+| POST | `/api/v1/api-keys` | Create a new API key (admin only). Response includes `raw_key` — shown once | Yes |
 | DELETE | `/api/v1/api-keys/{key_id}` | Revoke an API key (admin only) | Yes |
+
+## Audit Log
+
+Every state-changing action under organizations / api-keys / auth (and increasingly elsewhere) writes a row to the audit log. Reads are paginated and filterable; retention is 90 days.
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/api/v1/audit-logs` | List audit entries for the organization (admin or auditor). Filterable by `action`, `resource_type`, `user_id`. Paginated. Hydrates actor (user) email + name in one batch query | Yes |
 
 ## Vendors (Art. 18 Supply Chain)
 

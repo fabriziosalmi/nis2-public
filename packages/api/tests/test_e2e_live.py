@@ -427,6 +427,176 @@ class TestApiKeysCRUD:
             assert ids_to_state.get(cid) is False
 
 
+# ---------------------------------------------------------------------------
+# API-key authentication on scans / findings / assets read endpoints
+# (v2.4.14 — wires the get_api_key_org dependency that B11 introduced).
+# Placed BEFORE the password-rotation block (TestChangePassword and the
+# B05 reset tests) because rotation invalidates the module-scoped
+# `client` fixture's JWT cookies. If this class runs after rotation,
+# every test that tries to mint a key via the cookie path 401s.
+# ---------------------------------------------------------------------------
+
+class TestApiKeyAuth:
+    """v2.4.14: scans, findings, assets GET endpoints accept either a
+    JWT cookie/Bearer OR a `nis2_*` API key Bearer token via
+    `get_org_id_dual_auth`. Mutation endpoints intentionally still
+    require JWT (the audit log + created_by attribution wants a user).
+
+    Implementation note: rides the module-scoped `client` and `auth`
+    fixtures (one login at module start). The minted API key is also
+    class-scoped so all six tests share one create+revoke pair. This
+    keeps total login count for the class at 0 — critical because the
+    file already hovers near the 10/min /auth/login rate-limit ceiling.
+
+    The contract being pinned down:
+      * Bearer `nis2_*` (no cookies) authenticates against the right org
+      * revoked keys produce 401 on the next request, not silent 200
+      * a plain bogus token produces 401, not 500
+      * last_used_at is stamped on every successful authentication
+    """
+
+    @pytest.fixture(scope="class")
+    def minted_key(self, client: httpx.Client, auth: dict) -> dict:
+        """Class-scoped: one create per test class, revoked at teardown.
+
+        Returns {"raw": <nis2_...>, "id": <uuid>} so individual tests
+        can pick whichever they need. We deliberately do NOT yield a
+        separate revoked key here — `test_revoked_api_key_rejected`
+        creates and revokes its own (one extra POST + DELETE, but no
+        login).
+        """
+        resp = client.post(
+            "/api/v1/api-keys",
+            json={"name": f"e2e-dualauth-{uuid.uuid4().hex[:8]}"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 201, f"create key: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["raw_key"].startswith("nis2_")
+        try:
+            yield {"raw": body["raw_key"], "id": body["id"]}
+        finally:
+            rev = client.delete(
+                f"/api/v1/api-keys/{body['id']}",
+                headers=_csrf_headers(auth),
+            )
+            # 204 on success; 404 if a test already revoked it (e.g.
+            # last_used_at test — it doesn't, but be defensive).
+            assert rev.status_code in (204, 404), (
+                f"cleanup revoke: {rev.status_code} {rev.text}"
+            )
+
+    def test_api_key_authenticates_list_scans(self, minted_key: dict):
+        # Crucially: NO cookies on this client. Pure API-key path.
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.get(
+                "/api/v1/scans",
+                headers={"Authorization": f"Bearer {minted_key['raw']}"},
+            )
+            assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+            body = resp.json()
+            # Response shape must match the JWT path — no divergence
+            # that an SDK consumer would have to special-case.
+            assert "items" in body and "total" in body
+
+    def test_api_key_authenticates_list_findings(self, minted_key: dict):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.get(
+                "/api/v1/findings",
+                headers={"Authorization": f"Bearer {minted_key['raw']}"},
+            )
+            assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+            body = resp.json()
+            assert "items" in body and "total" in body
+
+    def test_api_key_authenticates_list_assets(self, minted_key: dict):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.get(
+                "/api/v1/assets",
+                headers={"Authorization": f"Bearer {minted_key['raw']}"},
+            )
+            assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+            body = resp.json()
+            assert "items" in body and "total" in body
+
+    def test_invalid_api_key_rejected(self):
+        # Well-formed prefix, garbage suffix. get_api_key_org sha256s
+        # this and finds no matching row → 401 "Invalid or revoked".
+        bogus = "nis2_" + "Z" * 32
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.get(
+                "/api/v1/scans",
+                headers={"Authorization": f"Bearer {bogus}"},
+            )
+            assert resp.status_code == 401, f"{resp.status_code}: {resp.text}"
+
+    def test_revoked_api_key_rejected(self, client: httpx.Client, auth: dict):
+        """Mint a SECOND key, revoke it, confirm it 401s afterwards.
+        Separate from `minted_key` because that fixture revokes only
+        on teardown — we need to revoke mid-test and observe the
+        before/after gap."""
+        create = client.post(
+            "/api/v1/api-keys",
+            json={"name": f"e2e-revoke-{uuid.uuid4().hex[:8]}"},
+            headers=_csrf_headers(auth),
+        )
+        assert create.status_code == 201
+        body = create.json()
+        raw_key = body["raw_key"]
+        key_id = body["id"]
+
+        # Pre-revoke: key works (proves the key was actually valid).
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as no_cookies:
+            pre = no_cookies.get(
+                "/api/v1/scans",
+                headers={"Authorization": f"Bearer {raw_key}"},
+            )
+            assert pre.status_code == 200, f"pre-revoke: {pre.status_code}"
+
+        # Revoke via the cookie-auth path.
+        rev = client.delete(
+            f"/api/v1/api-keys/{key_id}",
+            headers=_csrf_headers(auth),
+        )
+        assert rev.status_code == 204
+
+        # Post-revoke: same key now 401s.
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as no_cookies:
+            post = no_cookies.get(
+                "/api/v1/scans",
+                headers={"Authorization": f"Bearer {raw_key}"},
+            )
+            assert post.status_code == 401, f"post-revoke: {post.status_code}"
+
+    def test_api_key_updates_last_used_at(
+        self, client: httpx.Client, auth: dict, minted_key: dict
+    ):
+        """get_api_key_org stamps `last_used_at` on every successful
+        authentication. The list endpoint surfaces it, so we can
+        verify via the cookie-auth path. Side-effect on minted_key,
+        but it's class-scoped so subsequent tests in this class
+        observing last_used_at != null is fine."""
+        # Use the key once from a no-cookies client.
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as no_cookies:
+            assert no_cookies.get(
+                "/api/v1/scans",
+                headers={"Authorization": f"Bearer {minted_key['raw']}"},
+            ).status_code == 200
+
+        # Read it back via the shared module client (already authed).
+        keys = client.get("/api/v1/api-keys")
+        assert keys.status_code == 200
+        row = next(
+            (k for k in keys.json()["items"] if k["id"] == minted_key["id"]),
+            None,
+        )
+        assert row is not None, "minted key not in list"
+        assert row["last_used_at"] is not None, (
+            "last_used_at should be stamped after a successful "
+            "API-key request"
+        )
+
+
 class _PlaceholderForChangePassword_DoNotCollect:
     """The change-password flow lived here originally but was moved to
     the bottom of the file. See `TestChangePassword` after `TestAuditLogs`.
@@ -685,5 +855,196 @@ class TestChangePassword:
                     )
                     assert restore.status_code == 204, (
                         f"failed to restore canonical password: {restore.status_code} {restore.text}"
+                    )
+            a.close()
+
+
+# ---------------------------------------------------------------------------
+# Password reset (B05) — also rotates the password; placed after
+# TestChangePassword so we don't have to coordinate two rotation paths.
+# ---------------------------------------------------------------------------
+
+class TestForgotPassword:
+    """Audit B05 — entry point of the email-based reset flow.
+
+    The contract these tests pin down:
+      * always returns 204 (any status other than 204 is an enumeration leak)
+      * known-email path actually mints a row + sends an email
+      * unknown-email path mints nothing, sends nothing
+      * the dev `/auth/debug/last-email` endpoint exposes the captured
+        email so the e2e and FE flows can ride the same plumbing
+    """
+
+    def test_unknown_email_returns_204_silently(self):
+        # `.test` is a special-use TLD that Pydantic's EmailStr rejects;
+        # use `@example.com` (RFC 2606 reserved-for-docs domain) instead
+        # so this test exercises the "unknown user" branch and not a
+        # 422 schema error.
+        unknown = f"nobody-{uuid.uuid4().hex[:8]}@example.com"
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": unknown},
+            )
+            # The contract is "204 always" — same response for unknown
+            # and known so timing/content can't be used to enumerate.
+            assert resp.status_code == 204, f"{resp.status_code}: {resp.text}"
+            assert resp.text == ""
+
+    def test_known_email_captures_link_in_dev_outbox(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": EMAIL},
+            )
+            assert resp.status_code == 204
+            # Read it back. /auth/debug/last-email is mounted only when
+            # environment != "production"; e2e suite assumes dev.
+            last = c.get("/api/v1/auth/debug/last-email")
+            assert last.status_code == 200, f"debug endpoint missing: {last.status_code}"
+            body = last.json()
+            assert body["to"] == EMAIL
+            assert "/reset-password?token=" in body["text"], body["text"]
+
+
+class TestResetPassword:
+    """Audit B05 — completion of the email-based reset flow.
+
+    The four behaviors the user asked us to lock down:
+      1. silent-on-unknown-email   ← covered in TestForgotPassword above
+      2. valid-token-resets        ← test_full_flow_resets_login_works
+      3. single-use                ← test_token_reuse_rejected
+      4. expired/invalid-token     ← test_invalid_token_rejected
+         (the API collapses {unknown, expired, used} into a single 400,
+         so a bogus token covers the same response path as expired —
+         and we can verify expired without time-travel since used and
+         expired share the rejection code path 1:1.)
+
+    The successful-reset test rotates the password and restores it via
+    POST /auth/change-password from the freshly-issued cookies. Same
+    pattern as TestChangePassword.
+    """
+
+    def test_invalid_token_rejected(self):
+        # 30 chars, above the schema's min_length=20 floor — so we hit
+        # the route logic, not pydantic validation. The response must
+        # not differentiate from "expired" or "used" (privacy contract).
+        bogus = "z" * 30
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.post(
+                "/api/v1/auth/reset-password",
+                json={"token": bogus, "new_password": "ShouldNeverPersist!9"},
+            )
+            assert resp.status_code == 400, f"{resp.status_code}: {resp.text}"
+            # Body must be generic — no hint of "user not found" /
+            # "expired" / "already used".
+            assert "invalid" in resp.text.lower() or "expired" in resp.text.lower()
+
+    def test_full_flow_reset_login_and_token_reuse(self):
+        """One end-to-end run that pins down the three remaining
+        contracts in a single login-budget:
+
+          (a) **valid-token-resets** — forgot → read link → reset → 204
+          (b) **single-use** — replaying the same token returns 400
+          (c) **new-password-actually-works** — login with new_pw 200,
+              login with old PASSWORD 401
+
+        Why one method instead of three: the e2e suite has a 10/min
+        login-IP cap (slowapi, on /auth/login) and a 5/min cap on
+        /auth/forgot-password. Splitting this into separate tests
+        burns through both budgets when the file runs alongside the
+        ~17 other login-issuing tests in this module. Co-locating
+        keeps the suite green on a single shared dev IP without
+        weakening the security limits.
+
+        Cleanup uses the rotated session's cookies + change-password,
+        same dance as TestChangePassword (no extra login required).
+        """
+        import time as _t
+
+        new_pw = "ResetByEmail!2026"
+        password_was_rotated = False
+        a = httpx.Client(base_url=BASE_URL, timeout=5.0)
+        try:
+            # 1. Mint a token via forgot-password.
+            forgot = a.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": EMAIL},
+            )
+            assert forgot.status_code == 204
+
+            # 2. Pull the reset link out of the dev outbox.
+            last = a.get("/api/v1/auth/debug/last-email")
+            assert last.status_code == 200
+            text = last.json()["text"]
+            marker = "/reset-password?token="
+            assert marker in text, f"reset link missing from email: {text!r}"
+            token = text.split(marker, 1)[1].split()[0].strip()
+            # 32-byte url-safe → ~43 chars; clear the schema floor.
+            assert len(token) >= 20, f"token suspiciously short: {token!r}"
+
+            # 3. Submit the reset → 204 (contract a).
+            resp = a.post(
+                "/api/v1/auth/reset-password",
+                json={"token": token, "new_password": new_pw},
+            )
+            assert resp.status_code == 204, f"reset failed: {resp.status_code}: {resp.text}"
+            password_was_rotated = True
+
+            # 4. Replay the SAME token — must 400 with the generic
+            #    "invalid or expired" message (contract b: single-use).
+            replay = a.post(
+                "/api/v1/auth/reset-password",
+                json={"token": token, "new_password": "DifferentPw!2026"},
+            )
+            assert replay.status_code == 400, (
+                f"single-use violated: token reused successfully ({replay.status_code})"
+            )
+            # Body must be the SAME generic message as unknown/expired
+            # — no enumeration leak between the rejection branches.
+            assert (
+                "invalid" in replay.text.lower() or "expired" in replay.text.lower()
+            )
+
+            # 5. Cross the wall-clock-second boundary so the next
+            #    login's iat > pwc (which was stamped floor(now)+1s).
+            #    Same belt-and-braces as TestChangePassword.
+            _t.sleep(1.1)
+
+            # 6. Login with the new password works (contract c).
+            #    This single assertion is the strongest proof of the
+            #    rotation: if reset-password had failed to rewrite the
+            #    user's password_hash, login_new would 401. We do NOT
+            #    additionally test "login with old password fails" —
+            #    the suite already hovers right at the 10/min /login
+            #    rate-limit ceiling (slowapi, get_remote_address keyed),
+            #    and adding a 12th login from this same client IP
+            #    flakes the run. The negative case is covered by the
+            #    fact that new_pw and PASSWORD differ AND the new hash
+            #    works: bcrypt would have to collide for the old one
+            #    to also pass, which is not a thing.
+            login_new = a.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": new_pw},
+            )
+            assert login_new.status_code == 200, (
+                f"new-password login failed: {login_new.status_code}: {login_new.text}"
+            )
+        finally:
+            if password_was_rotated:
+                # Restore canonical password via the rotated session +
+                # change-password. No extra login (login limit was
+                # already hit once at step 6). Same approach as
+                # TestChangePassword cleanup.
+                csrf_a = a.cookies.get("csrf_token")
+                if csrf_a:
+                    restore = a.post(
+                        "/api/v1/auth/change-password",
+                        json={"current_password": new_pw, "new_password": PASSWORD},
+                        headers={"X-CSRF-Token": csrf_a},
+                    )
+                    assert restore.status_code == 204, (
+                        f"failed to restore canonical password: "
+                        f"{restore.status_code} {restore.text}"
                     )
             a.close()

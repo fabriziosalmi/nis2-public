@@ -553,6 +553,31 @@
     "fullNameRequired": "Il nome è obbligatorio",
     "orgNameRequired": "Il nome organizzazione è obbligatorio"
   },
+  "forgotPasswordPage": {
+    "title": "Hai dimenticato la password?",
+    "description": "Inserisci la tua email e ti invieremo un link per reimpostarla.",
+    "submit": "Invia link di reset",
+    "backToLogin": "Torna all'accesso",
+    "successTitle": "Controlla la posta",
+    "successDescription": "Se esiste un account per {email}, abbiamo inviato un link per reimpostare la password.",
+    "checkSpam": "Il link scade tra 30 minuti. Controlla la cartella spam se non lo vedi entro un paio di minuti."
+  },
+  "resetPasswordPage": {
+    "title": "Imposta una nuova password",
+    "description": "Scegli una nuova password per il tuo account.",
+    "newPassword": "Nuova Password",
+    "confirmPassword": "Conferma Nuova Password",
+    "submit": "Reimposta password",
+    "backToLogin": "Torna all'accesso",
+    "invalidLinkTitle": "Link di reset non valido",
+    "invalidLinkDescription": "Manca il token di reset in questo link. Richiedi un nuovo link per continuare.",
+    "requestNewLink": "Richiedi un nuovo link",
+    "invalidOrExpired": "Questo link di reset non è valido, è scaduto o è già stato utilizzato. Richiedine uno nuovo.",
+    "successTitle": "Password aggiornata",
+    "successDescription": "La tua password è stata reimpostata. Ora puoi accedere con quella nuova.",
+    "redirecting": "Reindirizzamento all'accesso…",
+    "success": "Password reimpostata con successo"
+  },
   "header": {
     "searchPlaceholder": "Cerca scansioni, risultati, asset...",
     "lightMode": "Chiaro",

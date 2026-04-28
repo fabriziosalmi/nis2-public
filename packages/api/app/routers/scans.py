@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, get_org_id_dual_auth
 from app.models.asset import Asset
 from app.models.finding import Finding
 from app.models.membership import Membership
@@ -33,11 +33,12 @@ async def list_scans(
     status_filter: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> ScanListResponse:
-    user, membership = current_org
-    org_id = membership.organization_id
+    # Read endpoint — accept either a JWT cookie session or a `nis2_*`
+    # API key Bearer token. Audit B11 wired the API-key dependency; this
+    # is the actual consumer (CI/CD pipelines polling scan status).
 
     query = select(Scan).where(Scan.organization_id == org_id)
     count_query = select(func.count(Scan.id)).where(Scan.organization_id == org_id)
@@ -157,13 +158,13 @@ async def create_scan(
 @router.get("/{scan_id}", response_model=ScanResponse)
 async def get_scan(
     scan_id: uuid.UUID,
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> ScanResponse:
-    user, membership = current_org
+    # Dual-auth read — see list_scans for the rationale.
     scan = await db.get(Scan, scan_id)
 
-    if not scan or scan.organization_id != membership.organization_id:
+    if not scan or scan.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
     return ScanResponse.model_validate(scan)
@@ -174,14 +175,13 @@ async def get_scan_results(
     scan_id: uuid.UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> ScanResultListResponse:
-    user, membership = current_org
-
-    # Verify scan belongs to org
+    # Dual-auth read — primary CI/CD use case (poll a scan's per-host
+    # results once it completes). See list_scans for the wiring note.
     scan = await db.get(Scan, scan_id)
-    if not scan or scan.organization_id != membership.organization_id:
+    if not scan or scan.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
     count_query = select(func.count(ScanResult.id)).where(ScanResult.scan_id == scan_id)
@@ -211,13 +211,12 @@ async def get_scan_findings(
     scan_id: uuid.UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ) -> FindingListResponse:
-    user, membership = current_org
-
+    # Dual-auth read — see list_scans for the wiring note.
     scan = await db.get(Scan, scan_id)
-    if not scan or scan.organization_id != membership.organization_id:
+    if not scan or scan.organization_id != org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
     count_query = select(func.count(Finding.id)).where(Finding.scan_id == scan_id)
@@ -301,13 +300,11 @@ async def delete_scan(
 async def compare_scans(
     scan_id: uuid.UUID,
     other_id: uuid.UUID,
-    current_org: tuple[User, Membership] = Depends(get_current_org),
+    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Compare two scans: score delta, new/resolved/persistent findings."""
-    user, membership = current_org
-    org_id = membership.organization_id
-
+    """Compare two scans: score delta, new/resolved/persistent findings.
+    Dual-auth read — see list_scans for the wiring note."""
     scan_a = await db.get(Scan, scan_id)
     scan_b = await db.get(Scan, other_id)
 

@@ -126,6 +126,9 @@ async def ensure_schema() -> None:
         # treats the token's iat as fresher than NULL automatically.
         ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
     ]
+    # v2.4.14: PasswordResetToken is a brand-new table; create_all above
+    # already provisions it, no ALTER needed. Listed here for the
+    # changelog grep — see app/models/password_reset_token.py.
     async with engine.begin() as conn:
         for table, column, ddl in additive_columns:
             try:
