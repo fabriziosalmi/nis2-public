@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.4.10] - 2026-04-28
+
+### Security (Dependabot drain — closes 9 open alerts, 2 high + 7 medium)
+
+| # | Severity | Package | Manifest | Action |
+|---|---|---|---|---|
+| 24 | high | rollup `<4.59.0` | root `package-lock.json` | `overrides` to `^4.59.0` (path traversal) |
+| 23 | high | preact `<10.28.2` | root `package-lock.json` | `overrides` to `^10.28.2` (JSON VNode injection) |
+| 22 | medium | esbuild `<=0.24.2` | root `package-lock.json` | `overrides` to `^0.25.0` (dev-server CORS) |
+| 57 | medium | vite `<=6.4.1` | root `package-lock.json` | `overrides` to `^6.4.2` (path traversal) |
+| 60 | medium | postcss `<8.5.10` | root `package-lock.json` | `overrides` to `^8.5.10` (XSS via `</style>`) |
+| 78 | medium | postcss `<8.5.10` | `packages/web/package-lock.json` | dep + `overrides` to `^8.5.10` |
+| 77 | medium | next-intl `<4.9.1` | `packages/web/package-lock.json` | bump 3.25 → 4.11.0 (open redirect — not exploitable here, no `next-intl/navigation` usage, but bumped for hygiene; verified drop-in upgrade against the v4 migration guide) |
+| 69 | medium | next-auth `<5.0.0-beta.30` | `packages/web/package-lock.json` | bump beta.25 → beta.31 (email misdelivery) |
+| 25 | medium | scapy `<=2.6.1` | `packages/scanner/requirements.txt` | **dropped** — never imported in the codebase, dragged GHSA-pq98-w3cw-pgcr (untrusted-pickle session deserialization, no patched release) |
+
+### Verification
+- `npm audit` on root and `packages/web`: **0 vulnerabilities** at any severity.
+- 42 unit + 21 e2e = **63 green** (ensures the next-intl 3 → 4 bump is genuinely drop-in for our usage subset: `getRequestConfig`, `NextIntlClientProvider`, `useTranslations`, `getLocale`/`getMessages`).
+
+### Notes
+- The `next-intl 3 → 4` bump in `packages/web/package.json` is the largest single change. We use only the simplest subset of next-intl (no localised routing, no middleware, no navigation `redirect()`); the v4 release notes document this as a no-config-change upgrade, and the test suite + visual smoke test confirm.
+- `next` itself auto-bumped from 15.5.9 to 15.5.15 as part of the resolve.
+
 ## [2.4.9] - 2026-04-28
 
 ### Added

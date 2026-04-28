@@ -235,7 +235,7 @@ def run_mcp_stdio():
                             "capabilities": {"tools": {}},
                             "serverInfo": {
                                 "name": "nis2-compliance",
-                                "version": "2.4.9",
+                                "version": "2.4.10",
                             },
                         },
                     }
