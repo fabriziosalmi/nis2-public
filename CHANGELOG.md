@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.9] - 2026-04-28
+
+### Added
+- **Dashboard screenshot in docs hero + README.** Replaced the small `/logo.svg` image in the VitePress hero with a proper 1208×683 product screenshot (`docs/public/screenshot.png`) and added it to the README under the badges. Gives visitors an immediate visual answer to "what does it look like?" without having to clone-and-`make-dev`.
+- **Full i18n on 8 settings + asset pages** (round 1 of 3 staggered i18n patches). Pages now translated end-to-end (titles, subtitles, dialogs, table headers, empty states, button labels, toast messages, placeholders, validation copy) across 5 locales: `assets`, `scans/schedules`, `settings/{organization, scan-defaults, api-keys, audit-log, team, notifications}`. **Net: +156 leaf strings × 5 locales = 780 new translations**, structurally aligned across all 5 files (validated by `jq '[.. | scalars] | length'` returning 457 for every locale).
+
+### Translation quality
+- **EN + IT** — native-equivalent.
+- **FR / DE / ES** — base-UI vocabulary, NIS2 / cybersec terminology kept as-is. Flagged for native-speaker review in a follow-up; structure is stable for PR contributions.
+
+### Coverage status (after this release)
+- ✅ **Full i18n** (titles, body, forms, toasts): dashboard, scans (list), findings, reports, **assets**, **scans/schedules**, profile, **settings/{organization, scan-defaults, api-keys, audit-log, team, notifications}** — 13 pages.
+- ⏳ **Pending v2.4.10**: scans/new, scans/[id], scans/[id]/compare, compliance.
+- ⏳ **Pending v2.4.11**: pt.json file (currently `i18n.ts` declares `pt` as a locale but the file doesn't exist), Zod validation message i18n refactor.
+
+### Operational note
+Editing `messages/*.json` and just `docker restart docker-web-1` is not enough — the anonymous `/app/.next` volume keeps a stale messages bundle. Use `docker compose -f infra/docker/docker-compose.dev.yml up -d --force-recreate web` (already documented in v2.4.7).
+
 ## [2.4.8] - 2026-04-28
 
 ### Fixed (reported by Davide F. — round 2)

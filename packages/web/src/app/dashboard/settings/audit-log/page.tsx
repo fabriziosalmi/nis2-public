@@ -47,25 +47,25 @@ export default function AuditLogPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ScrollText className="h-5 w-5" />
-            Activity
+            {t("activity")}
           </CardTitle>
-          <CardDescription>Showing recent actions. Audit logs are retained for 90 days.</CardDescription>
+          <CardDescription>{t("activityDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Action</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>Time</TableHead>
+                <TableHead>{t("action")}</TableHead>
+                <TableHead>{t("user")}</TableHead>
+                <TableHead>{t("details")}</TableHead>
+                <TableHead>{t("time")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    No audit log entries yet
+                    {t("noEntriesShort")}
                   </TableCell>
                 </TableRow>
               ) : (

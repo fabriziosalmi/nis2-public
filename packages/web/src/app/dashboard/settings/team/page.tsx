@@ -10,6 +10,7 @@ import { z } from "zod"
 import { toast } from "sonner"
 import { Plus, Loader2, UserPlus, MoreHorizontal, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +65,8 @@ const roleColors: Record<string, string> = {
 }
 
 export default function TeamPage() {
+  const t = useTranslations("teamPage")
+  const tc = useTranslations("common")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -81,22 +84,22 @@ export default function TeamPage() {
     setLoading(true)
     try {
       // api.inviteMember would be called here
-      toast.success(`Invitation sent to ${data.email}`)
+      toast.success(t("invitationSent", { email: data.email }))
       reset()
       setDialogOpen(false)
     } catch (err: any) {
-      toast.error("Failed to send invitation", { description: err.message })
+      toast.error(t("invitationFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
   }
 
   const handleRoleChange = (memberId: string, newRole: string) => {
-    toast.success(`Role updated to ${newRole}`)
+    toast.success(t("roleUpdated", { role: newRole }))
   }
 
   const handleRemove = (memberId: string, name: string) => {
-    toast.success(`${name} has been removed from the team`)
+    toast.success(t("memberRemoved", { name }))
   }
 
   return (
@@ -108,38 +111,38 @@ export default function TeamPage() {
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Team Management</h1>
-          <p className="text-muted-foreground">Manage members and their roles</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <UserPlus className="mr-2 h-4 w-4" />
-              Invite Member
+              {t("inviteMember")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>Invite Team Member</DialogTitle>
-                <DialogDescription>Send an invitation to join your organization</DialogDescription>
+                <DialogTitle>{t("inviteTitle")}</DialogTitle>
+                <DialogDescription>{t("inviteDescription")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="colleague@company.com" {...register("email")} />
+                  <Label htmlFor="email">{t("emailLabel")}</Label>
+                  <Input id="email" type="email" placeholder={t("emailPlaceholder")} {...register("email")} />
                   {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Role</Label>
+                  <Label>{t("role")}</Label>
                   <Select onValueChange={(v) => setValue("role", v)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder={t("selectRole")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="admin">{t("admin")}</SelectItem>
+                      <SelectItem value="member">{t("member")}</SelectItem>
+                      <SelectItem value="viewer">{t("viewer")}</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.role && <p className="text-xs text-destructive">{errors.role.message}</p>}
@@ -147,11 +150,11 @@ export default function TeamPage() {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
+                  {tc("cancel")}
                 </Button>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Send Invitation
+                  {t("sendInvitation")}
                 </Button>
               </DialogFooter>
             </form>
@@ -164,10 +167,10 @@ export default function TeamPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Joined</TableHead>
+                <TableHead>{t("headerMember")}</TableHead>
+                <TableHead>{t("headerRole")}</TableHead>
+                <TableHead>{t("headerStatus")}</TableHead>
+                <TableHead>{t("headerJoined")}</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -213,13 +216,13 @@ export default function TeamPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleRoleChange(member.id, "admin")}>
-                              Set as Admin
+                              {t("setAsAdmin")}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleRoleChange(member.id, "member")}>
-                              Set as Member
+                              {t("setAsMember")}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleRoleChange(member.id, "viewer")}>
-                              Set as Viewer
+                              {t("setAsViewer")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -227,7 +230,7 @@ export default function TeamPage() {
                               onClick={() => handleRemove(member.id, member.full_name)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Remove Member
+                              {t("removeMember")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

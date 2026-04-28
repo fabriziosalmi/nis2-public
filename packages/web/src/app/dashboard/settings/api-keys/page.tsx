@@ -43,6 +43,7 @@ const sampleKeys = [
 
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeysPage")
+  const tc = useTranslations("common")
   const [createOpen, setCreateOpen] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [revokeId, setRevokeId] = useState<string | null>(null)
@@ -63,10 +64,10 @@ export default function ApiKeysPage() {
       // api.createApiKey would be called here
       const generatedKey = `nis2_pk_live_${Math.random().toString(36).substring(2, 34)}`
       setNewKey(generatedKey)
-      toast.success("API key created")
+      toast.success(t("keyCreated"))
       reset()
     } catch (err: any) {
-      toast.error("Failed to create API key", { description: err.message })
+      toast.error(t("keyCreateFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
@@ -75,12 +76,12 @@ export default function ApiKeysPage() {
   const handleCopy = () => {
     if (newKey) {
       navigator.clipboard.writeText(newKey)
-      toast.success("API key copied to clipboard")
+      toast.success(t("keyCopied"))
     }
   }
 
   const handleRevoke = (id: string) => {
-    toast.success("API key revoked")
+    toast.success(t("keyRevoked"))
     setRevokeId(null)
   }
 
@@ -106,17 +107,15 @@ export default function ApiKeysPage() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Create API Key
+              {t("create")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             {newKey ? (
               <>
                 <DialogHeader>
-                  <DialogTitle>API Key Created</DialogTitle>
-                  <DialogDescription>
-                    Copy this key now. You will not be able to see it again.
-                  </DialogDescription>
+                  <DialogTitle>{t("createdTitle")}</DialogTitle>
+                  <DialogDescription>{t("createdDescription")}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
@@ -126,34 +125,32 @@ export default function ApiKeysPage() {
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-sm text-destructive font-medium">
-                    Store this key securely. It will only be shown once.
-                  </p>
+                  <p className="text-sm text-destructive font-medium">{t("storeSecurely")}</p>
                 </div>
                 <DialogFooter>
-                  <Button onClick={handleCloseCreate}>Done</Button>
+                  <Button onClick={handleCloseCreate}>{t("done")}</Button>
                 </DialogFooter>
               </>
             ) : (
               <form onSubmit={handleSubmit(onSubmit)}>
                 <DialogHeader>
-                  <DialogTitle>Create New API Key</DialogTitle>
-                  <DialogDescription>Give your API key a descriptive name</DialogDescription>
+                  <DialogTitle>{t("createNewTitle")}</DialogTitle>
+                  <DialogDescription>{t("createNewDescription")}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Key Name</Label>
-                    <Input id="name" placeholder="e.g., CI/CD Pipeline" {...register("name")} />
+                    <Label htmlFor="name">{t("keyName")}</Label>
+                    <Input id="name" placeholder={t("keyNamePlaceholder")} {...register("name")} />
                     {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={handleCloseCreate}>
-                    Cancel
+                    {tc("cancel")}
                   </Button>
                   <Button type="submit" disabled={loading}>
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Key
+                    {t("createKey")}
                   </Button>
                 </DialogFooter>
               </form>
@@ -167,11 +164,11 @@ export default function ApiKeysPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Key Prefix</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Last Used</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t("name")}</TableHead>
+                <TableHead>{t("keyPrefix")}</TableHead>
+                <TableHead>{t("created")}</TableHead>
+                <TableHead>{t("lastUsed")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -186,7 +183,7 @@ export default function ApiKeysPage() {
                   <TableCell className="text-sm text-muted-foreground">{key.last_used}</TableCell>
                   <TableCell>
                     <Badge variant={key.status === "active" ? "secondary" : "outline"} className={key.status === "revoked" ? "text-red-600" : ""}>
-                      {key.status}
+                      {key.status === "active" ? t("active") : key.status === "revoked" ? t("revoked") : key.status}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -199,10 +196,10 @@ export default function ApiKeysPage() {
                               size="sm"
                               onClick={() => handleRevoke(key.id)}
                             >
-                              Confirm
+                              {t("confirm")}
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => setRevokeId(null)}>
-                              Cancel
+                              {tc("cancel")}
                             </Button>
                           </div>
                         ) : (
@@ -226,17 +223,10 @@ export default function ApiKeysPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">API Documentation</CardTitle>
+          <CardTitle className="text-sm">{t("documentation")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Use your API key in the <code className="rounded bg-muted px-1 py-0.5 text-xs">Authorization</code> header
-            as a Bearer token. See the{" "}
-            <a href="#" className="font-medium text-primary hover:underline">
-              API documentation
-            </a>{" "}
-            for available endpoints and usage examples.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("documentationDescription")}</p>
         </CardContent>
       </Card>
     </div>

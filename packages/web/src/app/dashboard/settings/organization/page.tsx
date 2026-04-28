@@ -50,9 +50,9 @@ export default function OrganizationSettingsPage() {
       const updated = await api.updateOrg(orgId, data)
       setOrg(updated)
       reset({ name: updated.name })
-      toast.success("Organization updated")
+      toast.success(t("saved"))
     } catch (err: any) {
-      toast.error("Update failed", { description: err.message })
+      toast.error(t("saveFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
@@ -69,33 +69,33 @@ export default function OrganizationSettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            General
+            {t("general")}
           </CardTitle>
-          <CardDescription>Basic organization information</CardDescription>
+          <CardDescription>{t("generalDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Organization Name</Label>
-              <Input id="name" placeholder="Acme Corp" {...register("name")} />
+              <Label htmlFor="name">{t("name")}</Label>
+              <Input id="name" placeholder={t("namePlaceholder")} {...register("name")} />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <Label>Slug</Label>
+              <Label>{t("slug")}</Label>
               <Input value={org?.slug || ""} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">URL identifier, auto-generated from name. Cannot be changed.</p>
+              <p className="text-xs text-muted-foreground">{t("slugHelp")}</p>
             </div>
 
             <div className="space-y-2">
-              <Label>Plan</Label>
+              <Label>{t("plan")}</Label>
               <Input value={org?.plan || "free"} disabled className="bg-muted capitalize" />
             </div>
 
             <div className="space-y-2">
-              <Label>Organization ID</Label>
+              <Label>{t("orgIdLabel")}</Label>
               <Input value={orgId || ""} disabled className="bg-muted font-mono text-xs" />
-              <p className="text-xs text-muted-foreground">Use this ID for API integrations</p>
+              <p className="text-xs text-muted-foreground">{t("orgIdHelp")}</p>
             </div>
 
             <Separator />
@@ -103,7 +103,7 @@ export default function OrganizationSettingsPage() {
             <div className="flex justify-end">
               <Button type="submit" disabled={loading || !isDirty}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Changes
+                {t("save")}
               </Button>
             </div>
           </form>
@@ -112,17 +112,17 @@ export default function OrganizationSettingsPage() {
 
       <Card className="border-destructive/50">
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
-          <CardDescription>Irreversible actions for this organization</CardDescription>
+          <CardTitle className="text-destructive">{t("dangerZone")}</CardTitle>
+          <CardDescription>{t("dangerDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4">
             <div>
-              <p className="font-medium">Delete Organization</p>
-              <p className="text-sm text-muted-foreground">Permanently delete this organization and all its data</p>
+              <p className="font-medium">{t("deleteOrg")}</p>
+              <p className="text-sm text-muted-foreground">{t("deleteOrgDescription")}</p>
             </div>
             <Button variant="destructive" size="sm" disabled>
-              Delete
+              {t("delete")}
             </Button>
           </div>
         </CardContent>

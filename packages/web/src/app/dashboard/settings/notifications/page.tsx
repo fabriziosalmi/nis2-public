@@ -6,6 +6,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { Bell, Mail, Webhook, Plus, Trash2, TestTube } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,15 +23,19 @@ interface Channel {
   active: boolean
 }
 
-const eventOptions = [
-  { value: "scan_completed", label: "Scan Completed" },
-  { value: "scan_failed", label: "Scan Failed" },
-  { value: "critical_finding", label: "Critical Finding Detected" },
-  { value: "score_dropped", label: "Compliance Score Dropped" },
-  { value: "domain_expiring", label: "Domain Expiring Soon" },
-]
+// Event option values are stable enum strings; labels are looked up
+// at render time under `notificationsPage.events.<value>`.
+const eventValues = [
+  "scan_completed",
+  "scan_failed",
+  "critical_finding",
+  "score_dropped",
+  "domain_expiring",
+] as const
 
 export default function NotificationsPage() {
+  const t = useTranslations("notificationsPage")
+  const tc = useTranslations("common")
   const [channels, setChannels] = useState<Channel[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [newType, setNewType] = useState<"email" | "webhook">("email")
@@ -40,7 +45,7 @@ export default function NotificationsPage() {
 
   const addChannel = () => {
     if (!newName || !newTarget) {
-      toast.error("Name and target are required")
+      toast.error(t("nameAndTargetRequired"))
       return
     }
     const channel: Channel = {
@@ -55,12 +60,12 @@ export default function NotificationsPage() {
     setNewName("")
     setNewTarget("")
     setShowAdd(false)
-    toast.success("Notification channel added")
+    toast.success(t("channelAdded"))
   }
 
   const removeChannel = (id: string) => {
     setChannels(channels.filter((c) => c.id !== id))
-    toast.success("Channel removed")
+    toast.success(t("channelRemoved"))
   }
 
   const toggleEvent = (event: string) => {
@@ -73,19 +78,19 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground">Configure how you receive scan alerts and updates</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowAdd(!showAdd)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Channel
+          {t("addChannel")}
         </Button>
       </div>
 
       {showAdd && (
         <Card>
           <CardHeader>
-            <CardTitle>New Notification Channel</CardTitle>
+            <CardTitle>{t("newChannelTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2">
@@ -95,7 +100,7 @@ export default function NotificationsPage() {
                 onClick={() => setNewType("email")}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                Email
+                {t("email")}
               </Button>
               <Button
                 variant={newType === "webhook" ? "default" : "outline"}
@@ -103,39 +108,39 @@ export default function NotificationsPage() {
                 onClick={() => setNewType("webhook")}
               >
                 <Webhook className="mr-2 h-4 w-4" />
-                Webhook
+                {t("webhook")}
               </Button>
             </div>
 
             <div className="space-y-2">
-              <Label>Channel Name</Label>
+              <Label>{t("channelName")}</Label>
               <Input
-                placeholder="e.g. Team Alerts"
+                placeholder={t("channelNamePlaceholder")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{newType === "email" ? "Email Address" : "Webhook URL"}</Label>
+              <Label>{newType === "email" ? t("emailAddress") : t("webhookUrl")}</Label>
               <Input
-                placeholder={newType === "email" ? "alerts@company.com" : "https://hooks.slack.com/..."}
+                placeholder={newType === "email" ? t("emailPlaceholder") : t("webhookPlaceholder")}
                 value={newTarget}
                 onChange={(e) => setNewTarget(e.target.value)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Trigger Events</Label>
+              <Label>{t("triggerEvents")}</Label>
               <div className="flex flex-wrap gap-2">
-                {eventOptions.map((ev) => (
+                {eventValues.map((ev) => (
                   <Badge
-                    key={ev.value}
-                    variant={newEvents.includes(ev.value) ? "default" : "outline"}
+                    key={ev}
+                    variant={newEvents.includes(ev) ? "default" : "outline"}
                     className="cursor-pointer"
-                    onClick={() => toggleEvent(ev.value)}
+                    onClick={() => toggleEvent(ev)}
                   >
-                    {ev.label}
+                    {t(`events.${ev}` as any)}
                   </Badge>
                 ))}
               </div>
@@ -144,8 +149,8 @@ export default function NotificationsPage() {
             <Separator />
 
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-              <Button onClick={addChannel}>Add Channel</Button>
+              <Button variant="outline" onClick={() => setShowAdd(false)}>{tc("cancel")}</Button>
+              <Button onClick={addChannel}>{t("addChannel")}</Button>
             </div>
           </CardContent>
         </Card>
@@ -155,13 +160,11 @@ export default function NotificationsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">No notification channels</h3>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">
-              Add an email or webhook to get notified about scan results and critical findings.
-            </p>
+            <h3 className="text-lg font-medium">{t("emptyTitle")}</h3>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">{t("emptyDescription")}</p>
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Your First Channel
+              {t("addFirstChannel")}
             </Button>
           </CardContent>
         </Card>
@@ -184,13 +187,13 @@ export default function NotificationsPage() {
                   <div className="flex flex-wrap gap-1 mt-1">
                     {ch.events.map((ev) => (
                       <Badge key={ev} variant="secondary" className="text-xs">
-                        {eventOptions.find((o) => o.value === ev)?.label || ev}
+                        {(eventValues as readonly string[]).includes(ev) ? t(`events.${ev}` as any) : ev}
                       </Badge>
                     ))}
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info("Test sent!")}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info(t("testSent"))}>
                     <TestTube className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeChannel(ch.id)}>

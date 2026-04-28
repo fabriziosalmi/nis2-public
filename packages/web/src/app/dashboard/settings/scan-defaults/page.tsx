@@ -67,9 +67,9 @@ export default function ScanDefaultsPage() {
         settings: { scan_defaults: data },
       })
       reset(data)
-      toast.success("Scan defaults saved")
+      toast.success(t("saved"))
     } catch (err: any) {
-      toast.error("Save failed", { description: err.message })
+      toast.error(t("saveFailed"), { description: err.message })
     } finally {
       setLoading(false)
     }
@@ -109,68 +109,66 @@ export default function ScanDefaultsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Radar className="h-5 w-5" />
-              Performance
+              {t("performance")}
             </CardTitle>
-            <CardDescription>Control scan speed and resource usage</CardDescription>
+            <CardDescription>{t("performanceDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="scan_timeout">Timeout (seconds)</Label>
+                <Label htmlFor="scan_timeout">{t("timeoutLabel")}</Label>
                 <Input id="scan_timeout" type="number" {...register("scan_timeout")} />
                 {errors.scan_timeout && <p className="text-xs text-destructive">{errors.scan_timeout.message}</p>}
-                <p className="text-xs text-muted-foreground">Per-host timeout</p>
+                <p className="text-xs text-muted-foreground">{t("timeoutHelp")}</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="concurrency">Concurrency</Label>
+                <Label htmlFor="concurrency">{t("concurrency")}</Label>
                 <Input id="concurrency" type="number" {...register("concurrency")} />
                 {errors.concurrency && <p className="text-xs text-destructive">{errors.concurrency.message}</p>}
-                <p className="text-xs text-muted-foreground">Parallel workers</p>
+                <p className="text-xs text-muted-foreground">{t("concurrencyHelp")}</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="max_hosts">Max Hosts</Label>
+                <Label htmlFor="max_hosts">{t("maxHosts")}</Label>
                 <Input id="max_hosts" type="number" {...register("max_hosts")} />
                 {errors.max_hosts && <p className="text-xs text-destructive">{errors.max_hosts.message}</p>}
-                <p className="text-xs text-muted-foreground">0 = unlimited</p>
+                <p className="text-xs text-muted-foreground">{t("maxHostsHelp")}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm">
               <Info className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                Higher concurrency scans faster but uses more resources. A timeout of 10s and concurrency of 20 is optimal for most audits.
-              </p>
+              <p className="text-muted-foreground">{t("performanceTip")}</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Scanner Modules</CardTitle>
-            <CardDescription>Enable or disable scan modules by default. Individual scans can override these.</CardDescription>
+            <CardTitle>{t("modules")}</CardTitle>
+            <CardDescription>{t("modulesDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <ToggleRow
               id="port_scan"
-              label="Port Scanning"
-              description="Scan 14 critical ports (SSH, RDP, SMB, MySQL, etc.) for exposure detection"
+              label={t("portScan")}
+              description={t("portScanDescription")}
             />
             <ToggleRow
               id="web_checks"
-              label="Web Security Checks"
-              description="HTTP headers, TLS/SSL, WAF detection, cookies, SRI, secrets, security.txt"
+              label={t("webChecks")}
+              description={t("webChecksDescription")}
             />
             <ToggleRow
               id="dns_checks"
-              label="DNS Security Checks"
-              description="DNSSEC, zone transfer (AXFR), SPF, DMARC, MX redundancy"
+              label={t("dnsChecks")}
+              description={t("dnsChecksDescription")}
             />
             <ToggleRow
               id="whois_checks"
-              label="WHOIS / Domain Expiry"
-              description="Check domain registration expiry dates and warn before 30-day threshold"
+              label={t("whoisChecks")}
+              description={t("whoisChecksDescription")}
             />
           </CardContent>
         </Card>
@@ -178,7 +176,7 @@ export default function ScanDefaultsPage() {
         <div className="flex justify-end">
           <Button type="submit" disabled={loading || !isDirty}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Defaults
+            {t("save")}
           </Button>
         </div>
       </form>
