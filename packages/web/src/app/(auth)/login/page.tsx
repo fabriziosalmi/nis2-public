@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { Logo } from "@/components/brand/logo"
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -57,9 +58,7 @@ export default function LoginPage() {
     <Card>
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-            N2
-          </div>
+          <Logo size={40} />
         </div>
         <CardTitle className="text-2xl">Sign in to NIS2 Platform</CardTitle>
         <CardDescription>Enter your credentials to access the dashboard</CardDescription>

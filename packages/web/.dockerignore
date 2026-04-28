@@ -1,0 +1,31 @@
+# Build context starts here (packages/web), so the repo-root .dockerignore
+# does NOT apply — duplicate the relevant rules locally to keep the
+# build context small and prevent stale host artefacts from leaking
+# into the image.
+
+# Node
+node_modules/
+.next/
+.next/cache/
+.swc/
+out/
+
+# Environment / secrets — the Dockerfile pulls config from compose env_file
+# at runtime; baking .env into the image would leak credentials and pin
+# environment-specific values into a portable artefact.
+.env
+.env.*
+!.env.example
+
+# Test + IDE artefacts
+.cache/
+coverage/
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Built docs / images that have nothing to do with the runtime
+*.tsbuildinfo

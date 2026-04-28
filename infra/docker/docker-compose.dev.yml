@@ -32,9 +32,26 @@ services:
     env_file: ../../.env
     environment:
       ENVIRONMENT: development
+      # `uvicorn --reload` uses the `watchfiles` library, which relies on
+      # inotify. inotify events do not propagate from a Windows-hosted
+      # filesystem through WSL2's `/mnt/c` proxy, so without polling the
+      # API simply never picks up Python edits. Same family as the
+      # WATCHPACK_POLLING fix on the web service. Cheap on Linux hosts.
+      WATCHFILES_FORCE_POLLING: "true"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+    healthcheck:
+      # /api/v1/health does not require auth (deliberately) and returns
+      # 200 once lifespan setup (RLS, schema bootstrap) has completed —
+      # the right gate for any downstream waiting on `service_healthy`.
+      # Using python instead of wget/curl because the slim API image
+      # ships neither but always has python; no extra layer needed.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
 
   celery-worker:
     build:
@@ -55,7 +72,17 @@ services:
     build:
       context: ../..
       dockerfile: packages/api/Dockerfile
-    command: celery -A app.tasks.celery_app beat --loglevel=info
+    # The default beat scheduler is a SQLite-shelve file (`celerybeat-
+    # schedule`) written to the working directory. The working dir is
+    # `/app/packages/api`, which is bind-mounted from the host. On
+    # Docker Desktop with WSL2 + a Windows-hosted source tree, file
+    # locking semantics through the `/mnt/c` proxy do not satisfy
+    # SQLite's POSIX-locking requirements, so beat crashes on first
+    # write and exit-loops. `/tmp` lives on tmpfs *inside* the container
+    # — fast, locking-correct, and isolated from the host filesystem.
+    # On Linux hosts this is just a slightly faster path; on WSL2 it
+    # is what makes celery-beat boot at all. (Reported by Davide F.)
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - ../../packages/api:/app/packages/api
     env_file: ../../.env

@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.4.8] - 2026-04-28
+
+### Fixed (reported by Davide F. — round 2)
+- **`make prod` web container restart-loop** with `sh: next: not found`. The prod compose was overriding the Dockerfile CMD (`node server.js`) with `command: npm start` → `next start`, but the Next.js production stage builds a *standalone* bundle: only `.next/standalone/server.js`, `.next/static/` and `public/` are copied — no `node_modules`, no `next` binary. Removed the override; Dockerfile CMD runs unchanged.
+- **`make prod` prometheus mount fails** with `not a directory: Are you trying to mount a directory onto a file (or vice-versa)?` on Docker Desktop / Windows. The `prometheus.yml` referenced by the compose did not exist in the repo, so Docker Desktop silently created an empty *directory* at the bind-mount source, and the mount then collided with the file path inside the container. Tracked `prometheus.yml` in the repo with a self+api+web scrape config.
+- **`celery-beat` crash on WSL2** (`Errno 13` writing the schedule) — celery-beat's default scheduler is a SQLite-shelve file written to the working directory, which under `make dev` is bind-mounted from a Windows host through the `/mnt/c` proxy. SQLite POSIX locking semantics don't survive the round trip and beat exits on first write. `--schedule=/tmp/celerybeat-schedule` (dev) and a named `celerybeat_data` volume (prod) put the file on a docker-managed path. Linux hosts get a tiny perf bonus; WSL2 users get a working scheduler.
+
+### Added
+- **Sidebar / login / register: real logo.** Replaced the `N2` text-in-a-box placeholder with the inline-SVG `<Logo>` component (the same double-check artwork the docs site uses). `useId`-based gradient ids prevent the mobile/desktop instances from collidng on the same `url(#id)` reference. Favicon and Apple touch icon now also point at the same SVG via the root metadata, so browser tabs and PWA installs match the in-app brand.
+
+### Fixed (audit-driven, latent)
+- **`uvicorn --reload` not picking up edits on WSL2.** Same family as the Next.js polling fix from v2.4.3 — `watchfiles` (uvicorn's reload backend) relies on inotify, which doesn't propagate from `/mnt/c`. Added `WATCHFILES_FORCE_POLLING=true` to the dev API service.
+- **Cold-start 502s through Caddy.** The API had no healthcheck and Caddy depended on `service_started`, so during the first 5–30s after `make prod` the proxy could route traffic at an API still doing RLS bootstrap. Added `/api/v1/health` healthcheck (uses `python urllib` to avoid pulling wget into the slim image), and switched Caddy's `depends_on` to `service_healthy`.
+- **`make dev` / `make prod` returned before stack ready.** The Makefile printed "running at http://…" while containers were still warming up. Switched to `docker compose up -d --build --wait --wait-timeout 90` (Compose v2.20+); the URLs print only once everything declared healthy is healthy.
+
+### Improved
+- **`.env.example` default to `ENVIRONMENT=development`** (was production). Production-mode boot enforcement is opt-in. New users running `cp .env.example .env && make prod` no longer hit a refuse-to-start cascade. Added inline comments explaining the production-switch checklist (JWT_SECRET ≥32 chars, CORS_ORIGINS non-empty).
+- **`.env.example` documents the dual-context for `DATABASE_URL`** — the `postgres:5432` host is correct for in-container use, the host-mapped `localhost:5433` for scripts run outside compose.
+- **`make clean-all`** added — nukes `node_modules`, prod stack volumes, and per-project Docker images. Exists for the "guaranteed-fresh first run" scenario; the regular `clean` target preserves images and `node_modules` for cache reuse.
+- **`packages/web/.dockerignore`** added. The repo-root `.dockerignore` does not apply to a sub-directory build context — without this, host `node_modules` and `.next` could leak into the Next.js build context (slow + bloated image).
+
+### Verified
+- API container healthcheck flips to `healthy` in <30s on a clean recreate.
+- Test suite: 42 unit + 21 e2e = **63 green**.
+
 ## [2.4.7] - 2026-04-28
 
 ### Added (i18n: page content, not just navigation)

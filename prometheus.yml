@@ -1,0 +1,46 @@
+# Prometheus configuration for the NIS2 Compliance Platform.
+#
+# Mounted read-only into the prometheus container by
+# infra/docker/docker-compose.prod.yml at /etc/prometheus/prometheus.yml.
+#
+# Why this file is in the repo: when the bind-mount source path doesn't
+# exist on the host, Docker Desktop on Windows silently creates an empty
+# *directory* there, and the mount then fails with "not a directory: Are
+# you trying to mount a directory onto a file (or vice-versa)?" — which
+# is exactly the trap Davide F. fell into on his first `make prod`.
+# Keeping the file tracked in git makes the directory-creation race
+# impossible.
+#
+# Scrape targets reach each service over the docker-compose user-defined
+# bridge network (`nis2-net`) using the service name as DNS — those
+# names are not externally resolvable.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: nis2
+
+scrape_configs:
+  # Self-monitoring: Prometheus exposes its own metrics on /metrics.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # FastAPI doesn't expose a /metrics endpoint by default; this scrape
+  # job is here so that the moment we wire prometheus-fastapi-instrumentator
+  # (or equivalent) the dashboards already see the series. Without it the
+  # job would be missing rather than empty, which is harder to diagnose.
+  - job_name: nis2-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  # Node.js exposes nothing useful at /metrics in standalone mode either,
+  # but the same future-proofing argument applies. Removing this entry is
+  # cheaper than adding it later when we decide we want browser-side
+  # web-vitals reporting.
+  - job_name: nis2-web
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["web:3000"]

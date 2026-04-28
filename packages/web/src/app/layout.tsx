@@ -13,6 +13,13 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 export const metadata: Metadata = {
   title: "NIS2 Platform",
   description: "NIS2 Compliance Scanning and Monitoring Platform",
+  // Same SVG mark as the docs site / sidebar / login screen — keeps
+  // browser tabs, bookmarks, and home-screen icons visually consistent
+  // with the in-app branding.
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: "/logo.svg",
+  },
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

@@ -27,6 +27,7 @@ import {
   ChevronLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -81,9 +82,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className={cn("flex h-16 items-center border-b px-4", collapsed && "justify-center px-2")}>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            N2
-          </div>
+          <Logo size={32} />
           {!collapsed && <span className="text-lg font-bold tracking-tight">NIS2</span>}
         </Link>
         {!collapsed && (
