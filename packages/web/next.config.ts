@@ -23,10 +23,20 @@ const config: NextConfig = {
     ],
   },
   async rewrites() {
+    // Rewrites are evaluated server-side by the Next.js process. When the
+    // web service runs inside docker compose, `NEXT_PUBLIC_API_URL` is the
+    // browser-facing URL (e.g. http://localhost:8000) which is unreachable
+    // from inside the web container. INTERNAL_API_URL is the docker DNS
+    // name (e.g. http://api:8000). Outside docker, both fall back to the
+    // public URL.
+    const target =
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://localhost:8000'
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/:path*`,
+        destination: `${target}/api/v1/:path*`,
       },
     ]
   },

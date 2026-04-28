@@ -77,7 +77,17 @@ services:
     ports: ["8077:3000"]
     env_file: ../../.env
     environment:
+      # Browser-side: where the user's browser reaches the API directly.
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Server-side: where the Next.js process inside this container
+      # reaches the API for rewrites. `api` resolves via docker DNS.
+      - INTERNAL_API_URL=http://api:8000
+      # Windows/WSL2 file watcher fix. Native chokidar/inotify events
+      # do not propagate from a Windows-mounted filesystem into WSL2,
+      # which makes Next.js never finish its initial dev compile and
+      # leaves the browser stuck on the SSR'd "Loading..." fallback.
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
 
 volumes:
   pgdata:
