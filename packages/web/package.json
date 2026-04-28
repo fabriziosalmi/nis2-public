@@ -32,7 +32,7 @@
     "next-intl": "^4.9.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.54.0",
+    "react-hook-form": "^7.74.0",
     "recharts": "^2.15.0",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.6.0",
