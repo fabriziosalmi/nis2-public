@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.6] - 2026-04-28
+
+### Fixed (UI consistency, reported live by maintainer)
+- **`/dashboard/reports` was 404.** The sidebar navigated to `/dashboard/reports` but the page didn't exist. Built it: full table of completed scans with a per-row format selector (PDF / HTML / Markdown / JSON / CSV / JUnit XML), Generate button that queues the Celery task, polls `/reports/status/{task_id}` every 1.5s up to a 5-minute ceiling, then exposes a Download button that opens the FileResponse stream. Empty state nudges to `/dashboard/scans/new`.
+- **`api-client.generateReport` was 422.** The FastAPI `/reports/generate` endpoint takes `scan_id` and `format` as **query parameters** (no Pydantic body model); the client was POSTing them as JSON. Switched to `URLSearchParams` on the URL.
+- **Settings pages were narrow while the rest of the app is full-width.** `Profile`, `Organization`, `Scan Defaults`, `Notifications` had `<div class="space-y-6 max-w-2xl">` constraining content to ~672px on a wide layout. Removed the cap so they match Assets / Scans / Findings / API Keys / Team / Audit Log.
+- **Hydration warning from browser-extension attributes.** ColorZilla / Grammarly / Dark Reader inject attributes (`cz-shortcut-listen`, `data-gr-*`) on `<body>` before React hydrates. Added `suppressHydrationWarning` on `<body>` (already present on `<html>` for `next-themes`). This silences only the attribute diff on this single element, not deeper-tree mismatches.
+
 ## [2.4.5] - 2026-04-28
 
 ### Fixed (caught by live e2e against the docker stack)
