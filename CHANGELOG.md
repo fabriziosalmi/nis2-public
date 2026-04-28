@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.4.4] - 2026-04-27
+
+### Fixed (docs e2e review)
+- **Docs were stale on GitHub Pages.** `deploy-docs.yml` only triggered on `paths: ['docs/**', '.github/workflows/deploy-docs.yml']`, so README, CHANGELOG and SECURITY changes never re-deployed the site. Dropped the path filter — the build is ~30s and always-fresh docs is worth more than the saved CI seconds. Also added `workflow_dispatch:` for manual runs.
+- **Marketing claims still oversold in `docs/`.** The public docs still said "50+ checks" and "all 10 subsections" in four places (`docs/index.md`, `docs/guide/acn-compliance.md`, `docs/guide/services.md`) — the same wording we softened in `README.md` during the audit. Realigned: "30+ checks" and "all 10 sub-paragraphs (a)-(j) cross-referenced via the new `subparagraph` enum".
+- **Determine ACN page missing CSIRT/24h deadlines.** Only the July 2027 baseline was listed; added the 31 December 2026 (CSIRT referent designation) and 1 January 2027 (24h Early Warning start) deadlines that the API already exposes via `/api/v1/deadlines`.
+- **Determina 127437 export marked preliminary** in the docs to match the `"schema_version": "1.0-preliminary"` flag the API has been emitting since v2.4.0. The official ACN *modello di categorizzazione* publication (May/June 2026) will trigger a re-validation.
+- **Mobile tables clipped cells.** `vp-doc table` had `overflow: hidden` so long API-reference rows got truncated under ~600px. Switched to `display: block; overflow-x: auto` for proper horizontal scrolling.
+
+### Added (docs polish)
+- **`og:image` (1200×630) at `/og.png`.** Social previews on LinkedIn, Slack, Telegram are now visual instead of text-only. Twitter card upgraded to `summary_large_image`. `theme-color: #0071e3` for browser chrome tinting.
+- **JSON-LD `SoftwareApplication`** in `<head>` for rich Google search results.
+- **`/.well-known/security.txt`** (RFC 9116) on the docs site itself — appropriate for a NIS2-themed product. Points to the SECURITY.md policy.
+- **Footer links to Releases, Changelog, Security policy.** A "v2.4" dropdown in the navbar mirrors them in the top chrome.
+- **LinkedIn social icon in the navbar** alongside GitHub. Lead capture from docs visitors.
+
 ## [2.4.3] - 2026-04-27
 
 ### Fixed (first-user feedback)
