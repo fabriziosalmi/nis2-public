@@ -8,6 +8,7 @@ import Link from "next/link"
 import { Download, FileText, Loader2, Radar } from "lucide-react"
 import { format as formatDate } from "date-fns"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,16 +23,15 @@ import { useScans } from "@/hooks/use-scans"
 import { api } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
-// All formats the FastAPI report router accepts. The pattern in
-// `/api/v1/reports/generate` is `^(pdf|json|csv|markdown|md|junit|xml|html)$`;
-// we surface the user-facing six and rely on the API's regex to validate.
+// Format keys map to entries under `reports.formatHints` in messages/*.json.
+// Labels (PDF, HTML, ...) stay as-is — they're proper nouns, not localised.
 const FORMATS = [
-  { value: "pdf",      label: "PDF",      hint: "Executive report" },
-  { value: "html",     label: "HTML",     hint: "Browser-friendly" },
-  { value: "markdown", label: "Markdown", hint: "Plain-text, version-controllable" },
-  { value: "json",     label: "JSON",     hint: "Machine-readable" },
-  { value: "csv",      label: "CSV",      hint: "Spreadsheet import" },
-  { value: "junit",    label: "JUnit XML",hint: "CI pipeline integration" },
+  { value: "pdf",      label: "PDF" },
+  { value: "html",     label: "HTML" },
+  { value: "markdown", label: "Markdown" },
+  { value: "json",     label: "JSON" },
+  { value: "csv",      label: "CSV" },
+  { value: "junit",    label: "JUnit XML" },
 ] as const
 
 type FormatValue = typeof FORMATS[number]["value"]
@@ -50,6 +50,7 @@ const POLL_MS = 1500
 const POLL_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes — beyond this, surface an error
 
 export default function ReportsPage() {
+  const t = useTranslations("reports")
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page)
   const [rowState, setRowState] = useState<Record<string, RowState>>({})
@@ -78,19 +79,19 @@ export default function ReportsPage() {
         const status = await api.getReportStatus(task_id)
         if (status.status === "success") {
           setRow(scanId, { phase: "ready" })
-          toast.success(`Report ready (${fmt.toUpperCase()})`, {
-            description: `Click "Download" to save the file.`,
+          toast.success(t("ready", { format: fmt.toUpperCase() }), {
+            description: t("readyDescription"),
           })
           return
         }
         if (status.status === "failure") {
           setRow(scanId, { phase: "error", error: status.error || "Generation failed" })
-          toast.error("Report generation failed", { description: status.error })
+          toast.error(t("generationFailed"), { description: status.error })
           return
         }
         if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
           setRow(scanId, { phase: "error", error: "Timed out after 5 minutes" })
-          toast.error("Report timed out", { description: "Try again or check the worker logs." })
+          toast.error(t("timeout"), { description: t("timeoutDescription") })
           return
         }
         setTimeout(tick, POLL_MS)
@@ -98,7 +99,7 @@ export default function ReportsPage() {
       tick()
     } catch (err: any) {
       setRow(scanId, { phase: "error", error: err.message })
-      toast.error("Failed to queue report", { description: err.message })
+      toast.error(t("queueFailed"), { description: err.message })
     }
   }
 
@@ -115,11 +116,8 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">
-            Generate compliance reports from completed scans — PDF, HTML, Markdown,
-            JSON, CSV, or JUnit XML.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
@@ -134,15 +132,14 @@ export default function ReportsPage() {
               <div className="rounded-full bg-muted p-4 mb-4">
                 <FileText className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No completed scans</h3>
+              <h3 className="text-lg font-medium mb-1">{t("noCompletedScans")}</h3>
               <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                Reports are generated from completed scans. Run a scan first; once
-                it finishes you can export it in any of the supported formats.
+                {t("noCompletedScansDescription")}
               </p>
               <Button asChild>
                 <Link href="/dashboard/scans/new">
                   <Radar className="mr-2 h-4 w-4" />
-                  New Scan
+                  {t("newScan")}
                 </Link>
               </Button>
             </div>
@@ -150,12 +147,12 @@ export default function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Scan</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Findings</TableHead>
-                  <TableHead>Completed</TableHead>
-                  <TableHead className="w-[200px]">Format</TableHead>
-                  <TableHead className="text-right w-[200px]">Action</TableHead>
+                  <TableHead>{t("scan")}</TableHead>
+                  <TableHead>{t("score")}</TableHead>
+                  <TableHead>{t("findings")}</TableHead>
+                  <TableHead>{t("completed")}</TableHead>
+                  <TableHead className="w-[200px]">{t("format")}</TableHead>
+                  <TableHead className="text-right w-[200px]">{t("action")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -216,7 +213,7 @@ export default function ReportsPage() {
                               <SelectItem key={f.value} value={f.value}>
                                 <span className="font-medium">{f.label}</span>
                                 <span className="ml-2 text-xs text-muted-foreground">
-                                  {f.hint}
+                                  {t(`formatHints.${f.value}` as any)}
                                 </span>
                               </SelectItem>
                             ))}
@@ -231,11 +228,11 @@ export default function ReportsPage() {
                               variant="outline"
                               onClick={() => setRow(scan.id, { phase: "idle", taskId: undefined })}
                             >
-                              Reset
+                              {t("reset")}
                             </Button>
                             <Button size="sm" onClick={() => handleDownload(scan.id)}>
                               <Download className="mr-2 h-4 w-4" />
-                              Download
+                              {t("download")}
                             </Button>
                           </div>
                         ) : (
@@ -247,12 +244,12 @@ export default function ReportsPage() {
                             {busy ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {state.phase === "queued" ? "Queuing…" : "Generating…"}
+                                {state.phase === "queued" ? t("queuing") : t("generating")}
                               </>
                             ) : (
                               <>
                                 <FileText className="mr-2 h-4 w-4" />
-                                Generate
+                                {t("generate")}
                               </>
                             )}
                           </Button>

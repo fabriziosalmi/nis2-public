@@ -6,6 +6,7 @@
 import Link from "next/link"
 import { Plus, Loader2, CalendarClock, Radar } from "lucide-react"
 import { format } from "date-fns"
+import { useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations("scans")
   const variants: Record<string, string> = {
     pending: "border-yellow-500 text-yellow-600 bg-yellow-50",
     running: "border-blue-500 text-blue-600 bg-blue-50 animate-pulse",
@@ -22,9 +24,12 @@ function StatusBadge({ status }: { status: string }) {
     failed: "border-red-500 text-red-600 bg-red-50",
     cancelled: "border-gray-400 text-gray-500 bg-gray-50",
   }
+  // Status string from the API matches a translation key; fall back to the
+  // raw value if a future status appears that we haven't localised yet.
+  const known = ["pending", "running", "completed", "failed", "cancelled"]
   return (
     <Badge variant="outline" className={variants[status] || ""}>
-      {status}
+      {known.includes(status) ? t(status as any) : status}
     </Badge>
   )
 }
@@ -32,6 +37,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function ScansPage() {
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page)
+  const t = useTranslations("scans")
   const scans = data?.items || []
   const total = data?.total || 0
 
@@ -39,20 +45,20 @@ export default function ScansPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Scans</h1>
-          <p className="text-muted-foreground">Manage and monitor your compliance scans</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Button variant="outline" asChild>
             <Link href="/dashboard/scans/schedules">
               <CalendarClock className="mr-2 h-4 w-4" />
-              Schedules
+              {t("schedules")}
             </Link>
           </Button>
           <Button asChild>
             <Link href="/dashboard/scans/new">
               <Plus className="mr-2 h-4 w-4" />
-              New Scan
+              {t("newScan")}
             </Link>
           </Button>
         </div>
@@ -69,14 +75,14 @@ export default function ScansPage() {
               <div className="rounded-full bg-muted p-4 mb-4">
                 <Radar className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No scans yet</h3>
+              <h3 className="text-lg font-medium mb-1">{t("noScansYet")}</h3>
               <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                Run your first compliance scan to assess your infrastructure against NIS2 requirements.
+                {t("noScansDescription")}
               </p>
               <Button asChild>
                 <Link href="/dashboard/scans/new">
                   <Plus className="mr-2 h-4 w-4" />
-                  Run First Scan
+                  {t("runFirstScan")}
                 </Link>
               </Button>
             </div>
@@ -84,12 +90,12 @@ export default function ScansPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Hosts</TableHead>
-                  <TableHead>Findings</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("score")}</TableHead>
+                  <TableHead>{t("hosts")}</TableHead>
+                  <TableHead>{t("findings")}</TableHead>
+                  <TableHead>{t("date")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -123,9 +129,9 @@ export default function ScansPage() {
 
       {total > 20 && (
         <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-          <span className="text-sm text-muted-foreground">Page {page}</span>
-          <Button variant="outline" size="sm" disabled={scans.length < 20} onClick={() => setPage(page + 1)}>Next</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("previous")}</Button>
+          <span className="text-sm text-muted-foreground">{t("page", { n: page })}</span>
+          <Button variant="outline" size="sm" disabled={scans.length < 20} onClick={() => setPage(page + 1)}>{t("next")}</Button>
         </div>
       )}
     </div>

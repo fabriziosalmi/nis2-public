@@ -10,6 +10,7 @@ import { z } from "zod"
 import { toast } from "sonner"
 import { Plus, Loader2, Copy, ArrowLeft, Key, Trash2 } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -41,6 +42,7 @@ const sampleKeys = [
 ]
 
 export default function ApiKeysPage() {
+  const t = useTranslations("apiKeysPage")
   const [createOpen, setCreateOpen] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [revokeId, setRevokeId] = useState<string | null>(null)
@@ -97,8 +99,8 @@ export default function ApiKeysPage() {
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">API Keys</h1>
-          <p className="text-muted-foreground">Manage API keys for programmatic access</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Dialog open={createOpen} onOpenChange={(open) => { if (!open) handleCloseCreate(); else setCreateOpen(true); }}>
           <DialogTrigger asChild>

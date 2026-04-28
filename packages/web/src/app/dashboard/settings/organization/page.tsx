@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2, Building2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +25,7 @@ const orgSchema = z.object({
 type OrgForm = z.infer<typeof orgSchema>
 
 export default function OrganizationSettingsPage() {
+  const t = useTranslations("organizationPage")
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
   const [org, setOrg] = useState<any>(null)
@@ -59,8 +61,8 @@ export default function OrganizationSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Organization</h1>
-        <p className="text-muted-foreground">Manage your organization settings</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <Card>

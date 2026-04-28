@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.4.7] - 2026-04-28
+
+### Added (i18n: page content, not just navigation)
+- **8 page namespaces translated** across all 5 supported locales (en, it, fr, de, es): `scans`, `findings`, `reports`, `profilePage`, `organizationPage`, `scanDefaultsPage`, `apiKeysPage`, `auditLogPage`. Total **301 leaf strings × 5 = 1505 translations**, structurally identical across locales (validated by `jq '[.. | scalars] | length'` returning 301 for each).
+- **Scans / Findings / Reports / Profile pages** wired with `useTranslations`: titles, subtitles, table headers, empty states, filter labels, status badges, toast messages, format hints. Settings sub-pages (Organization, Scan Defaults, API Keys, Audit Log) translated at the **header level** (title + subtitle); deeper form fields kept in English for this iteration to keep the diff reviewable — open as follow-up if a non-English user reports friction.
+- **EN + IT translations** are accurate (native-equivalent for IT — the project's primary deployment language). **FR / DE / ES** new keys use base-UI vocabulary based on standard cybersecurity terminology; flagged for native review in a follow-up.
+
+### Fixed
+- **`generateReport` 422** (already in v2.4.6 release notes — verifying it stays fixed under the i18n changes via the e2e suite).
+- **Stale `.next` cache after volume-mount edits**: confirmed that with `infra/docker/docker-compose.dev.yml`'s anonymous `/app/.next` volume, message-file changes need `docker compose up -d --force-recreate web` rather than just `docker restart`. Documented in commit message.
+
+### Notes
+- Translation coverage holes (intentional for this release): page sub-routers like `scans/[id]`, `scans/new`, `scans/schedules`, `compliance`, `governance`, `incidents`, `remediation`, `vendors`, `bia`. Reach out (or open an issue) if any of these block your locale.
+
 ## [2.4.6] - 2026-04-28
 
 ### Fixed (UI consistency, reported live by maintainer)

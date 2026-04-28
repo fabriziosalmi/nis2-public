@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2, Radar, Info } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +41,7 @@ const defaults: ScanDefaultsForm = {
 }
 
 export default function ScanDefaultsPage() {
+  const t = useTranslations("scanDefaultsPage")
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
 
@@ -98,8 +100,8 @@ export default function ScanDefaultsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Scan Defaults</h1>
-        <p className="text-muted-foreground">Configure default settings for new compliance scans</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

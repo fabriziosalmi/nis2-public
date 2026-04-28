@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2, UserCog, Globe } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +44,7 @@ const locales = [
 ]
 
 export default function ProfileSettingsPage() {
+  const t = useTranslations("profilePage")
   const user = useAuthStore((s) => s.user)
   const setAuth = useAuthStore((s) => s.setAuth)
   const orgId = useAuthStore((s) => s.orgId)
@@ -67,9 +69,9 @@ export default function ProfileSettingsPage() {
       const updated = await api.updateMe(data)
       setAuth(updated, orgId)
       profileForm.reset({ full_name: updated.full_name, locale: updated.locale })
-      toast.success("Profile updated")
+      toast.success(t("profileUpdated"))
     } catch (err: any) {
-      toast.error("Update failed", { description: err.message })
+      toast.error(t("updateFailed"), { description: err.message })
     } finally {
       setLoadingProfile(false)
     }
@@ -83,9 +85,9 @@ export default function ProfileSettingsPage() {
         new_password: data.new_password,
       })
       passwordForm.reset()
-      toast.success("Password changed")
+      toast.success(t("passwordUpdated"))
     } catch (err: any) {
-      toast.error("Password change failed", { description: err.message })
+      toast.error(t("updateFailed"), { description: err.message })
     } finally {
       setLoadingPassword(false)
     }
@@ -94,29 +96,27 @@ export default function ProfileSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
-        <p className="text-muted-foreground">Manage your personal account settings</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserCog className="h-5 w-5" />
-            Personal Information
+            {t("personalInfo")}
           </CardTitle>
-          <CardDescription>Your name and preferences</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("email")}</Label>
               <Input value={user?.email || ""} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name</Label>
-              <Input id="full_name" placeholder="John Doe" {...profileForm.register("full_name")} />
+              <Label htmlFor="full_name">{t("fullName")}</Label>
+              <Input id="full_name" {...profileForm.register("full_name")} />
               {profileForm.formState.errors.full_name && (
                 <p className="text-xs text-destructive">{profileForm.formState.errors.full_name.message}</p>
               )}
@@ -125,7 +125,7 @@ export default function ProfileSettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="locale" className="flex items-center gap-1">
                 <Globe className="h-3.5 w-3.5" />
-                Language
+                {t("locale")}
               </Label>
               <select
                 id="locale"
@@ -143,7 +143,7 @@ export default function ProfileSettingsPage() {
             <div className="flex justify-end">
               <Button type="submit" disabled={loadingProfile || !profileForm.formState.isDirty}>
                 {loadingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Profile
+                {t("saveProfile")}
               </Button>
             </div>
           </form>
@@ -152,13 +152,12 @@ export default function ProfileSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-          <CardDescription>Update your account password</CardDescription>
+          <CardTitle>{t("changePassword")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="current_password">Current Password</Label>
+              <Label htmlFor="current_password">{t("currentPassword")}</Label>
               <Input id="current_password" type="password" {...passwordForm.register("current_password")} />
               {passwordForm.formState.errors.current_password && (
                 <p className="text-xs text-destructive">{passwordForm.formState.errors.current_password.message}</p>
@@ -166,15 +165,15 @@ export default function ProfileSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new_password">New Password</Label>
-              <Input id="new_password" type="password" placeholder="Min. 8 characters" {...passwordForm.register("new_password")} />
+              <Label htmlFor="new_password">{t("newPassword")}</Label>
+              <Input id="new_password" type="password" {...passwordForm.register("new_password")} />
               {passwordForm.formState.errors.new_password && (
                 <p className="text-xs text-destructive">{passwordForm.formState.errors.new_password.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirm_password">Confirm New Password</Label>
+              <Label htmlFor="confirm_password">{t("confirmNewPassword")}</Label>
               <Input id="confirm_password" type="password" {...passwordForm.register("confirm_password")} />
               {passwordForm.formState.errors.confirm_password && (
                 <p className="text-xs text-destructive">{passwordForm.formState.errors.confirm_password.message}</p>
@@ -186,7 +185,7 @@ export default function ProfileSettingsPage() {
             <div className="flex justify-end">
               <Button type="submit" disabled={loadingPassword}>
                 {loadingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Change Password
+                {t("updatePassword")}
               </Button>
             </div>
           </form>

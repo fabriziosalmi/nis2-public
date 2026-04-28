@@ -6,6 +6,7 @@
 import { useState, Fragment } from "react"
 import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -48,6 +49,7 @@ const statusOptions = ["all", "open", "acknowledged", "resolved", "false_positiv
 const categoryOptions = ["all", "TLS", "Headers", "DNS", "Web", "Ports", "WHOIS"]
 
 export default function FindingsPage() {
+  const t = useTranslations("findings")
   const [severityFilter, setSeverityFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -85,19 +87,37 @@ export default function FindingsPage() {
           updateFinding.mutateAsync({ id, data: { status: bulkStatus } })
         )
       )
-      toast.success(`Updated ${selectedIds.length} findings`)
+      toast.success(t("updatedCount", { count: selectedIds.length }))
       setSelectedIds([])
       setBulkStatus("")
     } catch (err: any) {
-      toast.error("Failed to update findings", { description: err.message })
+      toast.error(t("updateFailed"), { description: err.message })
     }
   }
+
+  // Severity / status enum keys map directly to translation keys in the
+  // `findings` namespace; for the special "all" value we use a sibling
+  // key per filter (`allSeverities`, `allStatuses`, `allCategories`).
+  const severityLabel = (s: string) =>
+    s === "all" ? t("allSeverities") : t(s as any)
+  const statusLabel = (s: string) => {
+    if (s === "all") return t("allStatuses")
+    // status keys in JSON use camelCase (`falsePositive`); the API returns
+    // snake_case (`false_positive`). Keep the API value for storage and
+    // map at display time.
+    const key = s === "false_positive" ? "falsePositive"
+              : s === "in_progress" ? "inProgress"
+              : s
+    return t(key as any)
+  }
+  const categoryLabel = (s: string) =>
+    s === "all" ? t("allCategories") : s
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Findings</h1>
-        <p className="text-muted-foreground">Review and manage compliance findings</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {/* Filters */}
@@ -105,7 +125,7 @@ export default function FindingsPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-sm font-medium">Filters</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("filters")}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -113,13 +133,11 @@ export default function FindingsPage() {
             <div className="w-40">
               <Select value={severityFilter} onValueChange={setSeverityFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Severity" />
+                  <SelectValue placeholder={t("severity")} />
                 </SelectTrigger>
                 <SelectContent>
                   {severityOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s === "all" ? "All Severities" : s.charAt(0).toUpperCase() + s.slice(1)}
-                    </SelectItem>
+                    <SelectItem key={s} value={s}>{severityLabel(s)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -127,13 +145,11 @@ export default function FindingsPage() {
             <div className="w-40">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Status" />
+                  <SelectValue placeholder={t("status")} />
                 </SelectTrigger>
                 <SelectContent>
                   {statusOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s === "all" ? "All Statuses" : s.charAt(0).toUpperCase() + s.slice(1).replace("_", " ")}
-                    </SelectItem>
+                    <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -141,13 +157,11 @@ export default function FindingsPage() {
             <div className="w-40">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Category" />
+                  <SelectValue placeholder={t("category")} />
                 </SelectTrigger>
                 <SelectContent>
                   {categoryOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s === "all" ? "All Categories" : s}
-                    </SelectItem>
+                    <SelectItem key={s} value={s}>{categoryLabel(s)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -159,23 +173,23 @@ export default function FindingsPage() {
       {/* Bulk actions */}
       {selectedIds.length > 0 && (
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
-          <span className="text-sm font-medium">{selectedIds.length} selected</span>
+          <span className="text-sm font-medium">{t("selectedCount", { count: selectedIds.length })}</span>
           <Select value={bulkStatus} onValueChange={setBulkStatus}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Set status..." />
+              <SelectValue placeholder={t("setStatusPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="acknowledged">Acknowledged</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="false_positive">False Positive</SelectItem>
+              <SelectItem value="acknowledged">{t("acknowledged")}</SelectItem>
+              <SelectItem value="resolved">{t("resolved")}</SelectItem>
+              <SelectItem value="false_positive">{t("falsePositive")}</SelectItem>
             </SelectContent>
           </Select>
           <Button size="sm" onClick={handleBulkUpdate} disabled={!bulkStatus || updateFinding.isPending}>
             {updateFinding.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-            Apply
+            {t("apply")}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
-            Clear
+            {t("clearSelection")}
           </Button>
         </div>
       )}
@@ -192,11 +206,11 @@ export default function FindingsPage() {
               <div className="rounded-full bg-green-500/10 p-4 mb-4">
                 <AlertTriangle className="h-8 w-8 text-green-600" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No findings</h3>
+              <h3 className="text-lg font-medium mb-1">{t("noFindings")}</h3>
               <p className="text-sm text-muted-foreground max-w-sm">
                 {severityFilter !== "all" || statusFilter !== "all" || categoryFilter !== "all"
-                  ? "No findings match your current filters. Try adjusting the filter criteria."
-                  : "Run a compliance scan to detect security findings across your assets."}
+                  ? t("noFindingsFiltered")
+                  : t("noFindingsDescription")}
               </p>
             </div>
           ) : (
@@ -212,12 +226,12 @@ export default function FindingsPage() {
                     />
                   </TableHead>
                   <TableHead className="w-6"></TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Assigned</TableHead>
+                  <TableHead>{t("severity")}</TableHead>
+                  <TableHead>{t("category")}</TableHead>
+                  <TableHead>{t("message")}</TableHead>
+                  <TableHead>{t("target")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("assigned")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -275,14 +289,14 @@ export default function FindingsPage() {
                       <TableRow key={`${finding.id}-expanded`}>
                         <TableCell colSpan={8} className="bg-muted/30 p-4">
                           <div className="space-y-2">
-                            <p className="text-sm font-medium">Full Details</p>
+                            <p className="text-sm font-medium">{t("fullDetails")}</p>
                             <p className="text-sm text-muted-foreground">{finding.message}</p>
                             <div className="flex gap-4 text-sm">
                               <span>
-                                <strong>Source:</strong> {finding.scan_name}
+                                <strong>{t("source")}:</strong> {finding.scan_name}
                               </span>
                               <span>
-                                <strong>Target:</strong> {finding.target}
+                                <strong>{t("target")}:</strong> {finding.target}
                               </span>
                             </div>
                           </div>
