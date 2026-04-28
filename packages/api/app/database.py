@@ -90,6 +90,51 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def ensure_schema() -> None:
+    """Best-effort idempotent schema bootstrap.
+
+    The repo does not yet ship Alembic migration files (alembic/versions/
+    is empty). Until that gap is closed, we let the FastAPI lifespan
+    create missing tables and apply the small set of known column
+    additions, so a fresh `docker compose up` works without manual SQL
+    and existing volumes auto-heal on restart.
+
+    DEBT: this is not a substitute for migrations. It cannot rename
+    columns, drop columns safely, alter types, or coordinate data
+    backfills. Generate proper Alembic revisions before any production
+    deployment.
+    """
+    if not IS_POSTGRES:
+        # SQLite-backed tests do their own create_all in conftest.
+        return
+
+    # 1. Create any tables defined in the ORM that don't exist yet.
+    #    On a populated DB this is a fast no-op.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 2. Known columns added after the initial schema. ADD COLUMN IF NOT
+    #    EXISTS is idempotent and cheap. Each entry is a (table, column,
+    #    type) tuple — keep it short and append, never rewrite history.
+    additive_columns: list[tuple[str, str, str]] = [
+        # v2.4.0: DNS rebinding TOCTOU mitigation pins the resolved IP
+        # at create-time so the scanner cannot be redirected to a private
+        # range between validation and connection.
+        ("assets", "pinned_ip", "VARCHAR(45)"),
+    ]
+    async with engine.begin() as conn:
+        for table, column, ddl in additive_columns:
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}")
+                )
+            except Exception as exc:
+                # If the table itself doesn't exist yet on this engine
+                # (e.g. metadata mismatch), log and move on — RLS setup
+                # below logs the same way and CI catches real breakage.
+                logger.warning("ensure_schema: %s.%s skipped: %s", table, column, exc)
+
+
 async def setup_row_level_security() -> None:
     """Idempotently apply tenant-isolation RLS on every tenant-scoped table.
 
@@ -101,6 +146,11 @@ async def setup_row_level_security() -> None:
     The fallback `current_setting('app.bypass_rls', true) = 'on'` lets
     Alembic migrations and admin scripts opt out by setting that GUC at
     the start of their transaction. See alembic/env.py.
+
+    Each table is wrapped in its own transaction (engine.begin per
+    iteration) so that a single failing ALTER (e.g. a table that doesn't
+    exist on this deployment) does NOT poison the whole batch with
+    InFailedSQLTransactionError.
     """
     if not IS_POSTGRES:
         logger.debug("setup_row_level_security: skipping (not Postgres)")
@@ -120,22 +170,29 @@ async def setup_row_level_security() -> None:
         "OR current_setting('app.bypass_rls', true) = 'on')"
     )
 
-    async with engine.begin() as conn:
-        for tname in tenant_tables:
-            try:
+    applied: list[str] = []
+    skipped: list[str] = []
+    for tname in tenant_tables:
+        # Per-table transaction. The previous single-transaction version
+        # aborted on the first failure and `InFailedSQLTransactionError`
+        # silently disabled RLS on every table after that — exactly the
+        # silent failure mode RLS is supposed to prevent.
+        try:
+            async with engine.begin() as conn:
                 await conn.execute(text(f"ALTER TABLE {tname} ENABLE ROW LEVEL SECURITY"))
                 await conn.execute(text(f"ALTER TABLE {tname} FORCE ROW LEVEL SECURITY"))
                 await conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation ON {tname}"))
                 await conn.execute(text(
                     f"CREATE POLICY tenant_isolation ON {tname} {policy_sql}"
                 ))
-            except Exception as exc:
-                # A missing table on first boot (before alembic upgrade) is
-                # expected; log and continue. A real failure shows up in
-                # postgres logs and the CI smoke tests below.
-                logger.warning("RLS setup skipped for %s: %s", tname, exc)
+            applied.append(tname)
+        except Exception as exc:
+            logger.warning("RLS setup skipped for %s: %s", tname, exc)
+            skipped.append(tname)
+
     logger.info(
-        "RLS policies applied to %d tenant tables: %s",
+        "RLS policies applied to %d/%d tenant tables (skipped: %s)",
+        len(applied),
         len(tenant_tables),
-        ", ".join(tenant_tables),
+        ", ".join(skipped) if skipped else "none",
     )

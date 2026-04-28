@@ -11,7 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.database import setup_row_level_security
+from app.database import ensure_schema, setup_row_level_security
 from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
@@ -21,7 +21,7 @@ from app.routers.auth import limiter
 
 logger = logging.getLogger(__name__)
 
-API_VERSION = "2.4.4"
+API_VERSION = "2.4.5"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.
@@ -45,6 +45,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("NIS2 Platform API %s started (env=%s)", API_VERSION, settings.environment)
+    # Bootstrap missing tables/columns on a fresh DB and heal any
+    # additive schema drift on existing volumes. See ensure_schema for
+    # the debt note — this is a stopgap until alembic/versions/ is
+    # populated with proper revisions.
+    try:
+        await ensure_schema()
+    except Exception:
+        logger.exception("ensure_schema failed — continuing; expect schema-drift errors")
     # Idempotent failsafe: ensure tenant isolation is enforced at the
     # database layer too, not only by per-router WHERE clauses. If a
     # router ever forgets to filter by organization_id, RLS still

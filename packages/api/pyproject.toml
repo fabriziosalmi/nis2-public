@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nis2-api"
-version = "2.4.4"
+version = "2.4.5"
 description = "NIS2 Compliance Platform API"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,6 +23,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "httpx>=0.26.0",
     "weasyprint>=61.0",
+    "slowapi>=0.1.9",  # was missing — main.py imports it for rate-limit middleware
     "nis2scan",
 ]
 

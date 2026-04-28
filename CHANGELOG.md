@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.4.5] - 2026-04-28
+
+### Fixed (caught by live e2e against the docker stack)
+- **Schema drift: `assets.pinned_ip` column missing on existing volumes.** v2.4.0 added `pinned_ip: Mapped[Optional[str]]` to the `Asset` model for the DNS-rebinding TOCTOU mitigation, but no Alembic revision was ever generated — long-lived dev/CI volumes still had the old schema, so adding any asset 500'd with `column assets.pinned_ip does not exist`. Added an idempotent `ensure_schema()` step to the FastAPI lifespan: `Base.metadata.create_all` for missing tables, plus an explicit additive-column registry (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`) for known drift. This is a stopgap — `alembic/versions/` should be populated before any production deploy and the registry is documented as DEBT in `database.py`.
+- **RLS setup poisoned by single-transaction abort.** `setup_row_level_security` ran every `ALTER TABLE` inside one `engine.begin()`. The first failure on a non-existent table aborted the transaction, and every subsequent table failed with `InFailedSQLTransactionError: current transaction is aborted` — silently disabling RLS on 7+ tenant tables, exactly the failure mode RLS exists to prevent. Each table now runs in its own transaction. Verified in Postgres: 12/12 tenant-scoped tables show `relrowsecurity=t AND relforcerowsecurity=t`.
+- **CSP blocked Next.js React Refresh in dev.** `script-src 'self' 'unsafe-inline'` (no `'unsafe-eval'`) tripped `Uncaught EvalError: Evaluating a string as JavaScript violates Content Security Policy` on every page reload. Now `'unsafe-eval'` and `ws:`/`wss:` are added to CSP **only** when `NODE_ENV !== 'production'`; the production build keeps the strict policy unchanged.
+- **`slowapi` missing from `packages/api/pyproject.toml`** (caught by the post-rebuild `make dev`): API container failed to start with `ModuleNotFoundError: No module named 'slowapi'` even though `app/main.py` and `app/routers/auth.py` import it for rate limiting. Added `"slowapi>=0.1.9"` to dependencies.
+
+### Added
+- **`packages/api/tests/test_e2e_live.py`** — 21 end-to-end tests against a running stack (skipped automatically without `E2E_LIVE_BASE_URL`/`EMAIL`/`PASSWORD`). Covers: smoke (health, openapi), cookie HttpOnly verification on the raw set-cookie header, CSRF double-submit (no token → 403, wrong token → 403), full asset CRUD with the `pinned_ip` regression, 6 parametrised SSRF blocks (RFC1918, loopback, 169.254.169.254, localhost, metadata.google.internal, private CIDR), logout → /me 401. Total runtime: 1.7s. Run with the stack from `make dev`:
+  ```bash
+  E2E_LIVE_BASE_URL=http://localhost:8000 \
+  E2E_LIVE_EMAIL=… E2E_LIVE_PASSWORD=… \
+  pytest packages/api/tests/test_e2e_live.py -v
+  ```
+
+### Visual verification
+- Login → dashboard renders clean, **zero console errors** (CSP fix verified). `Assets Monitored` reflects DB state in real time, proving the proxy/rewrite/cookie chain end-to-end.
+
 ## [2.4.4] - 2026-04-27
 
 ### Fixed (docs e2e review)
