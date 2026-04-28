@@ -19,6 +19,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuthStore } from "@/stores/auth-store"
 import { LanguageSwitcher } from "@/components/layout/language-switcher"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import Link from "next/link"
 
 function getBreadcrumbs(pathname: string) {
@@ -81,7 +82,8 @@ export function Header() {
           </kbd>
         </Button>
 
-        {/* Language switcher */}
+        {/* Theme + language switchers */}
+        <ThemeToggle />
         <LanguageSwitcher />
 
         {/* User menu */}

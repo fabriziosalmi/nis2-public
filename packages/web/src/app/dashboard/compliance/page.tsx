@@ -5,13 +5,18 @@
 
 import { CheckCircle, XCircle, AlertTriangle, Clock, Info, ShieldCheck, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useScans } from "@/hooks/use-scans"
 
-// NIS2 Art. 21(2) subsections with Italian D.Lgs 138/2024 descriptions
+// NIS2 Art. 21(2) subsections — Italian text is the canonical legal
+// reference under D.Lgs 138/2024 and stays as-is regardless of locale.
+// English here is the EU directive's wording, also locale-stable. The
+// surrounding UX (status labels, summary cards, info copy) IS i18n —
+// see the `compliancePage` namespace.
 const ART21_SECTIONS: Record<string, { title: string; description: string }> = {
   art21_a: { title: "Politiche di analisi dei rischi e sicurezza dei sistemi informativi", description: "Risk analysis and information system security policies" },
   art21_b: { title: "Gestione degli incidenti", description: "Incident handling procedures including detection, reporting, and response" },
@@ -33,15 +38,17 @@ function mapStatus(matrixStatus: string): "pass" | "partial" | "fail" | "manual"
   return "fail"
 }
 
-const statusConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
-  pass: { icon: CheckCircle, color: "text-green-600", bg: "bg-green-50 border-green-200", label: "Conforme" },
-  partial: { icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50 border-yellow-200", label: "Parziale" },
-  fail: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Non Conforme" },
-  manual: { icon: Clock, color: "text-gray-500", bg: "bg-gray-50 border-gray-200", label: "Verifica Manuale" },
-}
-
 export default function CompliancePage() {
+  const t = useTranslations("compliancePage")
   const { data: scansData, isLoading } = useScans()
+  // Status labels are translated; icons + colours stay constant. The
+  // tuple shape mirrors the previous `statusConfig` object.
+  const statusConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
+    pass: { icon: CheckCircle, color: "text-green-600", bg: "bg-green-50 border-green-200", label: t("compliant") },
+    partial: { icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50 border-yellow-200", label: t("partial") },
+    fail: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: t("nonCompliant") },
+    manual: { icon: Clock, color: "text-gray-500", bg: "bg-gray-50 border-gray-200", label: t("manualReview") },
+  }
 
   // Find the most recent completed scan with a compliance matrix
   const latestScan = (scansData?.items || [])
@@ -55,7 +62,7 @@ export default function CompliancePage() {
   const complianceAreas = Object.entries(ART21_SECTIONS).map(([key, section]) => {
     const matrixEntry = matrix[key]
     const status = matrixEntry ? mapStatus(matrixEntry.status) : "manual"
-    const detail = matrixEntry?.description || matrixEntry?.status || "Non ancora verificato"
+    const detail = matrixEntry?.description || matrixEntry?.status || t("notVerifiedYet")
     return { key, ...section, status, detail, automated: status === "pass" || status === "partial" }
   })
 
@@ -75,10 +82,8 @@ export default function CompliancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Matrice di Conformita NIS2</h1>
-        <p className="text-muted-foreground">
-          Art. 21 D.Lgs 138/2024 — Misure di gestione dei rischi di cybersicurezza
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {!hasData && (
@@ -87,13 +92,10 @@ export default function CompliancePage() {
             <div className="rounded-full bg-muted p-4 mb-4">
               <ShieldCheck className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-medium mb-1">Nessun dato di compliance disponibile</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-md">
-              Esegui una scansione di conformita per popolare automaticamente la matrice Art. 21.
-              I check automatizzati verificheranno sicurezza TLS, DNS, header HTTP, e altro.
-            </p>
+            <h3 className="text-lg font-medium mb-1">{t("noData")}</h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-md">{t("noDataDescription")}</p>
             <Button asChild>
-              <Link href="/dashboard/scans/new">Esegui Prima Scansione</Link>
+              <Link href="/dashboard/scans/new">{t("runFirstScan")}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -106,7 +108,7 @@ export default function CompliancePage() {
             <CheckCircle className="h-8 w-8 text-green-600" />
             <div>
               <p className="text-2xl font-bold">{passCount}</p>
-              <p className="text-sm text-muted-foreground">Conformi</p>
+              <p className="text-sm text-muted-foreground">{t("compliant")}</p>
             </div>
           </CardContent>
         </Card>
@@ -115,7 +117,7 @@ export default function CompliancePage() {
             <AlertTriangle className="h-8 w-8 text-yellow-600" />
             <div>
               <p className="text-2xl font-bold">{partialCount}</p>
-              <p className="text-sm text-muted-foreground">Parziali</p>
+              <p className="text-sm text-muted-foreground">{t("partial")}</p>
             </div>
           </CardContent>
         </Card>
@@ -124,7 +126,7 @@ export default function CompliancePage() {
             <XCircle className="h-8 w-8 text-red-600" />
             <div>
               <p className="text-2xl font-bold">{failCount}</p>
-              <p className="text-sm text-muted-foreground">Non Conformi</p>
+              <p className="text-sm text-muted-foreground">{t("nonCompliant")}</p>
             </div>
           </CardContent>
         </Card>
@@ -133,7 +135,7 @@ export default function CompliancePage() {
             <Clock className="h-8 w-8 text-gray-500" />
             <div>
               <p className="text-2xl font-bold">{manualCount}</p>
-              <p className="text-sm text-muted-foreground">Verifica Manuale</p>
+              <p className="text-sm text-muted-foreground">{t("manualReview")}</p>
             </div>
           </CardContent>
         </Card>
@@ -141,7 +143,7 @@ export default function CompliancePage() {
 
       {latestScan && (
         <p className="text-xs text-muted-foreground">
-          Basato sulla scansione: <strong>{latestScan.name}</strong> — Score: {latestScan.total_score}/100 — {new Date(latestScan.created_at).toLocaleDateString("it-IT")}
+          {t("basedOnScan", { name: latestScan.name, score: latestScan.total_score })} — {new Date(latestScan.created_at).toLocaleDateString()}
         </p>
       )}
 
@@ -172,7 +174,7 @@ export default function CompliancePage() {
                           <span className="text-sm font-semibold">{config.label}</span>
                         </div>
                         <Badge variant={area.automated ? "secondary" : "outline"} className="text-xs">
-                          {area.automated ? "Automatizzato" : "Manuale"}
+                          {area.automated ? t("automated") : t("manual")}
                         </Badge>
                       </div>
                     </div>
@@ -188,13 +190,8 @@ export default function CompliancePage() {
         <CardContent className="flex items-start gap-3 pt-6">
           <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
           <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Informazioni sulla matrice</p>
-            <p className="mt-1">
-              Questa matrice mappa i requisiti dell'Art. 21(2) della Direttiva NIS2 (EU 2022/2555),
-              recepita in Italia con D.Lgs 138/2024. I check automatizzati verificano TLS, DNS, header
-              di sicurezza HTTP, crittografia, e gestione incidenti. Le voci "Verifica Manuale" richiedono
-              attestazione dal team compliance.
-            </p>
+            <p className="font-medium text-foreground">{t("infoTitle")}</p>
+            <p className="mt-1">{t("infoBody")}</p>
           </div>
         </CardContent>
       </Card>

@@ -18,35 +18,40 @@ import { Label } from "@/components/ui/label"
 import { useCreateScan } from "@/hooks/use-scans"
 import { useAssets } from "@/hooks/use-assets"
 
+// Field names MUST match the backend schema (packages/api/app/schemas/scan.py:ScanCreate
+// + packages/api/app/routers/scans.py create_scan default features). Pydantic
+// silently drops unknown fields, so a typo here = silent default-override at
+// the API and a confusing user experience (the user thinks they disabled
+// port_scan; the API enables it; the scan task crashes downstream looking
+// for `dns_checks` that aren't there). Reported by Davide F.
 const scanSchema = z.object({
   name: z.string().min(1, "Scan name is required"),
   scan_type: z.enum(["full", "quick", "custom"]),
   features: z.object({
-    dns: z.boolean(),
-    web: z.boolean(),
-    ports: z.boolean(),
-    whois: z.boolean(),
+    dns_checks: z.boolean(),
+    web_checks: z.boolean(),
+    port_scan: z.boolean(),
+    whois_checks: z.boolean(),
   }),
-  timeout: z.number().min(30).max(3600).optional(),
-  concurrency: z.number().min(1).max(50).optional(),
-  max_hosts: z.number().min(1).max(1000).optional(),
+  // Per-host scan timeout. Backend enforces 1..120 (see ScanCreate); we
+  // mirror the bounds in the FE so zod catches bad input before a round-trip.
+  scan_timeout: z.number().min(1).max(120).optional(),
+  concurrency: z.number().min(1).max(200).optional(),
+  max_hosts: z.number().min(0).max(100000).optional(),
 })
 
 type ScanForm = z.infer<typeof scanSchema>
 
-const sampleAssets = [
-  { id: "1", name: "Production Web Server", target: "prod.example.com" },
-  { id: "2", name: "Staging Environment", target: "staging.example.com" },
-  { id: "3", name: "API Gateway", target: "api.example.com" },
-  { id: "4", name: "Mail Server", target: "mail.example.com" },
-  { id: "5", name: "CDN Endpoint", target: "cdn.example.com" },
-]
-
+// Note: previously this file shipped a `sampleAssets` placeholder list used
+// when the assets API hadn't loaded yet. That gave users the (fake) ability
+// to "select" an asset with id="1", which then 400'd on submit because no
+// such Asset exists in the org's DB. Removed in v2.4.11 — show an empty
+// state instead, with a CTA to add real assets.
 export default function NewScanPage() {
   const router = useRouter()
   const createScan = useCreateScan()
   const { data: assetsData } = useAssets()
-  const assets = assetsData?.items || sampleAssets
+  const assets = assetsData?.items || []
   const [selectedAssets, setSelectedAssets] = useState<string[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -60,9 +65,9 @@ export default function NewScanPage() {
     resolver: zodResolver(scanSchema),
     defaultValues: {
       scan_type: "full",
-      features: { dns: true, web: true, ports: true, whois: true },
-      timeout: 300,
-      concurrency: 10,
+      features: { dns_checks: true, web_checks: true, port_scan: true, whois_checks: true },
+      scan_timeout: 10,   // backend max is 120s/host
+      concurrency: 20,
       max_hosts: 100,
     },
   })
@@ -155,29 +160,41 @@ export default function NewScanPage() {
             <CardDescription>Select assets to include in the scan</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {assets.map((asset: any) => (
-                <label
-                  key={asset.id}
-                  className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                    selectedAssets.includes(asset.id)
-                      ? "border-primary bg-primary/5"
-                      : "border-input hover:border-primary/50"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedAssets.includes(asset.id)}
-                    onChange={() => toggleAsset(asset.id)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{asset.name}</p>
-                    <p className="text-xs text-muted-foreground">{asset.target}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
+            {assets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
+                <p className="text-sm font-medium">No assets configured yet</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Add at least one domain, IP or CIDR before launching a scan.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/dashboard/assets">Manage assets</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {assets.map((asset: any) => (
+                  <label
+                    key={asset.id}
+                    className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      selectedAssets.includes(asset.id)
+                        ? "border-primary bg-primary/5"
+                        : "border-input hover:border-primary/50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAssets.includes(asset.id)}
+                      onChange={() => toggleAsset(asset.id)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">{asset.name}</p>
+                      <p className="text-xs text-muted-foreground">{asset.target_value}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -189,25 +206,27 @@ export default function NewScanPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              {(["dns", "web", "ports", "whois"] as const).map((feature) => (
+              {(
+                [
+                  ["dns_checks", "DNS", "DNS record analysis"],
+                  ["web_checks", "Web", "Web security headers & TLS"],
+                  ["port_scan", "Ports", "Open port scanning"],
+                  ["whois_checks", "WHOIS", "Domain registration data"],
+                ] as const
+              ).map(([key, label, hint]) => (
                 <label
-                  key={feature}
+                  key={key}
                   className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    checked={features[feature]}
-                    onChange={(e) => setValue(`features.${feature}`, e.target.checked)}
+                    checked={features[key]}
+                    onChange={(e) => setValue(`features.${key}`, e.target.checked)}
                     className="h-4 w-4 rounded border-input"
                   />
                   <div>
-                    <p className="text-sm font-medium uppercase">{feature}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {feature === "dns" && "DNS record analysis"}
-                      {feature === "web" && "Web security headers & TLS"}
-                      {feature === "ports" && "Open port scanning"}
-                      {feature === "whois" && "Domain registration data"}
-                    </p>
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground">{hint}</p>
                   </div>
                 </label>
               ))}
@@ -234,11 +253,11 @@ export default function NewScanPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="timeout">Timeout (seconds)</Label>
+                  <Label htmlFor="scan_timeout">Timeout (seconds)</Label>
                   <Input
-                    id="timeout"
+                    id="scan_timeout"
                     type="number"
-                    {...register("timeout", { valueAsNumber: true })}
+                    {...register("scan_timeout", { valueAsNumber: true })}
                   />
                 </div>
                 <div className="space-y-2">
