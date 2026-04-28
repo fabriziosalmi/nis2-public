@@ -41,6 +41,18 @@ const config: NextConfig = {
     ]
   },
   async headers() {
+    // Next.js dev mode (React Refresh + webpack HMR) compiles modules client-
+    // side via `new Function()` / `eval`, which a strict CSP without
+    // 'unsafe-eval' blocks. We only loosen the policy in development; the
+    // production build is fully pre-compiled and keeps the tight policy.
+    const isDev = process.env.NODE_ENV !== 'production'
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'"
+    const connectSrc = isDev
+      ? `connect-src 'self' ${apiUrl} ws: wss:`
+      : `connect-src 'self' ${apiUrl}`
     return [
       {
         source: '/(.*)',
@@ -69,11 +81,11 @@ const config: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              scriptSrc,
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'),
+              connectSrc,
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
