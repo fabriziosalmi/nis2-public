@@ -67,8 +67,11 @@ packages/api/celerybeat-schedule
 # Docker volumes
 pgdata/
 
-# Reports output
-reports/
+# Reports output (generated PDF/HTML/CSV files at runtime; the Next.js
+# route at packages/web/src/app/dashboard/reports/ is the UI page and
+# must NOT be ignored — keep this rule narrow.)
+/reports/
+**/output/reports/
 evidence/
 screenshots/
 scan_history.json

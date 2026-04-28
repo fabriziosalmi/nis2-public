@@ -196,10 +196,15 @@ class ApiClient {
 
   // ----------------------------------------------------------------- Reports
   async generateReport(scanId: string, format: string) {
-    return this.request<any>('/api/v1/reports/generate', {
-      method: 'POST',
-      body: JSON.stringify({ scan_id: scanId, format }),
-    })
+    // The FastAPI endpoint takes scan_id and format as *query parameters*,
+    // not body — it has no Pydantic body model. Posting JSON returned 422.
+    const qs = new URLSearchParams({ scan_id: scanId, format })
+    return this.request<{
+      task_id: string
+      status: string
+      format: string
+      scan_id: string
+    }>(`/api/v1/reports/generate?${qs.toString()}`, { method: 'POST' })
   }
 
   async getReportStatus(taskId: string) {

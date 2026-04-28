@@ -20,8 +20,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = await getMessages()
 
   return (
+    // suppressHydrationWarning on <html> covers next-themes' class swap.
+    // The same flag on <body> covers attributes injected by browser
+    // extensions (ColorZilla's `cz-shortcut-listen`, Grammarly's
+    // `data-gr-*`, dark-reader, etc.) before React hydrates. These are
+    // outside our control and produce noisy dev warnings that mask real
+    // mismatches; suppressing them here only silences the *attribute*
+    // diff on this element, not deeper-tree hydration bugs.
     <html lang={locale} suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${inter.variable} font-sans antialiased`}
+        suppressHydrationWarning
+      >
         <NextIntlClientProvider messages={messages}>
           <Providers>{children}</Providers>
         </NextIntlClientProvider>
