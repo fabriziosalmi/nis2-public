@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nis2scan"
-version = "2.4.9"
+version = "2.4.10"
 description = "NIS2 Directive compliance scanner engine"
 requires-python = ">=3.10"
 dependencies = [
@@ -14,7 +14,9 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.7",
     "dnspython>=2.6",
-    "scapy>=2.5",
+    # scapy removed in v2.4.10 — never imported in the codebase, dragged in
+    # GHSA-pq98-w3cw-pgcr (untrusted-pickle session deserialization, no
+    # patched release as of 2026-04). Re-add only with a justified use.
     "prometheus_client>=0.19",
     "python-whois>=0.9",
     "Jinja2>=3.1",
