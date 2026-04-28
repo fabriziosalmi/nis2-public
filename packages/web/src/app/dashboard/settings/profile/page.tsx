@@ -23,13 +23,20 @@ const profileSchema = z.object({
   locale: z.string().min(2).max(10),
 })
 
+// Like elsewhere: zod messages are i18n keys looked up via t() at render.
 const passwordSchema = z.object({
-  current_password: z.string().min(1, "Current password is required"),
-  new_password: z.string().min(8, "Minimum 8 characters"),
-  confirm_password: z.string().min(8),
+  current_password: z.string().min(1, "profilePage.currentPasswordRequired"),
+  new_password: z.string().min(8, "auth.passwordMin8"),
+  confirm_password: z.string().min(8, "auth.passwordMin8"),
 }).refine((data) => data.new_password === data.confirm_password, {
-  message: "Passwords don't match",
+  message: "profilePage.passwordsDontMatch",
   path: ["confirm_password"],
+}).refine((data) => data.new_password !== data.current_password, {
+  // The backend will also reject this with a 400, but catching it
+  // client-side is a kinder UX — no round-trip, error appears under
+  // the field that's wrong.
+  message: "profilePage.newSameAsCurrent",
+  path: ["new_password"],
 })
 
 type ProfileForm = z.infer<typeof profileSchema>
@@ -45,6 +52,10 @@ const locales = [
 
 export default function ProfileSettingsPage() {
   const t = useTranslations("profilePage")
+  // Top-level translator so zod messages like "auth.passwordMin8" resolve
+  // across namespaces. The form-validation errors are stored as i18n
+  // *keys* (not messages) — see passwordSchema above.
+  const tg = useTranslations()
   const user = useAuthStore((s) => s.user)
   const setAuth = useAuthStore((s) => s.setAuth)
   const orgId = useAuthStore((s) => s.orgId)
@@ -80,14 +91,28 @@ export default function ProfileSettingsPage() {
   const onPasswordSubmit = async (data: PasswordForm) => {
     setLoadingPassword(true)
     try {
-      await api.updateMe({
+      // Audit B04: was `api.updateMe(...)`, which dropped the password
+      // fields silently and showed a "passwordUpdated" toast that lied.
+      // The dedicated endpoint verifies the current password, hashes
+      // the new one, and stamps password_changed_at to invalidate other
+      // sessions. Cookies for THIS tab are rotated server-side so the
+      // user keeps working without a re-login here.
+      await api.changePassword({
         current_password: data.current_password,
         new_password: data.new_password,
       })
       passwordForm.reset()
-      toast.success(t("passwordUpdated"))
+      toast.success(t("passwordUpdated"), { description: t("passwordUpdatedDescription") })
     } catch (err: any) {
-      toast.error(t("updateFailed"), { description: err.message })
+      // Match the typical error shapes the backend can produce so the
+      // user sees a useful message rather than a generic "update failed".
+      const msg = err?.message || ""
+      const description = /current password is incorrect/i.test(msg)
+        ? t("currentPasswordIncorrect")
+        : /must differ/i.test(msg)
+          ? t("newSameAsCurrent")
+          : msg
+      toast.error(t("passwordChangeFailed"), { description })
     } finally {
       setLoadingPassword(false)
     }
@@ -158,25 +183,25 @@ export default function ProfileSettingsPage() {
           <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="current_password">{t("currentPassword")}</Label>
-              <Input id="current_password" type="password" {...passwordForm.register("current_password")} />
+              <Input id="current_password" type="password" autoComplete="current-password" {...passwordForm.register("current_password")} />
               {passwordForm.formState.errors.current_password && (
-                <p className="text-xs text-destructive">{passwordForm.formState.errors.current_password.message}</p>
+                <p className="text-xs text-destructive">{tg(passwordForm.formState.errors.current_password.message as any)}</p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="new_password">{t("newPassword")}</Label>
-              <Input id="new_password" type="password" {...passwordForm.register("new_password")} />
+              <Input id="new_password" type="password" autoComplete="new-password" {...passwordForm.register("new_password")} />
               {passwordForm.formState.errors.new_password && (
-                <p className="text-xs text-destructive">{passwordForm.formState.errors.new_password.message}</p>
+                <p className="text-xs text-destructive">{tg(passwordForm.formState.errors.new_password.message as any)}</p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirm_password">{t("confirmNewPassword")}</Label>
-              <Input id="confirm_password" type="password" {...passwordForm.register("confirm_password")} />
+              <Input id="confirm_password" type="password" autoComplete="new-password" {...passwordForm.register("confirm_password")} />
               {passwordForm.formState.errors.confirm_password && (
-                <p className="text-xs text-destructive">{passwordForm.formState.errors.confirm_password.message}</p>
+                <p className="text-xs text-destructive">{tg(passwordForm.formState.errors.confirm_password.message as any)}</p>
               )}
             </div>
 

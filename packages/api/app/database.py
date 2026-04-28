@@ -121,6 +121,10 @@ async def ensure_schema() -> None:
         # at create-time so the scanner cannot be redirected to a private
         # range between validation and connection.
         ("assets", "pinned_ip", "VARCHAR(45)"),
+        # v2.4.13: password-change session invalidation watermark.
+        # NULL on existing rows = "never rotated" — the iat check
+        # treats the token's iat as fresher than NULL automatically.
+        ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
     ]
     async with engine.begin() as conn:
         for table, column, ddl in additive_columns:

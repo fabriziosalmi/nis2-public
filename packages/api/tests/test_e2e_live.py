@@ -427,6 +427,134 @@ class TestApiKeysCRUD:
             assert ids_to_state.get(cid) is False
 
 
+class _PlaceholderForChangePassword_DoNotCollect:
+    """The change-password flow lived here originally but was moved to
+    the bottom of the file. See `TestChangePassword` after `TestAuditLogs`.
+    Reason: stamping `password_changed_at` invalidates every JWT iat
+    issued before it — including the module-level `client` fixture's
+    own access cookie — so any TestChangePassword run in the middle of
+    the file would cascade 401s into the tests that come after it.
+
+    The class is intentionally not named `Test*` so pytest skips
+    collection.
+    """
+
+    def _moved_test_wrong_current_password_rejected(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            assert login.status_code == 200
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={
+                    "current_password": "definitely-not-my-password",
+                    "new_password": "BrandNewPassword123!",
+                },
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert resp.status_code == 401, f"{resp.status_code}: {resp.text}"
+            assert "incorrect" in resp.text.lower()
+
+    def test_weak_new_password_rejected_422(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": PASSWORD, "new_password": "short"},
+                headers={"X-CSRF-Token": csrf},
+            )
+            # Pydantic min_length=8 enforces the floor.
+            assert resp.status_code == 422
+
+    def test_same_as_current_rejected_400(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": PASSWORD, "new_password": PASSWORD},
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert resp.status_code == 400
+            assert "differ" in resp.text.lower()
+
+    def test_change_password_success_invalidates_other_sessions(self):
+        """The full happy-path: we open two parallel clients (two tabs in
+        two different machines), change the password from client A, and
+        verify that:
+          * client A keeps working (cookies were rotated server-side)
+          * client B gets bounced to login on its next protected call
+
+        Restore the original password before exiting — done via the same
+        client A whose cookies were just rotated, NOT via a fresh login.
+        Reasoning: a fresh login in the same wall-clock second as the
+        change happens to mint a token whose iat-second equals the
+        password_changed_at-second; the watermark check `iat < pwc`
+        rejects it half the time depending on rounding. Using A's
+        already-rotated cookies (iat == pwc, check is `<` not `<=`) is
+        deterministic and exercises the same code path the production
+        UI will use.
+        """
+        new_pw = "RotatedTempPassword!2026"
+        password_was_rotated = False
+        # Hold client A open across the change so we can use its rotated
+        # cookies for the cleanup change. `with` would close it.
+        a = httpx.Client(base_url=BASE_URL, timeout=5.0)
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=5.0) as b:
+                login_a = a.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+                login_b = b.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+                assert login_a.status_code == 200
+                assert login_b.status_code == 200
+                csrf_a = login_a.json()["csrf_token"]
+
+                assert a.get("/api/v1/auth/me").status_code == 200
+                assert b.get("/api/v1/auth/me").status_code == 200
+
+                resp = a.post(
+                    "/api/v1/auth/change-password",
+                    json={"current_password": PASSWORD, "new_password": new_pw},
+                    headers={"X-CSRF-Token": csrf_a},
+                )
+                assert resp.status_code == 204, f"{resp.status_code}: {resp.text}"
+                password_was_rotated = True
+
+                # Client A must keep working — cookies were re-issued
+                # with iat == password_changed_at.
+                me_a = a.get("/api/v1/auth/me")
+                assert me_a.status_code == 200, f"client A should keep working; got {me_a.status_code}"
+
+                # Client B must be bounced — its iat predates the watermark.
+                me_b = b.get("/api/v1/auth/me")
+                assert me_b.status_code == 401, f"client B should be invalidated, got {me_b.status_code}"
+        finally:
+            if password_was_rotated:
+                # Use A's already-rotated session for the cleanup so
+                # we don't have to wait a full second for a fresh login
+                # to mint a passing token.
+                csrf_a = a.cookies.get("csrf_token")
+                if csrf_a:
+                    restore = a.post(
+                        "/api/v1/auth/change-password",
+                        json={"current_password": new_pw, "new_password": PASSWORD},
+                        headers={"X-CSRF-Token": csrf_a},
+                    )
+                    assert restore.status_code == 204, (
+                        f"failed to restore canonical password: {restore.status_code} {restore.text}"
+                    )
+            a.close()
+
+
 class TestAuditLogs:
     """B03: audit-log endpoint exists and the actions emitted by the
     routers above show up in the read view."""
@@ -447,3 +575,115 @@ class TestAuditLogs:
         # Every returned row must carry the requested action.
         for row in resp.json()["items"]:
             assert row["action"] == "api_key.created"
+
+
+# ---------------------------------------------------------------------------
+# Password change — kept LAST in the file because it stamps
+# `password_changed_at`, which invalidates every JWT issued earlier, including
+# the module-level `client` fixture's own cookies. Running this anywhere but
+# the bottom cascades 401s into every test that comes after.
+# ---------------------------------------------------------------------------
+
+class TestChangePassword:
+    """Audit B04: real password rotation. The previous /auth/me PATCH route
+    silently dropped both fields and the toast lied. The new
+    POST /auth/change-password verifies, hashes, stamps password_changed_at,
+    audit-logs, and re-issues cookies for the active session.
+    """
+
+    def test_wrong_current_password_rejected(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            assert login.status_code == 200
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={
+                    "current_password": "definitely-not-my-password",
+                    "new_password": "BrandNewPassword123!",
+                },
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert resp.status_code == 401, f"{resp.status_code}: {resp.text}"
+            assert "incorrect" in resp.text.lower()
+
+    def test_weak_new_password_rejected_422(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": PASSWORD, "new_password": "short"},
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert resp.status_code == 422
+
+    def test_same_as_current_rejected_400(self):
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            login = c.post(
+                "/api/v1/auth/login",
+                json={"email": EMAIL, "password": PASSWORD},
+            )
+            csrf = login.json()["csrf_token"]
+            resp = c.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": PASSWORD, "new_password": PASSWORD},
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert resp.status_code == 400
+            assert "differ" in resp.text.lower()
+
+    def test_change_password_success_invalidates_other_sessions(self):
+        """Two parallel clients (two tabs / two devices). Change password
+        from client A; A keeps working (cookies were rotated), B is bounced
+        to login on its next protected call.
+
+        Cleanup uses A's already-rotated cookies (iat == pwc) to avoid
+        the same-second mint trap a fresh login would fall into.
+        """
+        new_pw = "RotatedTempPassword!2026"
+        password_was_rotated = False
+        a = httpx.Client(base_url=BASE_URL, timeout=5.0)
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=5.0) as b:
+                login_a = a.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+                login_b = b.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+                assert login_a.status_code == 200
+                assert login_b.status_code == 200
+                csrf_a = login_a.json()["csrf_token"]
+
+                assert a.get("/api/v1/auth/me").status_code == 200
+                assert b.get("/api/v1/auth/me").status_code == 200
+
+                resp = a.post(
+                    "/api/v1/auth/change-password",
+                    json={"current_password": PASSWORD, "new_password": new_pw},
+                    headers={"X-CSRF-Token": csrf_a},
+                )
+                assert resp.status_code == 204, f"{resp.status_code}: {resp.text}"
+                password_was_rotated = True
+
+                me_a = a.get("/api/v1/auth/me")
+                assert me_a.status_code == 200, f"client A should keep working; got {me_a.status_code}"
+
+                me_b = b.get("/api/v1/auth/me")
+                assert me_b.status_code == 401, f"client B should be invalidated, got {me_b.status_code}"
+        finally:
+            if password_was_rotated:
+                csrf_a = a.cookies.get("csrf_token")
+                if csrf_a:
+                    restore = a.post(
+                        "/api/v1/auth/change-password",
+                        json={"current_password": new_pw, "new_password": PASSWORD},
+                        headers={"X-CSRF-Token": csrf_a},
+                    )
+                    assert restore.status_code == 204, (
+                        f"failed to restore canonical password: {restore.status_code} {restore.text}"
+                    )
+            a.close()

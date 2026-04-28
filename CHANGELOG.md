@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.4.13] - 2026-04-28
+
+### Fixed (audit blocker B04)
+
+- **Password change UI was a lie.** The Profile page sent `current_password` + `new_password` to `PATCH /auth/me`. That route validated against `UserUpdate` — a Pydantic schema declaring only `full_name`, `locale`, `avatar_url`. Pydantic silently dropped the unknown fields, the route returned 200, the toast said "passwordUpdated", and the password hash never changed. Users believed they had rotated a compromised password and remained compromised. Fixed by introducing a real endpoint.
+
+### Added — `POST /api/v1/auth/change-password`
+
+- **Pydantic body** (`ChangePasswordRequest`): `current_password` (required, 1..128) + `new_password` (required, 8..128). The `min_length=8` is what enforces the password floor — Zod on the FE mirrors it.
+- **passlib `verify`** of the current password against `password_hash` → 401 on mismatch (constant-time comparison; no enumeration leak).
+- **No-op refusal**: setting the new password equal to the current one returns 400 instead of pretending success. The verify-against-old-hash check uses passlib too, so it costs one bcrypt round but avoids the silent-success footgun.
+- **bcrypt rehash + persist** the new password.
+- **`password_changed_at` watermark**. New `User.password_changed_at` column (nullable; legacy users read as "never rotated"). Stamped to `floor(now) + 1s` on every change. The JWT decode path in `dependencies.py` and `/auth/refresh` now compares `iat` against this watermark **in epoch seconds**, rejecting any token whose `iat` is strictly less. Result: every other session for this user gets bounced to `/login` on its very next request, with no per-jti tracking required.
+- **`iat_override` plumbed through `_build_token_response` → `create_access_token` / `create_refresh_token`**. The change-password handler mints the new tokens with `iat = next_second`, the same value as the watermark, so the active tab keeps working (its iat is == watermark, comparison is `<` not `<=`) while every other tab loses its session.
+- **Audit log entry** (`user.password_changed`, `resource_type=user`, `details={self_initiated: True}`) so the compliance team can answer "when did Alice last rotate her password" without grepping postgres logs.
+- **slowapi rate limit** `5/minute` on the endpoint to slow credential-stuffing attempts that try old passwords as the "current".
+- **CSRF**: not in the exempt list (login/register/refresh/logout); state-changing authenticated mutation, double-submit token required.
+
+### Subtle bug found & documented during e2e bring-up
+
+JWT encodes `iat` as epoch seconds (truncated). `datetime.now(utc)` carries microseconds. Comparing `datetime(iat) < datetime(password_changed_at)` was unstable in the same wall-clock second: a token minted at `02.500s` had `iat = 02.000s`, which compared as `< 02.345s` (the watermark stored with microseconds). Solution: store the watermark as `floor(now) + 1s`, mint new tokens with `iat = next_second`, **compare in epoch seconds on both sides**. Documented in `dependencies.py` and `/refresh` so a future maintainer doesn't undo it.
+
+### Frontend
+
+- `api.changePassword({current_password, new_password})` (real endpoint, not `updateMe`).
+- Profile page: schema rejects `new === current` client-side too (better UX than the 400 round-trip), zod messages live as i18n keys (`profilePage.currentPasswordRequired`, `auth.passwordMin8`, …) resolved via `t()` at render. Error toasts pattern-match the server detail to surface localised hints.
+- Inputs got proper `autocomplete` attributes (`current-password`, `new-password`) so password managers behave.
+- Post-success toast description: "Other devices and tabs will need to sign in again" — sets the right expectation.
+
+### Translations
+
++9 leaf strings × 5 locales = **45 new translations**. All locale files validate at **516 leaf strings**.
+
+### Verified
+
+- 42 unit + **36** e2e (was 32 — added a 4-test `TestChangePassword` block: wrong-current 401, weak-new 422, same-as-current 400, success-with-cross-session-invalidation 204+200/401) = **78 green**.
+- The `TestChangePassword` block is positioned at the **bottom of `test_e2e_live.py`** because the password change watermark invalidates every JWT issued before it — including the module-level `client` fixture's own access cookie. Running it earlier would cascade 401s into every subsequent test.
+
+### Still pending (audit follow-up — v2.4.14)
+
+- **B05** forgot-password / reset-password (token-based; needs SMTP plumbing or a copy-paste-token compromise).
+- **B06+B07** proper invite tokens + email + accept-after-register (today the invite endpoint silently auto-binds the user to an org without consent).
+- Wire `get_api_key_org` into `scans` / `findings` / `assets` so API keys actually authenticate API calls (the dependency is sound, just unused).
+- 9 serious + 5 nits from the audit.
+
 ## [2.4.12] - 2026-04-28
 
 ### Fixed (audit blockers B01–B03 + B08–B12)

@@ -390,7 +390,13 @@
     "confirmNewPassword": "Confirmer le Nouveau Mot de Passe",
     "updatePassword": "Mettre à Jour le Mot de Passe",
     "profileUpdated": "Profil mis à jour",
-    "passwordUpdated": "Mot de passe mis à jour",
+    "passwordUpdated": "Mot de passe modifié",
+    "passwordUpdatedDescription": "Les autres appareils et onglets devront se reconnecter.",
+    "passwordChangeFailed": "Échec du changement de mot de passe",
+    "currentPasswordRequired": "Veuillez saisir votre mot de passe actuel",
+    "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
+    "passwordsDontMatch": "Les nouveaux mots de passe ne correspondent pas",
+    "newSameAsCurrent": "Le nouveau mot de passe doit différer de l'actuel",
     "updateFailed": "Échec de la mise à jour"
   },
   "organizationPage": {
