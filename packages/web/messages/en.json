@@ -688,7 +688,17 @@
     "switchTo": "Switch to",
     "switchedTo": "Switched to {name}",
     "switchFailed": "Could not switch organization",
-    "trigger": "Active organization: {name}. Click to switch."
+    "trigger": "Active organization: {name}. Click to switch.",
+    "createOrg": "Create new organization",
+    "createTitle": "Create new organization",
+    "createDescription": "Spin up a new tenant for a separate client or project. You'll automatically be set as its admin.",
+    "createNameLabel": "Organization name",
+    "createNamePlaceholder": "Acme Corp",
+    "createNameRequired": "Organization name is required",
+    "createCancel": "Cancel",
+    "createSubmit": "Create organization",
+    "createSuccess": "Created {name}",
+    "createFailed": "Could not create organization"
   },
   "scansComparePage": {
     "title": "Scan Comparison",

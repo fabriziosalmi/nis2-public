@@ -28,6 +28,19 @@ class OrgUpdate(BaseModel):
     settings: Optional[dict[str, Any]] = None
 
 
+class CreateOrgRequest(BaseModel):
+    """v2.4.18: payload for `POST /api/v1/organizations` — create a new
+    organization owned by the calling user.
+
+    Only `name` is accepted on the wire. The slug is derived from the
+    name server-side (via `app.utils.slug.slugify`) with a numeric
+    suffix appended on collision so users don't have to think about
+    URL identifier uniqueness. The plan / settings / max_scans default
+    from the `Organization` model — same values an org gets at
+    /register time."""
+    name: str = Field(..., min_length=1, max_length=256)
+
+
 class MemberResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
