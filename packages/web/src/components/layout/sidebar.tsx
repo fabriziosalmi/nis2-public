@@ -33,6 +33,7 @@ import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { OrgSwitcher } from "@/components/layout/org-switcher"
 import { useAuthStore } from "@/stores/auth-store"
+import { useFindingStats } from "@/hooks/use-findings"
 import { useState } from "react"
 
 const mainNavKeys = [
@@ -59,6 +60,16 @@ export function Sidebar() {
   const router = useRouter()
   const { user, logout } = useAuthStore()
   const t = useTranslations()
+  // v2.4.17 audit O-DRA-05: surface a destructive badge with the
+  // count of critical findings next to "Findings" in the nav. This
+  // pulls attention to the most-actionable item without forcing the
+  // user to open the page. We use `critical` (not `open`) because
+  // a resolved-but-still-critical row is a different UX problem; the
+  // signal we want here is "do I have something blowing up right now".
+  // The hook is gated on `!!user` inside, so logged-out renders skip
+  // the request entirely.
+  const { data: findingStats } = useFindingStats()
+  const criticalCount = findingStats?.critical ?? 0
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -107,23 +118,54 @@ export function Sidebar() {
       {/* Main navigation */}
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="space-y-1 px-2">
-          {mainNavKeys.map((item) => (
+          {mainNavKeys.map((item) => {
+            // v2.4.17 audit O-DRA-05: per-nav-item destructive badge
+            // with a count. Currently only "findings" shows one
+            // (critical findings count). The map is set up so adding
+            // future badges (e.g. unreviewed audit-log entries) is a
+            // one-liner.
+            const badge =
+              item.key === "findings" && criticalCount > 0
+                ? criticalCount
+                : null
+            return (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive(item.href)
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
                 collapsed && "justify-center px-2"
               )}
+              aria-label={
+                badge !== null
+                  ? `${t(`nav.${item.key}`)} (${badge} ${t("nav.criticalBadgeAria")})`
+                  : undefined
+              }
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{t(`nav.${item.key}`)}</span>}
+              {!collapsed && <span className="flex-1">{t(`nav.${item.key}`)}</span>}
+              {badge !== null && (
+                // Destructive pill. On the collapsed sidebar (icon
+                // only), render as a tiny dot so it doesn't fight
+                // the icon for space; on the expanded sidebar, show
+                // the actual count.
+                <span
+                  className={cn(
+                    "rounded-full bg-destructive text-destructive-foreground font-semibold",
+                    collapsed
+                      ? "absolute top-1 right-1 h-2 w-2"
+                      : "ml-auto px-1.5 text-[10px] leading-5 min-w-[20px] text-center"
+                  )}
+                >
+                  {!collapsed && (badge > 99 ? "99+" : badge)}
+                </span>
+              )}
             </Link>
-          ))}
+          )})}
         </nav>
 
         <Separator className="my-4 mx-2" />

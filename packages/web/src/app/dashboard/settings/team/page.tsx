@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { Loader2, UserPlus, MoreHorizontal, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
-import { format as formatDate } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -72,6 +72,7 @@ const roleColors: Record<string, string> = {
 export default function TeamPage() {
   const t = useTranslations("teamPage")
   const tc = useTranslations("common")
+  const formatDate = useFormatDate()
   const currentUser = useAuthStore((s) => s.user)
 
   const { data: members = [], isLoading } = useMembers()
@@ -371,9 +372,7 @@ export default function TeamPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {member.created_at
-                          ? formatDate(new Date(member.created_at), "yyyy-MM-dd")
-                          : "—"}
+                        {formatDate(member.created_at, "PP")}
                       </TableCell>
                       <TableCell>
                         {!isSelf && (

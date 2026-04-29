@@ -6,7 +6,7 @@
 import { use } from "react"
 import Link from "next/link"
 import { ArrowLeft, Loader2, Clock, CheckCircle, AlertTriangle, GitCompareArrows, Radar } from "lucide-react"
-import { format } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -53,6 +53,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
   const t = useTranslations("scanDetailsPage")
   const ts = useTranslations("scans")
   const tf = useTranslations("findings")
+  const formatDate = useFormatDate()
   const { id } = use(params)
   const { data: scan, isLoading } = useScan(id)
   const { data: resultsData } = useScanResults(id)
@@ -108,7 +109,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             )}
           </div>
           <p className="text-muted-foreground">
-            {scan.created_at && format(new Date(scan.created_at), "yyyy-MM-dd HH:mm")}
+            {scan.created_at && formatDate(scan.created_at, "Pp")}
             {scan.duration_seconds && ` — ${t("duration", { seconds: scan.duration_seconds })}`}
           </p>
         </div>

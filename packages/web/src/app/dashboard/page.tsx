@@ -27,7 +27,7 @@ const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip) as any, { 
 const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer) as any, { ssr: false })
 const LineChart = dynamic(() => import("recharts").then(m => m.LineChart) as any, { ssr: false })
 const Line = dynamic(() => import("recharts").then(m => m.Line) as any, { ssr: false })
-import { format } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 
 function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
@@ -66,6 +66,10 @@ export default function DashboardPage() {
   // namespace; reuse those rather than mint duplicates.
   const tf = useTranslations("findings")
   const tc = useTranslations("common")
+  // v2.4.17 audit S-DRA-01: replaces direct `date-fns format()` calls
+  // so dates render in the user's active locale (IT / FR / DE / ES)
+  // rather than always en-US.
+  const formatDate = useFormatDate()
 
   const { data: scansData, isLoading: scansLoading } = useScans()
   const { data: statsData } = useFindingStats()
@@ -97,7 +101,11 @@ export default function DashboardPage() {
   const trendData = completedScans
     .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     .map((s: any) => ({
-      date: format(new Date(s.created_at), "MMM d"),
+      // "MMM d" intentionally hardcoded — the trend chart's X axis
+      // benefits from a compact label that doesn't blow out the
+      // tick spacing, regardless of locale verbosity. The full
+      // localised date appears in the table cells below.
+      date: formatDate(s.created_at, "MMM d"),
       score: s.total_score,
     }))
 
@@ -293,7 +301,7 @@ export default function DashboardPage() {
                     <TableCell><ScoreDisplay score={scan.total_score} /></TableCell>
                     <TableCell>{(scan.findings_critical || 0) + (scan.findings_high || 0) + (scan.findings_medium || 0) + (scan.findings_low || 0)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {scan.created_at ? format(new Date(scan.created_at), "MMM d, yyyy") : "--"}
+                      {formatDate(scan.created_at, "PP")}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { Plus, Loader2, Copy, ArrowLeft, Key, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
-import { format as formatDate } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +38,7 @@ type CreateKeyForm = z.infer<typeof createKeySchema>
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeysPage")
   const tc = useTranslations("common")
+  const formatDate = useFormatDate()
   const { data: keysData, isLoading } = useApiKeys()
   const createKey = useCreateApiKey()
   const revokeKey = useRevokeApiKey()
@@ -209,12 +210,10 @@ export default function ApiKeysPage() {
                       </code>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {key.created_at ? formatDate(new Date(key.created_at), "yyyy-MM-dd") : "—"}
+                      {formatDate(key.created_at, "PP")}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {key.last_used_at
-                        ? formatDate(new Date(key.last_used_at), "yyyy-MM-dd HH:mm")
-                        : t("neverUsed")}
+                      {key.last_used_at ? formatDate(key.last_used_at, "Pp") : t("neverUsed")}
                     </TableCell>
                     <TableCell>
                       <Badge

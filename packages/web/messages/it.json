@@ -40,7 +40,8 @@
     "team": "Team",
     "apiKeys": "Chiavi API",
     "notifications": "Notifiche",
-    "auditLog": "Registro Audit"
+    "auditLog": "Registro Audit",
+    "criticalBadgeAria": "risultati critici"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -189,7 +190,11 @@
     "deleted": "Pianificazione eliminata",
     "deleteFailed": "Eliminazione fallita",
     "triggered": "Scansione avviata! Controlla la pagina Scansioni per il progresso.",
-    "triggerFailed": "Avvio fallito"
+    "triggerFailed": "Avvio fallito",
+    "nameRequired": "Il nome della pianificazione è obbligatorio",
+    "cronRequired": "L'espressione cron è obbligatoria",
+    "cronInvalid": "L'espressione cron deve avere 5 campi (minuto ora giorno mese giorno-settimana). Prova un preset qui sotto.",
+    "cronHelp": "Formato: minuto ora giorno mese giorno-settimana — es. 0 9 * * 1 = ogni lunedì alle 9."
   },
   "teamPage": {
     "title": "Gestione Team",
@@ -297,7 +302,9 @@
     "remediation": "Remediation",
     "viewPlaybook": "Vedi Playbook",
     "updatedCount": "Aggiornati {count} risultati",
-    "updateFailed": "Aggiornamento risultati fallito"
+    "updateFailed": "Aggiornamento risultati fallito",
+    "exportCsv": "Esporta CSV",
+    "exportedCount": "Esportati {count} risultati"
   },
   "certificates": {
     "title": "Intelligence Certificati",
@@ -661,6 +668,20 @@
     "findingsDescription": "Problemi di sicurezza rilevati durante la scansione",
     "noFindings": "Nessun finding rilevato — ottimo risultato!",
     "findingsPending": "I findings appariranno al completamento della scansione."
+  },
+  "commandPalette": {
+    "label": "Palette comandi",
+    "placeholder": "Digita un comando o una pagina…",
+    "empty": "Nessun risultato.",
+    "actionsGroup": "Azioni",
+    "navigateGroup": "Vai a",
+    "hintNavigate": "naviga",
+    "hintSelect": "seleziona",
+    "hintClose": "chiudi",
+    "actions": {
+      "newScan": "Nuova scansione",
+      "schedules": "Gestisci pianificazioni"
+    }
   },
   "orgSwitcher": {
     "currentOrg": "Organizzazione attiva",

@@ -40,7 +40,8 @@
     "team": "Team",
     "apiKeys": "API Keys",
     "notifications": "Notifications",
-    "auditLog": "Audit Log"
+    "auditLog": "Audit Log",
+    "criticalBadgeAria": "critical findings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -189,7 +190,11 @@
     "deleted": "Schedule deleted",
     "deleteFailed": "Delete failed",
     "triggered": "Scan triggered! Check the Scans page for progress.",
-    "triggerFailed": "Trigger failed"
+    "triggerFailed": "Trigger failed",
+    "nameRequired": "Schedule name is required",
+    "cronRequired": "Cron expression is required",
+    "cronInvalid": "Cron expression must have 5 fields (minute hour day month weekday). Try a preset below.",
+    "cronHelp": "Format: minute hour day month weekday — e.g. 0 9 * * 1 = every Monday at 9am."
   },
   "teamPage": {
     "title": "Team Management",
@@ -297,7 +302,9 @@
     "remediation": "Remediation",
     "viewPlaybook": "View Playbook",
     "updatedCount": "Updated {count} findings",
-    "updateFailed": "Failed to update findings"
+    "updateFailed": "Failed to update findings",
+    "exportCsv": "Export CSV",
+    "exportedCount": "Exported {count} findings"
   },
   "certificates": {
     "title": "Certificate Intelligence",
@@ -661,6 +668,20 @@
     "findingsDescription": "Security issues detected during the scan",
     "noFindings": "No findings detected — great result!",
     "findingsPending": "Findings will appear when the scan completes."
+  },
+  "commandPalette": {
+    "label": "Command palette",
+    "placeholder": "Type a command or page…",
+    "empty": "No matches.",
+    "actionsGroup": "Actions",
+    "navigateGroup": "Navigate",
+    "hintNavigate": "navigate",
+    "hintSelect": "select",
+    "hintClose": "close",
+    "actions": {
+      "newScan": "New scan",
+      "schedules": "Manage schedules"
+    }
   },
   "orgSwitcher": {
     "currentOrg": "Active organization",
