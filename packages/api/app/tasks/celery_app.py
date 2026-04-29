@@ -30,6 +30,16 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.scan_tasks.check_scheduled_scans",
         "schedule": 60.0,
     },
+    # v2.4.20 audit reports-005: sweep stale report files from
+    # /tmp/nis2-reports once a day. The cutoff comes from
+    # `settings.report_ttl_days` at task-execution time so a config
+    # bump doesn't require restarting beat. 86400s = 24h; we don't
+    # use crontab() here to avoid pulling in the timezone dance —
+    # any time-of-day is fine for a janitor that's idempotent.
+    "cleanup-old-reports": {
+        "task": "app.tasks.report_tasks.cleanup_old_reports",
+        "schedule": 86400.0,
+    },
 }
 
 # v2.4.19 hotfix: explicitly import the task modules so their

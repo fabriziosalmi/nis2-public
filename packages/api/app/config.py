@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_ssl: bool = False  # Mutually exclusive with starttls (port 465 typical)
 
+    # v2.4.20 (audit reports-005): report files written under
+    # /tmp/nis2-reports stay there forever absent a sweeper. With
+    # 100s of scans/day in production, /tmp fills up and the worker
+    # eventually OOMs the disk. The Celery beat schedule includes
+    # `cleanup-old-reports` running once daily; this knob is the
+    # cutoff age. Default 30 days — long enough for a compliance
+    # team to download last week's report after a holiday, short
+    # enough that the disk doesn't grow unbounded.
+    report_ttl_days: int = 30
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     @model_validator(mode="after")
