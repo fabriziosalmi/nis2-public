@@ -41,16 +41,81 @@ import asyncio
 import csv
 import html
 import json
+import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 
 from app.tasks.celery_app import celery_app
 
+logger = logging.getLogger(__name__)
+
 REPORTS_DIR = "/tmp/nis2-reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Cleanup beat task (v2.4.20 audit reports-005)
+# ---------------------------------------------------------------------------
+
+@celery_app.task
+def cleanup_old_reports() -> dict:
+    """Sweep `/tmp/nis2-reports/` of files older than `report_ttl_days`.
+
+    Runs on the Celery beat schedule (once a day, see
+    `app/tasks/celery_app.py`). Without this, `/tmp/nis2-reports`
+    grows unbounded — a deploy generating 100s of reports/day fills
+    the disk in weeks. The named volume `reports-data` is shared
+    between api and worker (v2.4.19), so the worker's `os.unlink`
+    deletes the file from the api's view too.
+
+    Best-effort: a single `OSError` (file disappeared mid-iteration,
+    permission denied on a manually-injected file) is logged and
+    skipped — the next day's run will pick it up. The task always
+    succeeds; the return dict surfaces counts to whoever's reading
+    the worker logs.
+    """
+    from app.config import settings
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.report_ttl_days)
+    cutoff_ts = cutoff.timestamp()
+
+    removed = 0
+    skipped = 0
+    bytes_freed = 0
+
+    if not os.path.isdir(REPORTS_DIR):
+        # Defensive: directory is normally created at module-import,
+        # but if someone wipes it between runs we don't want the task
+        # to crash — just log and exit.
+        logger.info("cleanup_old_reports: reports dir missing (%s)", REPORTS_DIR)
+        return {"removed": 0, "skipped": 0, "bytes_freed": 0}
+
+    for filename in os.listdir(REPORTS_DIR):
+        path = os.path.join(REPORTS_DIR, filename)
+        try:
+            if not os.path.isfile(path):
+                continue
+            mtime = os.path.getmtime(path)
+            if mtime < cutoff_ts:
+                size = os.path.getsize(path)
+                os.unlink(path)
+                removed += 1
+                bytes_freed += size
+        except OSError as exc:
+            # File vanished mid-iteration (another worker process
+            # racing this one), permission denied, etc. Don't blow
+            # up the whole sweep — log and move on.
+            logger.warning("cleanup_old_reports: skip %s — %s", path, exc)
+            skipped += 1
+
+    logger.info(
+        "cleanup_old_reports: removed=%d skipped=%d freed=%d bytes (cutoff=%s)",
+        removed, skipped, bytes_freed, cutoff.isoformat(),
+    )
+    return {"removed": removed, "skipped": skipped, "bytes_freed": bytes_freed}
 
 
 @celery_app.task(bind=True, max_retries=1, time_limit=120)
