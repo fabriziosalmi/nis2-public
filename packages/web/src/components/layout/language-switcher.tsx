@@ -3,7 +3,7 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +25,8 @@ const locales = [
 
 export function LanguageSwitcher() {
   const t = useTranslations("language")
+  const ta = useTranslations("a11y")
+  const currentLocale = useLocale()
   const router = useRouter()
 
   const setLocale = (locale: string) => {
@@ -32,12 +34,29 @@ export function LanguageSwitcher() {
     router.refresh()
   }
 
+  // v2.4.23 audit a11y-02 (WCAG SC 4.1.2): the previous label was
+  // "Switch language" verbatim in English even when the rest of the
+  // UI was Italian / French / etc. Now localised via the `a11y`
+  // namespace; also surfaces the CURRENT locale name so screen-
+  // reader users know what's active before they pop the dropdown.
+  const currentLocaleName = (() => {
+    try {
+      return t(currentLocale as any)
+    } catch {
+      return currentLocale
+    }
+  })()
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-9 w-9">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          aria-label={ta("languageSwitcher", { current: currentLocaleName })}
+        >
           <Languages className="h-4 w-4" />
-          <span className="sr-only">Switch language</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -46,8 +65,9 @@ export function LanguageSwitcher() {
             key={locale.code}
             onClick={() => setLocale(locale.code)}
             className="cursor-pointer gap-2"
+            aria-current={locale.code === currentLocale ? "true" : undefined}
           >
-            <span>{locale.flag}</span>
+            <span aria-hidden="true">{locale.flag}</span>
             <span>{t(locale.code)}</span>
           </DropdownMenuItem>
         ))}

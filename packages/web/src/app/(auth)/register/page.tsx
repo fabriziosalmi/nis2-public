@@ -67,32 +67,77 @@ export default function RegisterPage() {
         <CardTitle className="text-2xl">{t("auth.registerTitle")}</CardTitle>
         <CardDescription>{t("auth.registerDescription")}</CardDescription>
       </CardHeader>
+      {/* v2.4.23 audit a11y-14: aria-invalid + aria-describedby on
+          every form field so SR users hear validation errors when
+          they refocus the offending input. */}
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="full_name">{t("auth.fullName")}</Label>
-            <Input id="full_name" placeholder={t("auth.fullNamePlaceholder")} {...register("full_name")} />
-            {errors.full_name && <p className="text-xs text-destructive">{t(errors.full_name.message as any)}</p>}
+            <Input
+              id="full_name"
+              placeholder={t("auth.fullNamePlaceholder")}
+              aria-invalid={!!errors.full_name}
+              aria-describedby={errors.full_name ? "full_name-error" : undefined}
+              {...register("full_name")}
+            />
+            {errors.full_name && (
+              <p id="full_name-error" className="text-xs text-destructive">
+                {t(errors.full_name.message as any)}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">{t("auth.email")}</Label>
-            <Input id="email" type="email" placeholder={t("auth.emailPlaceholder")} {...register("email")} />
-            {errors.email && <p className="text-xs text-destructive">{t(errors.email.message as any)}</p>}
+            <Input
+              id="email"
+              type="email"
+              placeholder={t("auth.emailPlaceholder")}
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "email-error" : undefined}
+              {...register("email")}
+            />
+            {errors.email && (
+              <p id="email-error" className="text-xs text-destructive">
+                {t(errors.email.message as any)}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">{t("auth.password")}</Label>
-            <Input id="password" type="password" placeholder={t("auth.passwordMin8")} {...register("password")} />
-            {errors.password && <p className="text-xs text-destructive">{t(errors.password.message as any)}</p>}
+            <Input
+              id="password"
+              type="password"
+              placeholder={t("auth.passwordMin8")}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+              {...register("password")}
+            />
+            {errors.password && (
+              <p id="password-error" className="text-xs text-destructive">
+                {t(errors.password.message as any)}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="org_name">{t("auth.orgName")}</Label>
-            <Input id="org_name" placeholder={t("auth.orgNamePlaceholder")} {...register("org_name")} />
-            {errors.org_name && <p className="text-xs text-destructive">{t(errors.org_name.message as any)}</p>}
+            <Input
+              id="org_name"
+              placeholder={t("auth.orgNamePlaceholder")}
+              aria-invalid={!!errors.org_name}
+              aria-describedby={errors.org_name ? "org_name-error" : undefined}
+              {...register("org_name")}
+            />
+            {errors.org_name && (
+              <p id="org_name-error" className="text-xs text-destructive">
+                {t(errors.org_name.message as any)}
+              </p>
+            )}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t("auth.register")}
           </Button>
           <p className="text-center text-sm text-muted-foreground">

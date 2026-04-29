@@ -83,15 +83,28 @@ export default function LoginPage() {
               {t("auth.sessionExpired")}
             </div>
           )}
+          {/* v2.4.23 audit a11y-14 (WCAG SC 3.3.1 Error Identification
+              + 1.3.1 Info & Relationships): inline field errors were
+              rendered as a styled <p> next to the input, but had no
+              programmatic association with the field — SR users
+              didn't hear the error when they focused the input.
+              aria-describedby links the error to its input, and
+              aria-invalid surfaces the validity state. */}
           <div className="space-y-2">
             <Label htmlFor="email">{t("auth.email")}</Label>
             <Input
               id="email"
               type="email"
               placeholder={t("auth.emailPlaceholder")}
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "email-error" : undefined}
               {...register("email")}
             />
-            {errors.email && <p className="text-xs text-destructive">{t(errors.email.message as any)}</p>}
+            {errors.email && (
+              <p id="email-error" className="text-xs text-destructive">
+                {t(errors.email.message as any)}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -110,14 +123,20 @@ export default function LoginPage() {
               id="password"
               type="password"
               placeholder={t("auth.passwordPlaceholder")}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
               {...register("password")}
             />
-            {errors.password && <p className="text-xs text-destructive">{t(errors.password.message as any)}</p>}
+            {errors.password && (
+              <p id="password-error" className="text-xs text-destructive">
+                {t(errors.password.message as any)}
+              </p>
+            )}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {t("auth.signIn")}
           </Button>
           <p className="text-center text-sm text-muted-foreground">

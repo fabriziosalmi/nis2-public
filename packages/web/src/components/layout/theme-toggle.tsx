@@ -31,6 +31,7 @@ import {
 export function ThemeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const t = useTranslations("header")
+  const ta = useTranslations("a11y")
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -48,10 +49,23 @@ export function ThemeToggle() {
   // the moon — the dropdown still highlights "system" as the active row.
   const Icon = resolvedTheme === "dark" ? Moon : Sun
 
+  // v2.4.23 audit a11y-09 (WCAG SC 4.1.2): the previous aria-label
+  // was the bare word "Theme" — screen readers heard "Theme button"
+  // with no information about the current state or what activating
+  // the button does. Now we surface the active theme in the label
+  // ("Theme: dark" / "Theme: light" / "Theme: system") so a screen-
+  // reader user knows what the dropdown will offer.
+  const currentTheme = theme === "system" ? "system" : resolvedTheme
+  const themeLabel = currentTheme === "dark"
+    ? t("darkMode")
+    : currentTheme === "light"
+      ? t("lightMode")
+      : t("systemMode")
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Theme">
+        <Button variant="ghost" size="icon" aria-label={ta("themeToggle", { current: themeLabel })}>
           <Icon className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>

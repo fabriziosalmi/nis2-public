@@ -181,13 +181,19 @@ export default function ReportsPage() {
                         </Link>
                       </TableCell>
                       <TableCell>
+                        {/* v2.4.23 audit a11y-05: aria-label surfaces
+                            the band so the colour isn't the only
+                            signal of "is this a good or bad score". */}
                         {scan.total_score != null ? (
-                          <span className={cn(
-                            "font-bold",
-                            scan.total_score > 80 ? "text-green-600"
-                              : scan.total_score > 60 ? "text-yellow-600"
-                              : "text-red-600",
-                          )}>
+                          <span
+                            className={cn(
+                              "font-bold",
+                              scan.total_score > 80 ? "text-green-600"
+                                : scan.total_score > 60 ? "text-yellow-600"
+                                : "text-red-600",
+                            )}
+                            aria-label={`${scan.total_score} (${scan.total_score > 80 ? "good" : scan.total_score > 60 ? "fair" : "poor"})`}
+                          >
                             {scan.total_score}
                           </span>
                         ) : <span className="text-muted-foreground">--</span>}

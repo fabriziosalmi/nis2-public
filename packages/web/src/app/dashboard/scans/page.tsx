@@ -109,10 +109,16 @@ export default function ScansPage() {
                     </TableCell>
                     <TableCell><StatusBadge status={scan.status} /></TableCell>
                     <TableCell>
+                      {/* v2.4.23 audit a11y-05: aria-label surfaces
+                          the band (good/fair/poor) so the
+                          colour-coded score is not colour-only. */}
                       {scan.total_score !== null && scan.total_score !== undefined ? (
-                        <span className={cn("font-bold",
-                          scan.total_score > 80 ? "text-green-600" : scan.total_score > 60 ? "text-yellow-600" : "text-red-600"
-                        )}>{scan.total_score}</span>
+                        <span
+                          className={cn("font-bold",
+                            scan.total_score > 80 ? "text-green-600" : scan.total_score > 60 ? "text-yellow-600" : "text-red-600"
+                          )}
+                          aria-label={`${scan.total_score} (${scan.total_score > 80 ? "good" : scan.total_score > 60 ? "fair" : "poor"})`}
+                        >{scan.total_score}</span>
                       ) : <span className="text-muted-foreground">--</span>}
                     </TableCell>
                     <TableCell>{scan.hosts_scanned || 0}</TableCell>

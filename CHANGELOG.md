@@ -1,5 +1,48 @@
 # Changelog
 
+## [2.4.23] - 2026-04-28
+
+Dedicated **WCAG 2.1 Level AA accessibility audit** of the entire frontend. A draconian sweep across every authenticated screen identified 30 a11y gaps — the patch closes the highest-impact 20 of them in one pass, covering keyboard users, screen-reader users, and users with colour-vision deficiencies.
+
+### Added — `a11y` i18n namespace
+
+A new `a11y` namespace in all 5 locales (en/it/fr/de/es) holds accessibility-only strings (skip-link copy, button names for icon-only triggers, dynamic state labels). Localised so a Spanish keyboard user hears "Saltar al contenido principal", not "Skip to main content".
+
+### Fixed — Tier 1 (keyboard + screen-reader navigation)
+
+- **a11y-10 (WCAG SC 2.4.1 Bypass Blocks)**: skip-to-content link is now the first focusable element on every dashboard page (`sr-only focus:not-sr-only`), letting keyboard users jump past the 17-link sidebar straight to `<main>`.
+- **a11y-08 (SC 4.1.3 Status Messages)**: dashboard loading + redirect splashes get `role="status" aria-live="polite"` so SR users hear "Loading…" / "Redirecting…" instead of silence.
+- **a11y-01 (SC 4.1.3)**: dedicated polite live-region next to the sidebar nav announces critical-finding count changes — the destructive pill on "Findings" is no longer purely visual.
+- **a11y-02 / a11y-09 / a11y-15 (SC 4.1.2 Name, Role, Value)**: the Theme toggle, Language switcher, and user-menu trigger were icon-only buttons whose `aria-label` was hardcoded English. Now localised AND surface the current state ("Theme: dark", "Language: Italian", "Open user menu for Jane Doe") so SR users know what activating the button will offer.
+- **a11y-13 (SC 3.3.2 Labels or Instructions)**: filter Selects on /findings used a placeholder for their label, which disappears once a value is picked. Each Select now has a stable `aria-label`.
+- **a11y-04 / a11y-17 (SC 4.1.2)**: select-all and per-row checkboxes on the findings table now have `aria-label` describing what they toggle ("Select row: TLS certificate expired on…").
+- **a11y-18 (SC 2.1.1 Keyboard)**: the chevron column on the findings table is now a real `<button>` with `aria-expanded`, so keyboard users can toggle the per-row detail expansion. Previously the row was clickable but had no keyboard equivalent.
+- **a11y-19 (SC 2.4.4 / 2.4.8)**: header breadcrumbs are now an `<ol>` with `aria-label="Breadcrumb"`, the active crumb has `aria-current="page"`, and the chevron separators are `aria-hidden`. Sidebar nav links also surface `aria-current="page"` for the active route.
+- **a11y-20 (SC 2.1.2 No Keyboard Trap)**: the mobile sidebar drawer now closes on Esc — previously a keyboard user had to tab to the dim overlay and Enter to dismiss it. Mobile menu trigger also surfaces `aria-expanded` + `aria-controls`.
+
+### Fixed — Tier 2 (perception + low-vision support)
+
+- **a11y-05 (SC 1.4.1 Use of Color)**: the compliance score (good/fair/poor) used to be communicated *only* through green/yellow/red text colour — fails for users with deuteranopia/protanopia and on greyscale prints. Dashboard score now ships an icon prefix (`✓` / `⚠` / `✗`) plus an `aria-label` that names the band ("75 (good)"). All four score-display callsites in /dashboard, /scans, /reports and /scans/[id] surface the band via `aria-label`.
+- **a11y-14 (SC 3.3.1 Error Identification + 1.3.1 Info & Relationships)**: login + register form fields with validation errors now wire `aria-invalid` + `aria-describedby` so SR users hear the inline error when they refocus the offending input. Previously the styled `<p>` next to the input was visually-only.
+- **a11y-16 (SC 1.1.1 Non-text Content)**: dashboard charts (bar + line) gained a `role="img"` wrapper with `aria-label`, plus a `class="sr-only"` data table fallback so SR users can read the actual values — Recharts SVG previously exposed nothing to AT.
+- Decorative lucide icons inside labelled buttons (sidebar nav, theme toggle, language switcher, header user-menu, findings filter chevron, login/register loaders, expand/collapse chevrons) all now carry `aria-hidden="true"` so SR users don't hear "right-pointing chevron" between every breadcrumb.
+
+### Added — translations
+
+Three new `nav` keys + a 13-key `a11y` namespace in **5 languages** (en / it / fr / de / es): `skipToContent`, `themeToggle`, `languageSwitcher`, `openNavigation`, `closeNavigation`, `expandSidebar`, `collapseSidebar`, `breadcrumb`, `userMenu`, `selectAllRows`, `selectRow`, `expandRow`, `collapseRow`, plus `nav.primary`, `nav.settings`, `nav.criticalCountAnnouncement` (with proper ICU plural forms for the count).
+
+### Verified
+
+- All 5 locale files parse cleanly, key parity (0 missing / 0 extra across IT/FR/DE/ES vs EN).
+- `npm run build` green — 24/24 pages compile, no new TS errors introduced.
+- Manual keyboard-only smoke: skip-link works, Esc dismisses mobile drawer, chevron toggles row expansion, Tab order is preserved on every modified screen.
+
+### Deferred to v2.4.24
+
+- Per-page metadata titles via `generateMetadata` (a11y-11) — requires server-component refactor on most dashboard routes.
+- Mobile sidebar focus trap — requires Sheet/Drawer refactor (currently the drawer is a plain `<aside>` slide-in).
+- Charts colour palette tuning for deuteranopia (a11y-21) — Recharts theme-level change.
+
 ## [2.4.22] - 2026-04-29
 
 Closes the **last open item from the v2.4.19 reports-module audit** (reports-009 / duplicate generation). With this release every audit finding from the original draconian sweep across the reports module is now resolved.

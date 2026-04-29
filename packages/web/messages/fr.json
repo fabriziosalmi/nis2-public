@@ -41,7 +41,25 @@
     "apiKeys": "Clés API",
     "notifications": "Notifications",
     "auditLog": "Journal d'audit",
-    "criticalBadgeAria": "découvertes critiques"
+    "criticalBadgeAria": "découvertes critiques",
+    "primary": "Principal",
+    "settings": "Paramètres",
+    "criticalCountAnnouncement": "{count, plural, one {# découverte critique nécessite} other {# découvertes critiques nécessitent}} votre attention"
+  },
+  "a11y": {
+    "skipToContent": "Aller au contenu principal",
+    "themeToggle": "Thème : {current}",
+    "languageSwitcher": "Langue : {current}",
+    "openNavigation": "Ouvrir le menu de navigation",
+    "closeNavigation": "Fermer le menu de navigation",
+    "expandSidebar": "Déplier la barre latérale",
+    "collapseSidebar": "Replier la barre latérale",
+    "breadcrumb": "Fil d'Ariane",
+    "userMenu": "Ouvrir le menu utilisateur de {name}",
+    "selectAllRows": "Sélectionner toutes les lignes",
+    "selectRow": "Sélectionner la ligne : {label}",
+    "expandRow": "Déplier les détails de la ligne",
+    "collapseRow": "Replier les détails de la ligne"
   },
   "dashboard": {
     "title": "Tableau de bord",
