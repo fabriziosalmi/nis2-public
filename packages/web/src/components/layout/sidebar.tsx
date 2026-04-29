@@ -34,7 +34,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { OrgSwitcher } from "@/components/layout/org-switcher"
 import { useAuthStore } from "@/stores/auth-store"
 import { useFindingStats } from "@/hooks/use-findings"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const mainNavKeys = [
   { key: "dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -77,18 +77,87 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // v2.4.25 audit a11y (WCAG SC 2.4.3 Focus Order): the mobile
+  // drawer is a modal slide-out — when it's open, keyboard focus
+  // must stay inside it. The previous (v2.4.23) implementation
+  // closed on Esc but didn't constrain Tab, so Tab from the last
+  // nav link landed on whatever happened to be in the document
+  // BEHIND the dim overlay (the page main content the drawer was
+  // meant to obscure). That's a confusing state for SR / keyboard
+  // users and conventionally a focus-trap bug.
+  //
+  // The refs:
+  //   - asideRef: scope for the focus query when computing
+  //     "first / last focusable" to wrap Tab around.
+  //   - triggerRef: the hamburger button that opened the drawer;
+  //     focus returns here when the drawer closes (so the user's
+  //     keyboard position is restored predictably, per SC 2.4.3).
+  const asideRef = useRef<HTMLElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
   // v2.4.23 audit a11y-20 (WCAG SC 2.1.2 No Keyboard Trap): the
   // mobile drawer should close on Esc — keyboard users were
-  // forced to click the dim overlay to dismiss it. The listener
-  // is only attached when the drawer is open so it doesn't
-  // intercept Esc anywhere else.
+  // forced to click the dim overlay to dismiss it.
+  // v2.4.25: extended to also implement a focus trap (SC 2.4.3)
+  // and focus restore on close.
   useEffect(() => {
     if (!mobileOpen) return
+    const aside = asideRef.current
+    if (!aside) return
+
+    // The selector mirrors the de-facto "tabbable" set used by
+    // every focus-trap library — anchor with href, non-disabled
+    // form controls, and explicit tabindex>=0. We exclude
+    // tabindex="-1" because those are programmatically focusable
+    // but should not appear in the Tab order.
+    const FOCUSABLE_SELECTOR =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    // Move focus into the drawer on open so the next Tab keystroke
+    // lands somewhere inside, not back on the body. Defer to the
+    // next frame because the drawer's `translate-x-0` transition
+    // hasn't started yet — focusing while the element is still
+    // visually offscreen is fine, but some browsers refuse to
+    // focus an element with `display: none` ancestors.
+    const initial = aside.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+    initial?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false)
+      if (e.key === "Escape") {
+        setMobileOpen(false)
+        return
+      }
+      if (e.key !== "Tab") return
+
+      // Re-query on every Tab so dynamically added/removed nav
+      // links (e.g. the destructive findings badge appearing on
+      // count change) participate in the trap.
+      const focusables = aside.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+
+      // Wrap shift+tab from first → last, tab from last → first.
+      // Outside this trap the browser's default Tab order applies.
+      if (e.shiftKey && (active === first || !aside.contains(active))) {
+        last.focus()
+        e.preventDefault()
+      } else if (!e.shiftKey && (active === last || !aside.contains(active))) {
+        first.focus()
+        e.preventDefault()
+      }
     }
     document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      // Restore focus to the trigger so the keyboard user's
+      // position in the page is predictable. Defer to a microtask
+      // because React may unmount the trigger if the drawer-close
+      // navigation also unmounted the layout — a `?.focus()` in
+      // that case is a no-op rather than an error.
+      triggerRef.current?.focus()
+    }
   }, [mobileOpen])
 
   const handleLogout = async () => {
@@ -280,8 +349,11 @@ export function Sidebar() {
       {/* Mobile trigger — v2.4.23 audit: icon-only button needs an
           accessible name + the visual state (open vs closed)
           surfaces via aria-expanded so screen-reader users know
-          whether the next Tab takes them into the menu or past it. */}
+          whether the next Tab takes them into the menu or past it.
+          v2.4.25: ref'd so we can restore focus here when the
+          drawer closes (SC 2.4.3 Focus Order). */}
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="icon"
         className="fixed left-4 top-4 z-50 lg:hidden"
@@ -303,10 +375,29 @@ export function Sidebar() {
         />
       )}
 
-      {/* Mobile sidebar */}
+      {/* Mobile sidebar — v2.4.25 a11y: ref'd + role=dialog +
+          aria-modal so AT recognise it as a modal panel and the
+          focus-trap useEffect above can scope its query to the
+          drawer's contents.
+          `inert` when closed prevents the slid-offscreen drawer
+          from polluting the Tab order (translateX moves the
+          element visually but doesn't disable focus on its
+          descendants — pre-2.4.25 a mobile keyboard user tabbing
+          through the main content would suddenly be focused on
+          links inside the offscreen drawer). */}
       <aside
+        ref={asideRef}
         id="mobile-sidebar"
+        role="dialog"
+        aria-modal="true"
         aria-label={t("nav.primary")}
+        // React 19 supports `inert` natively as a boolean prop. We
+        // pass `true` when closed so the browser refuses to focus
+        // anything inside; `undefined` when open so links work.
+        // The {...} spread keeps TypeScript happy across the
+        // version straddle (React 18 typings don't have it; React
+        // 19 typings do).
+        {...(!mobileOpen ? { inert: "" as unknown as boolean } : {})}
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 transform border-r bg-sidebar transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
