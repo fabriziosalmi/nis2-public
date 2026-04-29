@@ -93,3 +93,17 @@ class RefreshRequest(BaseModel):
     refresh_token from the httpOnly cookie. SDKs can still POST it.
     """
     refresh_token: Optional[str] = None
+
+
+class SwitchOrgRequest(BaseModel):
+    """Audit B-DRA-02 (v2.4.16): switch the active organization.
+
+    The platform is multi-tenant — a single user can hold memberships
+    in any number of orgs (typically a NIS2 consultant managing several
+    clients). The active org is baked into the JWT's `org_id` claim
+    and read by every RLS-scoped request, so changing it requires
+    minting a new token rather than mutating client state. The web UI
+    posts here from the org-switcher dropdown; SDK / CLI consumers can
+    call it the same way.
+    """
+    organization_id: uuid.UUID

@@ -161,7 +161,7 @@ These automated checks verify whether the security measures documented in your g
 
 | Router | Endpoints | Purpose |
 |--------|-----------|---------|
-| `/api/v1/auth` | 9 | JWT authentication, registration, change-password, forgot/reset password |
+| `/api/v1/auth` | 10 | JWT authentication, registration, change-password, forgot/reset password, **switch active organization** |
 | `/api/v1/scans` | 8 | Scan management, results, comparison. Read endpoints accept API-key Bearer auth |
 | `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved). Read endpoints accept API-key Bearer auth |
 | `/api/v1/assets` | 6 | Asset inventory management. Read endpoints accept API-key Bearer auth |
@@ -185,8 +185,9 @@ These automated checks verify whether the security measures documented in your g
 
 Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 
-- Organization-based data isolation (`organization_id` filter on every protected query)
+- Organization-based data isolation (`organization_id` filter on every protected query, enforced by Postgres `FORCE ROW LEVEL SECURITY` policies — even the table owner cannot bypass them)
 - RBAC: admin, auditor, viewer per organization
+- **Org switcher in the sidebar** — a user with memberships in multiple orgs can move between client tenants without logging out (`POST /api/v1/auth/switch-org` remints the JWT with the new `org_id` claim, the FE clears the TanStack Query cache so no stale data leaks, audit log records the transition)
 - Executive PDF/CSV reports per client
 - Aggregated compliance dashboard across all organizations
 - Each client's data stays in the same self-hosted instance

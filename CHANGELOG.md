@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.4.16] - 2026-04-29
+
+Closes the last blocker from the v2.4.14 draconian UX audit (B-DRA-02): a user with memberships in multiple organizations can now switch between client tenants without logging out. README has marketed multi-tenancy "for NIS2 consultants managing multiple clients" since v1.0; until this release there was no UI to act on it. Backend already had RLS policies on every tenant-scoped table and the JWT carried `org_id` (since B10 in v2.4.12) — the missing pieces were the **switch endpoint** and the **switcher UI**.
+
+### Added — `POST /api/v1/auth/switch-org` (audit B-DRA-02)
+
+- **Body**: `{"organization_id": "<uuid>"}`. Pydantic enforces UUID format; malformed payload returns 422 before any DB work runs.
+- **Authorization**: requires the existing cookie or Bearer session. Looks up `(current_user.id, payload.organization_id)` against the eager-loaded `Membership` rows; if no match, returns **403** ("you are not a member of the target organization") rather than 404 — the org may exist; the membership doesn't.
+- **Token rotation**: reuses `_build_token_response` (the same helper as `/login`, `/register`, `/refresh`, `/change-password`), minting fresh access / refresh / csrf tokens with the new `org_id` claim and the role from the target membership. Cookies are rotated via `Set-Cookie` so the FE picks up the new tenant transparently.
+- **Audit log entry** `user.org_switched`, written under the *target* org so the security team finds it where they look ("who accessed our tenant today"). `details` records `from_org_id` (the previous JWT claim — `null` for legacy tokens predating v2.4.12) and `to_role`.
+- **Rate limit**: `10/min/IP`. UI action, not a credential surface; the limit makes brute-force enumeration of org IDs uninteresting (combined with the RLS guard, which already flatly refuses cross-org reads).
+- **CSRF**: required (state-changing, has session cookie — middleware enforces double-submit).
+
+### Added — Frontend `<OrgSwitcher>` component
+
+- New file `components/layout/org-switcher.tsx` plus `hooks/use-orgs.ts` (`useOrgs` + `useSwitchOrg` mutation).
+- **Renders only when the user has 2+ memberships** — single-org users (the vast majority of self-hosted installs) see no extra chrome.
+- Lives at the top of the sidebar, immediately under the logo, with both expanded (full button showing "Active organization" / `<orgName>`) and collapsed (icon-only) layouts.
+- On switch:
+  1. POSTs to `/auth/switch-org` (cookies rotate via `Set-Cookie`),
+  2. updates the auth-store's `orgId` so RLS-keyed queries (`["scans", orgId]`, `["members", orgId]`, etc.) re-key correctly,
+  3. **clears the entire TanStack Query cache** — every screen's data is RLS-scoped on the server, so stale results from the previous tenant must not leak into the new view (a per-key invalidate would race with components reading the stale data on the same render),
+  4. `router.refresh()` to re-run the App Router's hydration against the new tenant.
+- Accessible: `aria-label` on the collapsed icon trigger names the active org and the action ("Active organization: Acme. Click to switch.").
+- New `orgSwitcher` namespace in `messages/*.json` — **5 leaf keys × 5 locales = 25 new translations**.
+
+### API client
+
+- `api.switchOrg(organizationId)` returns the new `TokenResponse`. Caller is expected to clear the query cache after success — the `useSwitchOrg` mutation does this automatically.
+
+### Verified
+
+- 75 unit + **50** e2e (was 46 in v2.4.15) = **125 green**.
+- New `TestOrgSwitch` (4 tests):
+  - `test_switch_with_invalid_uuid_422` — malformed UUID body
+  - `test_switch_to_unknown_org_403` — well-formed UUID with no membership
+  - `test_switch_unauthenticated_401` — no cookie / Bearer
+  - `test_full_round_trip_multi_org` — register a temp user → temp invites the canonical test user (gives them a 2nd membership) → switch to the new org → switch back → cleanup the temp membership. Pays **zero extra `/login`** by reusing the module-scoped `client` fixture; `try/finally` always restores the original org so the module client's cookies are not poisoned for downstream tests.
+- All 5 i18n locales validate clean and re-pass parity at **641 leaf keys** (was 636).
+- Local `ruff check` matches CI's exact invocation, all clean.
+
+### Postponed to a later release
+
+- **B-DRA-02 part 2 / "Create new organization" surface** — currently a user only joins additional orgs via being invited to an existing one. A `POST /api/v1/organizations` route that creates a new org owned by `current_user` (giving the SaaS user a self-serve way to spin up a second tenant) is reasonable but out of scope for this patch.
+- **S-DRA-* / O-DRA-*** — date locale via next-intl, findings filter debouncing, cron preset chips, sticky table headers, locale-aware severity badges, real `cmdk` command palette, bulk export findings, drag-drop asset import. Bundled into v2.4.17+.
+
 ## [2.4.15] - 2026-04-29
 
 This release closes the i18n / dead-code / destructive-action backlog flagged by the v2.4.14 draconian UX audit. No backend changes — purely frontend cleanup. The recurring theme: pages that *had* an i18n namespace defined but never imported `useTranslations`, plus a few fake-UX leftovers from earlier prototypes.
