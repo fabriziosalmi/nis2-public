@@ -27,6 +27,16 @@ const actionColors: Record<string, string> = {
 export default function AuditLogPage() {
   const t = useTranslations("auditLogPage")
   const tc = useTranslations("common")
+  // Pagination strings (previous / next / page) live in the `scans`
+  // namespace — same widget rides on /scans, /reports, here, and
+  // every other paginated table. Reusing keeps the translations in
+  // one place. v2.4.19: previously this page called `tc("page")`
+  // (common namespace, which has no `page` key) and fell back to a
+  // literal English "Page X" via a `||` chain — but next-intl's
+  // `t()` throws on missing keys rather than returning falsy, so
+  // the page broke at runtime in IT/FR/DE/ES with a console
+  // MISSING_MESSAGE error and a React error boundary trip.
+  const ts = useTranslations("scans")
   const formatDate = useFormatDate()
   const [page, setPage] = useState(1)
   const { data, isLoading } = useAuditLogs({ page, page_size: 50 })
@@ -118,16 +128,16 @@ export default function AuditLogPage() {
       {total > 50 && (
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            {tc("back")}
+            {ts("previous")}
           </Button>
-          <span className="text-sm text-muted-foreground">{tc("page" as any) || `Page ${page}`} {page}</span>
+          <span className="text-sm text-muted-foreground">{ts("page", { n: page })}</span>
           <Button
             variant="outline"
             size="sm"
             disabled={items.length < 50}
             onClick={() => setPage(page + 1)}
           >
-            {tc("next")}
+            {ts("next")}
           </Button>
         </div>
       )}

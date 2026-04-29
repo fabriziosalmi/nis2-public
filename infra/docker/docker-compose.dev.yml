@@ -28,6 +28,15 @@ services:
     volumes:
       - ../../packages/api:/app/packages/api
       - ../../packages/scanner:/app/packages/scanner
+      # v2.4.19: shared volume for generated reports. The Celery
+      # worker writes the rendered file under /tmp/nis2-reports;
+      # the API's GET /reports/download/{task_id} reads from the
+      # SAME path. Without sharing, the worker's /tmp is invisible
+      # to the api container — every download 404'd. Named volume
+      # so it survives container restarts (devs don't lose reports
+      # mid-debug); for prod a real shared filesystem or object
+      # store is the right answer.
+      - reports-data:/tmp/nis2-reports
     ports: ["8000:8000"]
     env_file: ../../.env
     environment:
@@ -61,9 +70,20 @@ services:
     volumes:
       - ../../packages/api:/app/packages/api
       - ../../packages/scanner:/app/packages/scanner
+      # Mirrors the api service so the worker's report writes are
+      # visible to the api's download endpoint. See the api block.
+      - reports-data:/tmp/nis2-reports
     env_file: ../../.env
     environment:
       ENVIRONMENT: development
+      # v2.4.19: tells `app.database` to use NullPool. Celery's
+      # prefork worker mints a fresh asyncio event loop per task
+      # via `asyncio.run(...)`; pooled asyncpg connections from a
+      # previous task carry a now-closed loop reference and throw
+      # `Future attached to a different loop` on reuse. NullPool
+      # sidesteps that — same fix the integration tests already
+      # use. See the comment block in app/database.py.
+      CELERY_WORKER: "1"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -118,3 +138,7 @@ services:
 
 volumes:
   pgdata:
+  # v2.4.19: shared between api + celery-worker so generated reports
+  # are visible to the download endpoint. See the bind comments on
+  # each service.
+  reports-data:

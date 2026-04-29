@@ -4,11 +4,45 @@
 """
 Unified report generation via Celery.
 Supports 6 formats: JSON, CSV, PDF, Markdown, JUnit XML, HTML.
+
+v2.4.19 Reports module audit hardening — every text path that
+embeds DB-stored user content (scan name, finding messages, asset
+hostnames, executive summaries, remediation copy, ...) now flows
+through a format-appropriate escaper:
+
+  - HTML / PDF (HTML→PDF via WeasyPrint): `html.escape()` so a scan
+    named `</title><script>alert(1)</script>` doesn't execute in
+    the recipient's browser.
+  - Markdown: a custom `_md_escape()` that backslash-escapes the
+    structural characters (|, *, _, `, [, ], <, >) so a finding
+    message with a stray `|` doesn't break the table layout (or
+    worse, with `<script>` doesn't render as raw HTML in lenient
+    Markdown viewers).
+  - CSV: cells starting with `=`, `+`, `-`, `@`, tab, or carriage
+    return get prefixed with `'` to neuter Excel formula injection
+    (a finding message of `=cmd|'/c calc'!A1` would otherwise run
+    cmd.exe when the recipient opens the CSV in Excel).
+  - JUnit XML: `xml.sax.saxutils.escape()` + `quoteattr()` so a
+    message containing `"` or `&` doesn't break the XML structure
+    or inject sibling attributes.
+
+Also v2.4.19:
+  - Filenames are sanitized via `_safe_basename()` — only
+    alphanumeric / `-` / `_` survive — so a scan named
+    `../../../../etc/passwd` cannot escape `/tmp/nis2-reports/`.
+  - HTML reports carry a `lang` attribute matching the user's
+    locale (passed in by the caller).
+  - WeasyPrint is REQUIRED for PDF requests (the silent fallback
+    to HTML is gone) — if the import fails, the task fails and
+    the user sees a real error instead of receiving an HTML file
+    masquerading as `.pdf`.
 """
 import asyncio
 import csv
+import html
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from xml.etree.ElementTree import Element, SubElement, ElementTree
@@ -36,6 +70,11 @@ async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
         scan = await db.get(Scan, uuid.UUID(scan_id))
         if not scan:
             raise ValueError(f"Scan {scan_id} not found")
+        # v2.4.19 audit reports-001: pin the report to the
+        # requesting org. The download endpoint validates this
+        # later — see app/routers/reports.py.
+        if str(scan.organization_id) != str(org_id):
+            raise ValueError("Scan does not belong to requesting organization")
         results_q = await db.execute(select(ScanResult).where(ScanResult.scan_id == scan.id))
         results = results_q.scalars().all()
         findings_q = await db.execute(
@@ -44,7 +83,11 @@ async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
         findings = findings_q.scalars().all()
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    base = f"nis2_report_{scan.name.replace(' ', '_')}_{ts}"
+    # v2.4.19 audit reports-002: sanitize the scan name component
+    # of the on-disk filename. Without this, a scan named
+    # `../../../../etc/passwd` would resolve `os.path.join` outside
+    # of REPORTS_DIR and the writer could clobber arbitrary files.
+    base = f"nis2_report_{_safe_basename(scan.name)}_{ts}"
 
     generators = {
         "json": _gen_json,
@@ -59,11 +102,85 @@ async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
     gen = generators.get(format)
     if not gen:
         raise ValueError(f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}")
-    return gen(scan, results, findings, base)
+    result = gen(scan, results, findings, base)
+    # Stash the org_id on the result so the API's /status and
+    # /download endpoints can validate the requester's org matches.
+    result["org_id"] = str(org_id)
+    return result
 
 
 # ---------------------------------------------------------------------------
-# JSON
+# Sanitization helpers (v2.4.19 audit hardening)
+# ---------------------------------------------------------------------------
+
+def _safe_basename(name: str | None) -> str:
+    """Reduce a user-supplied scan name to a filename-safe slug.
+    Whitelist alphanumerics / hyphen / underscore — every other
+    byte (path separators, dotted parents, unicode glyphs) gets
+    replaced with `_`. Caps at 64 chars. Empty / None falls back
+    to `report` so we never generate `nis2_report__<ts>.pdf`."""
+    if not name:
+        return "report"
+    cleaned = re.sub(r"[^A-Za-z0-9_\-]", "_", name)[:64].strip("_")
+    return cleaned or "report"
+
+
+# Markdown structural characters. Backslash-escaping these inside
+# a table cell prevents user content from breaking the table layout
+# or injecting raw HTML in lenient Markdown viewers.
+_MD_ESCAPE = re.compile(r"([\\|*_`\[\]<>])")
+
+
+def _md(value: object) -> str:
+    """Escape a value for safe inclusion in a Markdown table cell.
+    Newlines are collapsed to spaces — pipes inside multi-line
+    content otherwise break tables; readers who want the full text
+    can open the JSON / HTML reports."""
+    if value is None:
+        return "-"
+    s = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return _MD_ESCAPE.sub(r"\\\1", s)
+
+
+def _csv_safe(value: object) -> str:
+    """Neuter Excel formula injection.
+    Cells beginning with `=`, `+`, `-`, `@`, tab, or carriage
+    return are auto-evaluated by Excel / LibreOffice / Google
+    Sheets when the file is opened. A finding message of
+    `=cmd|'/c calc'!A1` would launch calc.exe on a Windows
+    recipient's machine. Prefixing with a single quote (which
+    spreadsheet apps strip on display) defangs the trick.
+    See https://owasp.org/www-community/attacks/CSV_Injection."""
+    if value is None:
+        return ""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
+def _xml_attr(value: object) -> str:
+    """Escape a value for inclusion in an XML attribute. Returns
+    the inner text (without surrounding quotes — ElementTree adds
+    those). `xml.sax.saxutils.escape` handles `&`, `<`, `>`; we
+    also escape `"` since attributes use double quotes."""
+    from xml.sax.saxutils import escape
+    if value is None:
+        return ""
+    return escape(str(value), {'"': "&quot;"})
+
+
+def _xml_text(value: object) -> str:
+    """Escape body text — `&`, `<`, `>` only (quotes don't matter
+    in element text)."""
+    from xml.sax.saxutils import escape
+    if value is None:
+        return ""
+    return escape(str(value))
+
+
+# ---------------------------------------------------------------------------
+# JSON (no escaping needed — json.dumps handles everything)
 # ---------------------------------------------------------------------------
 
 def _gen_json(scan, results, findings, base) -> dict:
@@ -92,7 +209,7 @@ def _gen_json(scan, results, findings, base) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# CSV
+# CSV (formula-injection neutered)
 # ---------------------------------------------------------------------------
 
 def _gen_csv(scan, results, findings, base) -> dict:
@@ -102,20 +219,28 @@ def _gen_csv(scan, results, findings, base) -> dict:
         w.writerow(["Severity", "Category", "Message", "Target", "Remediation",
                      "CVSS Score", "CVSS Vector", "Compliance Article", "Status"])
         for fi in findings:
-            w.writerow([fi.severity, fi.category, fi.message, fi.target,
-                        fi.remediation or "", fi.cvss_base_score or "",
-                        fi.cvss_vector or "", fi.compliance_article or "", fi.status])
+            w.writerow([
+                _csv_safe(fi.severity),
+                _csv_safe(fi.category),
+                _csv_safe(fi.message),
+                _csv_safe(fi.target),
+                _csv_safe(fi.remediation or ""),
+                _csv_safe(fi.cvss_base_score or ""),
+                _csv_safe(fi.cvss_vector or ""),
+                _csv_safe(fi.compliance_article or ""),
+                _csv_safe(fi.status),
+            ])
     return _result(path, f"{base}.csv", "text/csv", "csv")
 
 
 # ---------------------------------------------------------------------------
-# Markdown
+# Markdown (structural chars escaped)
 # ---------------------------------------------------------------------------
 
 def _gen_markdown(scan, results, findings, base) -> dict:
     lines = []
     lines.append("# NIS2 Compliance Scan Report\n")
-    lines.append(f"**Scan:** {scan.name}  ")
+    lines.append(f"**Scan:** {_md(scan.name)}  ")
     date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else "N/A"
     lines.append(f"**Date:** {date_str}  ")
     lines.append(f"**Score:** {scan.total_score or 0}/100  ")
@@ -135,7 +260,9 @@ def _gen_markdown(scan, results, findings, base) -> dict:
 
     if scan.executive_summary:
         lines.append("## Executive Summary\n")
-        lines.append(f"> {scan.executive_summary}\n")
+        # Blockquote — escape pipes/asterisks/etc inside the body
+        # so a `*emphasis*` from the user doesn't reflow the doc.
+        lines.append(f"> {_md(scan.executive_summary)}\n")
 
     # Findings table
     lines.append("## Findings\n")
@@ -143,7 +270,10 @@ def _gen_markdown(scan, results, findings, base) -> dict:
     lines.append("|----------|----------|---------|--------|-------------|")
     for f in findings:
         sev_icon = {"CRITICAL": "[!]", "HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[.]"}.get(f.severity, "[ ]")
-        lines.append(f"| {sev_icon} {f.severity} | {f.category} | {f.message} | `{f.target}` | {f.remediation or '-'} |")
+        lines.append(
+            f"| {sev_icon} {_md(f.severity)} | {_md(f.category)} | {_md(f.message)} | "
+            f"`{_md(f.target)}` | {_md(f.remediation) if f.remediation else '-'} |"
+        )
     lines.append("")
 
     # Assets
@@ -153,7 +283,7 @@ def _gen_markdown(scan, results, findings, base) -> dict:
     for r in results:
         st = "Active" if r.is_alive else "Inactive"
         ports = ", ".join(str(p) for p in (r.open_ports or [])) or "None"
-        lines.append(f"| {r.target} | `{r.ip}` | {st} | {ports} |")
+        lines.append(f"| {_md(r.target)} | `{_md(r.ip)}` | {st} | {_md(ports)} |")
     lines.append("")
 
     lines.append(f"\n---\n*Generated by NIS2 Compliance Platform — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n")
@@ -165,31 +295,63 @@ def _gen_markdown(scan, results, findings, base) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# JUnit XML (CI/CD integration)
+# JUnit XML (CI/CD integration) — attribute + text escaping via
+# xml.sax.saxutils plus the wrappers above.
 # ---------------------------------------------------------------------------
 
 def _gen_junit(scan, results, findings, base) -> dict:
-    testsuites = Element("testsuites", name=scan.name or "NIS2 Scan",
-                         tests=str(len(findings)), timestamp=datetime.now(timezone.utc).isoformat())
+    # ElementTree's SubElement(name, attr=value) handles attribute
+    # escaping for `&`, `<`, `>` automatically — but to be safe
+    # against `"` we also pre-escape via _xml_attr() on the
+    # user-supplied attribute values. Body text passes through
+    # _xml_text() before assignment to .text.
+    testsuites = Element(
+        "testsuites",
+        name=_xml_attr(scan.name or "NIS2 Scan"),
+        tests=str(len(findings)),
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
 
     # Group findings by target for testsuite structure
-    targets = {}
+    targets: dict[str, list] = {}
     for f in findings:
         targets.setdefault(f.target, []).append(f)
 
     for target, target_findings in targets.items():
-        suite = SubElement(testsuites, "testsuite", name=target, tests=str(len(target_findings)))
+        suite = SubElement(
+            testsuites,
+            "testsuite",
+            name=_xml_attr(target),
+            tests=str(len(target_findings)),
+        )
         for f in target_findings:
-            tc = SubElement(suite, "testcase", name=f.message, classname=f.category)
+            tc = SubElement(
+                suite,
+                "testcase",
+                name=_xml_attr(f.message),
+                classname=_xml_attr(f.category or ""),
+            )
             if f.severity in ("CRITICAL", "HIGH"):
-                fail = SubElement(tc, "failure", message=f.message, type=f.severity)
-                fail.text = f"Remediation: {f.remediation or 'N/A'}\nCVSS: {f.cvss_base_score or 'N/A'}\nArticle: {f.compliance_article or 'N/A'}"
+                fail = SubElement(
+                    tc, "failure",
+                    message=_xml_attr(f.message),
+                    type=_xml_attr(f.severity),
+                )
+                fail.text = _xml_text(
+                    f"Remediation: {f.remediation or 'N/A'}\n"
+                    f"CVSS: {f.cvss_base_score or 'N/A'}\n"
+                    f"Article: {f.compliance_article or 'N/A'}"
+                )
             elif f.severity == "MEDIUM":
-                fail = SubElement(tc, "failure", message=f.message, type="WARNING")
-                fail.text = f"Remediation: {f.remediation or 'N/A'}"
+                fail = SubElement(
+                    tc, "failure",
+                    message=_xml_attr(f.message),
+                    type="WARNING",
+                )
+                fail.text = _xml_text(f"Remediation: {f.remediation or 'N/A'}")
             else:
                 so = SubElement(tc, "system-out")
-                so.text = f"INFO: {f.message} — {f.remediation or ''}"
+                so.text = _xml_text(f"INFO: {f.message} — {f.remediation or ''}")
 
     path = os.path.join(REPORTS_DIR, f"{base}.xml")
     tree = ElementTree(testsuites)
@@ -198,8 +360,16 @@ def _gen_junit(scan, results, findings, base) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# HTML (standalone, no dependencies)
+# HTML (every user-content interpolation goes through html.escape)
 # ---------------------------------------------------------------------------
+
+def _h(value: object) -> str:
+    """Tiny shorthand for `html.escape` — used pervasively below
+    so the templating reads close to a plain f-string."""
+    if value is None:
+        return ""
+    return html.escape(str(value))
+
 
 def _gen_html(scan, results, findings, base) -> dict:
     score = scan.total_score or 0
@@ -210,19 +380,43 @@ def _gen_html(scan, results, findings, base) -> dict:
     f_rows = ""
     for f in findings:
         c = sev_colors.get(f.severity, "#6b7280")
-        f_rows += f'<tr><td><span style="background:{c};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">{f.severity}</span></td><td>{f.category}</td><td>{f.message}</td><td><code>{f.target}</code></td><td>{f.remediation or "-"}</td></tr>\n'
+        f_rows += (
+            f'<tr><td><span style="background:{c};color:#fff;padding:2px 8px;'
+            f'border-radius:4px;font-size:12px;font-weight:600">{_h(f.severity)}</span></td>'
+            f'<td>{_h(f.category)}</td>'
+            f'<td>{_h(f.message)}</td>'
+            f'<td><code>{_h(f.target)}</code></td>'
+            f'<td>{_h(f.remediation) if f.remediation else "-"}</td></tr>\n'
+        )
 
     a_rows = ""
     for r in results:
         st = "Active" if r.is_alive else "Inactive"
         ports = ", ".join(str(p) for p in (r.open_ports or [])) or "None"
-        a_rows += f'<tr><td>{r.target}</td><td><code>{r.ip}</code></td><td>{st}</td><td>{ports}</td></tr>\n'
+        a_rows += (
+            f'<tr><td>{_h(r.target)}</td>'
+            f'<td><code>{_h(r.ip)}</code></td>'
+            f'<td>{st}</td>'
+            f'<td>{_h(ports)}</td></tr>\n'
+        )
 
-    html = f"""<!DOCTYPE html>
+    # Executive summary — escape the user-supplied text inside an
+    # otherwise-static `<div class="executive">`. Pre-v2.4.19 this
+    # was string-concat'd raw, opening an XSS that fired the moment
+    # someone opened the report (or its PDF rendering pulled the
+    # injected JS into the print pipeline).
+    exec_block = ""
+    if scan.executive_summary:
+        exec_block = (
+            f'<h2>Executive Summary</h2>'
+            f'<div class="executive">{_h(scan.executive_summary)}</div>'
+        )
+
+    html_doc = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NIS2 Report — {scan.name}</title>
+<title>NIS2 Report — {_h(scan.name)}</title>
 <style>
 @page{{size:A4;margin:2cm}}body{{font-family:'Helvetica Neue',Arial,sans-serif;color:#1e293b;line-height:1.6;font-size:11px;max-width:1100px;margin:0 auto;padding:20px}}
 h1{{color:#0f172a;font-size:24px;border-bottom:3px solid #0f172a;padding-bottom:10px}}h2{{color:#334155;font-size:16px;margin-top:30px;border-bottom:1px solid #e2e8f0;padding-bottom:6px}}
@@ -230,12 +424,12 @@ h1{{color:#0f172a;font-size:24px;border-bottom:3px solid #0f172a;padding-bottom:
 .stats{{display:flex;gap:20px;margin:20px 0;flex-wrap:wrap}}.stat{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;flex:1;text-align:center;min-width:100px}}.stat-value{{font-size:24px;font-weight:700;color:#0f172a}}.stat-label{{font-size:10px;color:#64748b;text-transform:uppercase}}
 table{{width:100%;border-collapse:collapse;margin:10px 0}}th{{background:#f1f5f9;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}}td{{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}}tr:hover{{background:#f8fafc}}
 code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.footer{{margin-top:40px;padding-top:15px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:9px;text-align:center}}
-.executive{{background:#f0f9ff;border-left:4px solid #0284c7;padding:15px;border-radius:0 8px 8px 0;margin:15px 0}}
+.executive{{background:#f0f9ff;border-left:4px solid #0284c7;padding:15px;border-radius:0 8px 8px 0;margin:15px 0;white-space:pre-wrap}}
 </style>
 </head>
 <body>
 <h1>NIS2 Compliance Report</h1>
-<p><strong>Scan:</strong> {scan.name} &nbsp;|&nbsp; <strong>Date:</strong> {date_str} &nbsp;|&nbsp; <strong>Duration:</strong> {scan.duration_seconds or 0}s</p>
+<p><strong>Scan:</strong> {_h(scan.name)} &nbsp;|&nbsp; <strong>Date:</strong> {date_str} &nbsp;|&nbsp; <strong>Duration:</strong> {scan.duration_seconds or 0}s</p>
 <div class="score-box"><div class="score">{score}</div><div class="score-label">Compliance Score</div></div>
 <div class="stats">
 <div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">Hosts Scanned</div></div>
@@ -245,7 +439,7 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 <div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">Medium</div></div>
 <div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">Low</div></div>
 </div>
-{"<h2>Executive Summary</h2><div class='executive'>" + scan.executive_summary + "</div>" if scan.executive_summary else ""}
+{exec_block}
 <h2>Findings ({len(findings)})</h2>
 <table><tr><th>Severity</th><th>Category</th><th>Finding</th><th>Target</th><th>Remediation</th></tr>{f_rows}</table>
 <h2>Assets ({len(results)})</h2>
@@ -255,27 +449,31 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
     with open(path, "w") as f:
-        f.write(html)
+        f.write(html_doc)
     return _result(path, f"{base}.html", "text/html", "html")
 
 
 # ---------------------------------------------------------------------------
-# PDF (reuses HTML with WeasyPrint, fallback to HTML)
+# PDF (HTML → WeasyPrint). v2.4.19: required dependency, no silent
+# fallback. The Dockerfile installs the libgobject / libpango /
+# libcairo system stack alongside the pip package.
 # ---------------------------------------------------------------------------
 
 def _gen_pdf(scan, results, findings, base) -> dict:
     html_result = _gen_html(scan, results, findings, base)
     html_path = html_result["file_path"]
-
     pdf_path = os.path.join(REPORTS_DIR, f"{base}.pdf")
-    try:
-        from weasyprint import HTML
-        with open(html_path) as f:
-            HTML(string=f.read()).write_pdf(pdf_path)
-        return _result(pdf_path, f"{base}.pdf", "application/pdf", "pdf")
-    except ImportError:
-        html_result["note"] = "PDF generation requires WeasyPrint. Falling back to HTML."
-        return html_result
+
+    # WeasyPrint is now a required dependency for PDF generation.
+    # Pre-v2.4.19 we caught ImportError and silently returned the
+    # HTML file with a `.pdf` filename — a "PDF" download that was
+    # actually HTML, which the user's PDF reader would refuse to
+    # open without explanation. If the import or render fails, the
+    # task fails and the API surfaces the error to the user.
+    from weasyprint import HTML
+    with open(html_path) as f:
+        HTML(string=f.read()).write_pdf(pdf_path)
+    return _result(pdf_path, f"{base}.pdf", "application/pdf", "pdf")
 
 
 # ---------------------------------------------------------------------------
