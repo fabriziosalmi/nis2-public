@@ -43,6 +43,7 @@ from app.models.membership import Membership
 from app.models.scan import Scan
 from app.models.user import User
 from app.routers.auth import limiter  # share the single Limiter instance
+from app.utils import report_dedup
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -74,7 +75,20 @@ async def generate_report(
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ):
-    """Queue a report generation task. Returns task_id to poll status."""
+    """Queue a report generation task. Returns task_id to poll status.
+
+    v2.4.22 audit reports-009: requests for the same
+    `(organization_id, scan_id, format)` triple while a previous
+    generation is still in flight return the existing task_id
+    instead of queuing a duplicate. The dedup is keyed in Redis
+    with a 5-minute TTL, cleared automatically when the task
+    finishes (see the `task_postrun` signal handler in
+    `app/tasks/report_tasks.py`).
+
+    The `deduplicated` flag in the response surfaces the dedup
+    decision to the FE — useful for telemetry and for power
+    users who want to know they didn't queue a fresh task.
+    """
     user, membership = current_org
 
     scan = await db.get(Scan, scan_id)
@@ -82,6 +96,24 @@ async def generate_report(
         raise HTTPException(status_code=404, detail="Scan not found")
     if scan.status != "completed":
         raise HTTPException(status_code=400, detail="Scan must be completed to generate reports")
+
+    # v2.4.22 audit reports-009: dedup check. Look up an in-flight
+    # task for this exact (org, scan, format) triple before queuing
+    # a new one. If found, return its task_id — the caller's poll
+    # loop will see the same result either way. Best-effort: a
+    # Redis blip returns `None` here and we proceed with a fresh
+    # task, which is the safe fallback.
+    org_id_str = str(membership.organization_id)
+    scan_id_str = str(scan_id)
+    existing = report_dedup.lookup_inflight_task(org_id_str, scan_id_str, format)
+    if existing:
+        return {
+            "task_id": existing,
+            "status": "queued",
+            "format": format,
+            "scan_id": scan_id_str,
+            "deduplicated": True,
+        }
 
     # v2.4.21 audit reports-006/007: pass the requesting user's
     # locale to the worker so the rendered report (PDF/HTML/MD/CSV
@@ -91,13 +123,21 @@ async def generate_report(
     # user's locale is null / unknown.
     from app.tasks.report_tasks import generate_report_task
     task = generate_report_task.delay(
-        str(scan_id),
-        str(membership.organization_id),
+        scan_id_str,
+        org_id_str,
         format,
         getattr(user, "locale", None) or "en",
     )
 
-    return {"task_id": task.id, "status": "queued", "format": format, "scan_id": str(scan_id)}
+    # Stash the task_id in Redis so a follow-up POST within the
+    # TTL window can dedupe to it. The postrun signal will clear
+    # this key when the task finishes — but we set a TTL anyway
+    # as a safety net (lost worker, lost signal, etc.).
+    report_dedup.register_inflight_task(
+        org_id_str, scan_id_str, format, task.id
+    )
+
+    return {"task_id": task.id, "status": "queued", "format": format, "scan_id": scan_id_str}
 
 
 @router.get("/status/{task_id}")

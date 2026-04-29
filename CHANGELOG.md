@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.4.22] - 2026-04-29
+
+Closes the **last open item from the v2.4.19 reports-module audit** (reports-009 / duplicate generation). With this release every audit finding from the original draconian sweep across the reports module is now resolved.
+
+### Added — In-flight deduplication on `/reports/generate`
+
+A POST `/api/v1/reports/generate` for the same `(organization_id, scan_id, format)` triple while a previous generation is still running now returns the existing `task_id` instead of queuing a duplicate. The response carries `deduplicated: true` so the FE (and telemetry) can tell.
+
+**Why this matters**: pre-v2.4.22 a user clicking "Generate" twice rapidly — or a script opening 100 tabs and clicking each — queued N separate Celery tasks, all running to completion, all writing files to `/tmp/nis2-reports/`, the later one overwriting the earlier in UI state. The v2.4.19 5/min/IP rate limit caps the most egregious abuse, but a curious power user can still create 5 duplicates per minute per IP.
+
+**How it works**:
+- New module `app/utils/report_dedup.py` keeps a Redis lock keyed on `(org_id, scan_id, format)` with a 5-minute TTL (matches the FE's poll timeout).
+- The route checks the lock before queuing; on a hit, it returns the existing task_id without touching Celery at all.
+- A Celery `task_postrun` signal handler in `report_tasks.py` clears the lock when the task finishes — success OR failure — so a legitimate retry / regeneration isn't blocked for the full TTL.
+
+**Failure mode**: every helper in `report_dedup` swallows Redis errors and returns the "no lock present / no-op" answer. If Redis is briefly unreachable, dedup quietly degrades to "no dedup" — the route still works, the user can still generate reports. This is the safest possible failure mode for a polish feature; the alternative (refusing to generate when Redis is down) would be a worse user experience.
+
+**Key isolation** (defence-in-depth):
+- Different orgs don't see each other's locks (org_id in the key — even though scan_id alone is globally unique today).
+- Different formats stay independent: a PDF render in flight does NOT block a CSV render of the same scan from running concurrently.
+
+### Verified
+
+- 75 unit + **53** e2e (no count change — backend route surface is identical) = **128 green**.
+- New `tests/test_report_dedup.py` (**12 tests**) pinning the dedup helper:
+  - **Round-trip**: register → lookup returns task_id; clear → lookup returns None.
+  - **Key isolation** (3 cases): different org / scan / format don't collide.
+  - **TTL pinned to `INFLIGHT_TTL_SEC = 300`** — a regression that drops the EX flag (would make the lock permanent, blocking every future generation for that triple) gets caught.
+  - **Failure tolerance** (3 cases): Redis errors → log + safe default (None / no-op). Tested via a `_RaisingRedis` fake that mimics `redis.RedisError` from connection-refused / timeout.
+  - **Key shape**: locked to the documented `reports:inflight:` prefix so a rolling deploy doesn't leak orphan keys under a different namespace.
+- Manual smoke against running stack:
+  - POST #1 mints task `T1` with no `deduplicated` flag.
+  - POST #2 (immediately, same scan + format) returns the same `T1` with `deduplicated: true`. ✅
+  - POST #3 (same scan, different format `csv`) mints a brand-new task `T3 ≠ T1`. ✅ (format isolation)
+  - 5 seconds later, after both tasks complete: `redis-cli --scan reports:inflight:*` returns empty (postrun signal cleared the locks). ✅
+  - POST #4 (after the lock was cleared) mints a fresh task `T4 ≠ T1`, no `deduplicated` flag. ✅
+
+### Reports audit closeout — DONE
+
+| Audit ID | Issue | Resolved in |
+|---|---|---|
+| reports-001 | Cross-tenant report access (RLS bypass) | v2.4.19 |
+| reports-002 | Path traversal via scan name | v2.4.19 |
+| reports-003 | PDF silent fallback to HTML | v2.4.19 |
+| reports-004 | Internal error leakage in /status | v2.4.19 |
+| reports-005 | TTL/cleanup of report files | v2.4.20 |
+| reports-006 | Hardcoded English in templates | v2.4.21 |
+| reports-007 | HTML `lang="en"` hardcoded | v2.4.21 |
+| reports-008 | Locale-tagged timestamps | v2.4.21 |
+| **reports-009** | **Duplicate generation race** | **v2.4.22 ✅ (LAST)** |
+| reports-014 | Markdown injection | v2.4.19 |
+| reports-015 | XSS in HTML reports | v2.4.19 |
+| reports-016 | CSV formula injection | v2.4.19 |
+| reports-017 | XML attribute injection | v2.4.19 |
+| reports-018 | No rate limit on /generate | v2.4.19 |
+
+**14 / 14 reports audit findings closed across v2.4.19 → v2.4.22** (4 patches, ~24h of focused work). Reports module is now hardened against cross-tenant access, every form of injection (XSS / CSV / XML / Markdown / path traversal), localised in 5 languages, file-cleaned on a daily janitor, and dedup'd against accidental duplicate generation. Zero regressions on the e2e suite throughout the chain.
+
 ## [2.4.21] - 2026-04-29
 
 Closes 3 of the 4 follow-ups postponed from the v2.4.19 reports-module audit: **i18n of report content** (audit reports-006), **HTML `lang` attribute** (audit reports-007), and the locale-tagging side of **timezone localisation** (audit reports-008). All three share the same plumbing — passing the user's locale through the Celery task to the renderer — so they bundle naturally.
