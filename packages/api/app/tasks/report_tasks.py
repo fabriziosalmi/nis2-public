@@ -48,10 +48,49 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 
+from celery.signals import task_postrun
+
 from app.tasks.celery_app import celery_app
+from app.utils import report_dedup
 from app.utils.report_i18n import t as _t, normalize_locale
 
 logger = logging.getLogger(__name__)
+
+
+# v2.4.22 audit reports-009: when the report task finishes
+# (success OR failure), drop the inflight-dedup lock so a
+# legitimate retry / regeneration isn't blocked for the full TTL.
+#
+# `task_postrun` fires for every task this Celery app handles, so
+# we filter by sender name to limit the work to report tasks.
+# Args layout matches the `generate_report_task(scan_id, org_id,
+# format, locale)` signature; we match the FIRST 3 positionals.
+# A best-effort .delete() — if Redis is down at that moment, the
+# TTL eventually evicts the key.
+@task_postrun.connect
+def _clear_report_inflight_lock(
+    sender=None, task_id=None, args=None, kwargs=None, **extra
+):
+    if sender is None or sender.name != "app.tasks.report_tasks.generate_report_task":
+        return
+    args = args or ()
+    if len(args) < 3:
+        # Defensive: shouldn't happen given the task signature,
+        # but if a caller invents a different arity we don't want
+        # to crash the postrun chain (which would silently break
+        # other Celery instrumentation).
+        return
+    scan_id, org_id, fmt = str(args[0]), str(args[1]), str(args[2])
+    try:
+        report_dedup.clear_inflight_task(org_id, scan_id, fmt)
+    except Exception as exc:
+        # Belt-and-braces — the dedup helper already swallows
+        # Redis failures, but if something further upstream
+        # raises we don't want it to bring down task_postrun.
+        logger.warning(
+            "report-dedup: postrun clear failed for task %s: %s",
+            task_id, exc,
+        )
 
 REPORTS_DIR = "/tmp/nis2-reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
