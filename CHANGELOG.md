@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.4.21] - 2026-04-29
+
+Closes 3 of the 4 follow-ups postponed from the v2.4.19 reports-module audit: **i18n of report content** (audit reports-006), **HTML `lang` attribute** (audit reports-007), and the locale-tagging side of **timezone localisation** (audit reports-008). All three share the same plumbing — passing the user's locale through the Celery task to the renderer — so they bundle naturally.
+
+### Added — `app/utils/report_i18n.py`
+
+A hand-rolled per-locale label dictionary covering the ~30 strings used in generated reports (PDF/HTML/Markdown/JUnit/CSV). 5 locales × ~30 keys = ~150 hand-written translations.
+
+**Why a dict, not Babel / gettext / i18next**:
+- **No new runtime dependency.** Babel pulls 45MB+ of CLDR data when all we need is ~30 label translations per locale. The cost / benefit doesn't pencil out.
+- **Self-contained.** The web FE already has `messages/*.json` for its own i18n; mirroring that file format here would couple the worker to the FE bundle (a layering smell). The renderer is a server-side concern with a much smaller string surface.
+- **Diff-friendly.** Adding a key is a 5-line PR reviewers can read at a glance.
+
+**Resolution semantics** (`t(locale, key)`):
+- Known locale + known key → returns the translation.
+- Unknown locale (e.g. `pt`, `zh`, or `None`) → falls back to English. **Wrong language is always better than crashing the worker** for a compliance document.
+- Known locale + missing key → falls back to English (defensive — the parity test below would already catch this in CI).
+- Completely unknown key (typo in renderer) → returns the key itself, so the report renders with a visible placeholder which gets caught at QA time instead of crashing the worker.
+
+**Locale normalisation** (`normalize_locale`): regional variants (`en-US`, `it-IT`, `pt-BR`) get stripped to their language base; the result is matched against the supported set or falls back to English. Case-insensitive; underscore variant (`it_IT`) accepted alongside the hyphen form.
+
+### Wired through
+
+- **Router** (`routers/reports.py`): `generate_report` reads `current_user.locale` and passes it as the 4th arg to `generate_report_task.delay(...)`.
+- **Task** (`tasks/report_tasks.py`): `generate_report_task(scan_id, org_id, format, locale=None)` — backward-compatible signature so any in-flight task queued from a v2.4.20 client (rare, since the queue is empty between releases) still works and falls through to English.
+- **Renderers**: every `_gen_*` function (json, csv, markdown, junit, html, pdf) accepts `locale: str = "en"` and uses `_t(locale, key)` for every label. The HTML render also sets `<html lang="{locale}">` — was hardcoded `lang="en"` regardless of content language pre-v2.4.21 (audit reports-007).
+- **Result dict**: now carries `locale` (alongside `org_id`) so a curious admin reading the task result can answer "did this user actually request IT, or did the worker default to EN".
+
+### Timestamp policy
+
+Timestamps are intentionally NOT localised:
+- **`UTC` is unambiguous across timezones.** A Tokyo team reading the report knows exactly what the timestamp refers to without mental conversion. The audit's reports-008 concern (Tokyo team confused by UTC) is addressed by the explicit `UTC` suffix on every timestamp — pre-v2.4.21 the same suffix was already there; what changes now is the surrounding noun phrase ("**Date:**" → "**Data:**" in IT) gets translated.
+- **Compliance auditors correlate report timestamps with logs** from other tools (Splunk, ELK, cloud audit trails) which all standardise on UTC ISO. Forcing those readers to mentally convert "28 aprile alle 14:30" back into ISO is worse than the original problem.
+- **User-timezone localisation would require a new `User.timezone` field** — out of scope for this release. Could be added in a future patch.
+
+### Verified
+
+- 75 unit + **53** e2e (no count change — backend route surface is identical) = **128 green**.
+- New `tests/test_report_i18n.py` (**12 tests**) pinning the i18n module:
+  - **Parity** (3 parametrised tests × 4 non-EN locales = 8 cases): every non-EN locale must have every canonical EN key, no extras (typo defence). A new EN key without all 4 translations fails CI.
+  - **`normalize_locale`** (15 parametrised cases): canonical codes pass through, regional variants (`en-US`, `it-IT`, `pt-BR`) get stripped, unknowns fall back to EN, case-insensitive, underscore variants accepted.
+  - **`t()`**: known locale + known key returns translation, unknown locale → EN, completely unknown key → key itself, plus a "locales actually differ" guard against an accidental copy-paste that leaves all 5 locales returning the same string.
+- Manual smoke against running stack: a user with `locale=it` generates a Markdown report → header reads "Report di Conformità NIS2", "Scansione", "Data", "Punteggio", "Riepilogo Esecutivo", "Critico/Alto/Medio/Basso" all in Italian. HTML report has `<html lang="it">`. Result `task_id` polled via `/status` returns `"locale": "it"` so the rendered locale is observable from outside.
+
+### Postponed to a later release (audit closeout)
+
+- **reports-009 — duplicate-generation UX guard** is the last open item from the reports audit. The current FE `busy` flag plus the v2.4.19 5/min/IP rate limit cover the practical attack surface; this is polish for power users (e.g. a script that opens 100 tabs and clicks Generate). Bundle into a future small patch.
+- **`User.timezone`** field for true user-timezone localisation of timestamps (mentioned above).
+
 ## [2.4.20] - 2026-04-29
 
 Closes one of the four items postponed from the v2.4.19 reports-module audit: **report file lifecycle / TTL cleanup** (audit reports-005). Without this release, the `/tmp/nis2-reports/` directory shared between the api and worker containers grew unbounded — a deploy with 100s of scans/day would fill the disk in weeks.
