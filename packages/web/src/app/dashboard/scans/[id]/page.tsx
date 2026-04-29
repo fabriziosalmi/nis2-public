@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useScan, useScanResults, useScanFindings } from "@/hooks/use-scans"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
 const severityVariant: Record<string, "critical" | "high" | "medium" | "low" | "info"> = {
@@ -58,6 +59,12 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
   const { data: scan, isLoading } = useScan(id)
   const { data: resultsData } = useScanResults(id)
   const { data: findingsData } = useScanFindings(id)
+
+  // v2.4.24 audit a11y-11: per-page <title>. Falls back to the
+  // namespace name while the scan is loading; once the scan
+  // hydrates the tab shows the actual scan name so the user can
+  // tell two scan-detail tabs apart.
+  useDocumentTitle(scan?.name || ts("title"))
 
   const results = resultsData?.items || []
   const findings = findingsData?.items || []

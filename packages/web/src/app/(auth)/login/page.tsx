@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { Logo } from "@/components/brand/logo"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Schema messages stay English here — zod resolves them at form-init time,
 // before useTranslations is available. The useTranslations layer below
@@ -43,6 +44,8 @@ export default function LoginPage() {
   const sessionExpired = searchParams?.get("session") === "expired"
   const setAuth = useAuthStore((s) => s.setAuth)
   const [loading, setLoading] = useState(false)
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("auth.signIn"))
 
   const {
     register,

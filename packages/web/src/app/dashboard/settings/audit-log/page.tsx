@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuditLogs } from "@/hooks/use-audit-logs"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Severity-ish colour buckets for the action namespace prefix.
 // Doesn't try to be exhaustive — anything unknown falls back to muted.
@@ -27,6 +28,8 @@ const actionColors: Record<string, string> = {
 export default function AuditLogPage() {
   const t = useTranslations("auditLogPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   // Pagination strings (previous / next / page) live in the `scans`
   // namespace — same widget rides on /scans, /reports, here, and
   // every other paginated table. Reusing keeps the translations in

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useScans } from "@/hooks/use-scans"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -39,6 +40,8 @@ export default function ScansPage() {
   const { data, isLoading } = useScans(page)
   const t = useTranslations("scans")
   const formatDate = useFormatDate()
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const scans = data?.items || []
   const total = data?.total || 0
 

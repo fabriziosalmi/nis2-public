@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { Logo } from "@/components/brand/logo"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Audit B05 — entry point of the password-reset flow.
 //
@@ -38,6 +39,8 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submittedEmail, setSubmittedEmail] = useState("")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("forgotPasswordPage.title"))
 
   const {
     register,

@@ -5,7 +5,9 @@
 
 import Link from "next/link"
 import { Building2, UserCog, Radar, Users, Key, Bell, ScrollText, ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const settingsLinks = [
   {
@@ -53,10 +55,13 @@ const settingsLinks = [
 ]
 
 export default function SettingsPage() {
+  const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(tc("settings"))
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{tc("settings")}</h1>
         <p className="text-muted-foreground">Manage your organization and account settings</p>
       </div>
 

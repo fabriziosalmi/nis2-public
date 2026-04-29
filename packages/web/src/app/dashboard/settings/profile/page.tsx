@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const profileSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(256),
@@ -52,6 +53,8 @@ const locales = [
 
 export default function ProfileSettingsPage() {
   const t = useTranslations("profilePage")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   // Top-level translator so zod messages like "auth.passwordMin8" resolve
   // across namespaces. The form-validation errors are stored as i18n
   // *keys* (not messages) — see passwordSchema above.

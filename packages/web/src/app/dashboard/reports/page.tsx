@@ -20,6 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { useScans } from "@/hooks/use-scans"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { api } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
@@ -51,6 +52,8 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes — beyond this, surface an 
 
 export default function ReportsPage() {
   const t = useTranslations("reports")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   // Re-use the `scans` namespace's pagination strings (previous /
   // page / next) — same widget renders on both pages, no need to
   // mint separate keys.

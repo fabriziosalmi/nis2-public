@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const scanDefaultsSchema = z.object({
   scan_timeout: z.coerce.number().min(1).max(120),
@@ -42,6 +43,8 @@ const defaults: ScanDefaultsForm = {
 
 export default function ScanDefaultsPage() {
   const t = useTranslations("scanDefaultsPage")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
 

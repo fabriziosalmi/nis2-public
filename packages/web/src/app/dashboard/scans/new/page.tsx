@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCreateScan } from "@/hooks/use-scans"
 import { useAssets } from "@/hooks/use-assets"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Field names MUST match the backend schema (packages/api/app/schemas/scan.py:ScanCreate
 // + packages/api/app/routers/scans.py create_scan default features). Pydantic
@@ -60,6 +61,8 @@ type ScanForm = z.infer<typeof scanSchema>
 export default function NewScanPage() {
   const t = useTranslations("scansNewPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const router = useRouter()
   const createScan = useCreateScan()
   const { data: assetsData } = useAssets()
