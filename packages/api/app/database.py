@@ -32,7 +32,24 @@ IS_POSTGRES = settings.database_url.startswith(("postgresql", "postgres"))
 # and never reaches production.
 _INTEGRATION_TEST_MODE = os.environ.get("INTEGRATION_DB") == "1"
 
-if _INTEGRATION_TEST_MODE:
+# v2.4.19 hotfix: the same "Future attached to different loop" trap
+# fires inside the Celery worker. `run_scan_task` calls `asyncio.run`
+# per task, which mints a FRESH event loop each invocation; the
+# pooled asyncpg connection (held over from the previous task) is
+# bound to a now-CLOSED loop, and SQLAlchemy throws on the next
+# query. Symptom we hit in v2.4.18: a scan ran once successfully,
+# the second scan submission errored with `RuntimeError: Event loop
+# is closed`.
+#
+# Detection via env var (set in infra/docker/docker-compose.dev.yml
+# for the celery-worker + celery-beat services). NullPool gives each
+# task a fresh asyncpg connection — same fix as the integration
+# tests, same "performance hit irrelevant for the workload"
+# justification (tasks run end-to-end in seconds, not milliseconds,
+# so the cost of opening a connection is amortised away).
+_CELERY_WORKER_MODE = os.environ.get("CELERY_WORKER") == "1"
+
+if _INTEGRATION_TEST_MODE or _CELERY_WORKER_MODE:
     engine: AsyncEngine = create_async_engine(
         settings.database_url,
         echo=False,
