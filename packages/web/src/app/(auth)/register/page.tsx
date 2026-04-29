@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { Logo } from "@/components/brand/logo"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Like login: zod messages are i18n keys resolved via t(...) at render.
 const registerSchema = z.object({
@@ -35,6 +36,8 @@ export default function RegisterPage() {
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [loading, setLoading] = useState(false)
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("auth.register"))
 
   const {
     register,

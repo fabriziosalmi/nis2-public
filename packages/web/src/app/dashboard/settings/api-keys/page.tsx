@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useApiKeys, useCreateApiKey, useRevokeApiKey } from "@/hooks/use-api-keys"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const createKeySchema = z.object({
   name: z.string().min(1, "apiKeysPage.nameRequired").max(256),
@@ -38,6 +39,8 @@ type CreateKeyForm = z.infer<typeof createKeySchema>
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeysPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
   const { data: keysData, isLoading } = useApiKeys()
   const createKey = useCreateApiKey()

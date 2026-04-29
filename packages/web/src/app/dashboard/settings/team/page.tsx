@@ -49,6 +49,7 @@ import {
   useRemoveMember,
 } from "@/hooks/use-members"
 import { useAuthStore } from "@/stores/auth-store"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Role enum aligned with the backend's Pydantic Literal in
 // schemas/organization.py: admin / auditor / viewer.
@@ -72,6 +73,8 @@ const roleColors: Record<string, string> = {
 export default function TeamPage() {
   const t = useTranslations("teamPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
   const currentUser = useAuthStore((s) => s.user)
 

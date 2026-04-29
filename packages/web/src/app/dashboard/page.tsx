@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useScans } from "@/hooks/use-scans"
 import { useFindingStats } from "@/hooks/use-findings"
 import { useAssets } from "@/hooks/use-assets"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
 // Lazy load Recharts (400KB+) — only loads when charts are visible
@@ -86,6 +87,8 @@ export default function DashboardPage() {
   // so dates render in the user's active locale (IT / FR / DE / ES)
   // rather than always en-US.
   const formatDate = useFormatDate()
+  // v2.4.24 audit a11y-11: per-page <title> via document.title.
+  useDocumentTitle(t("title"))
 
   const { data: scansData, isLoading: scansLoading } = useScans()
   const { data: statsData } = useFindingStats()

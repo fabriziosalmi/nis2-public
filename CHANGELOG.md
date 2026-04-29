@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.4.24] - 2026-04-29
+
+Closes the **first deferred item from the v2.4.23 a11y audit** — per-page `<title>` (a11y-11 / WCAG SC 2.4.2 Page Titled).
+
+### Fixed — every page now has its own `<title>`
+
+Pre-v2.4.24 every browser tab said "NIS2 Platform" — the only metadata exported was the root layout default. That fails three real workflows:
+
+1. **Bookmarking**: a user bookmarking `/dashboard/findings` got a "NIS2 Platform" entry, indistinguishable from a bookmark of `/dashboard/scans` or `/login`.
+2. **Tab management**: power users with 5–10 tabs across the platform couldn't tell tabs apart at a glance — every tab title and favicon was identical.
+3. **Screen-reader announcement (WCAG SC 2.4.2)**: SR users hear the page title when a page loads. With every page sharing one title, the announcement carried zero information about *where* they had landed.
+
+### How it works
+
+A new `useDocumentTitle(title)` hook (`src/hooks/use-document-title.ts`) mutates `document.title` in a `useEffect` and restores the previous title on unmount. Every page-level component now calls it with its localised `t("title")` from the existing `useTranslations` namespace — so an Italian user on `/dashboard/scans` sees "Scansioni — NIS2 Platform" in the browser tab.
+
+**Why a hook and not `generateMetadata`**: the App Router exposes per-route metadata only from server components. The dashboard pages are all `"use client"` because they pull from TanStack Query / Zustand stores that need browser-only APIs. Splitting each route into a server-shell + client-body is a 22-route refactor for no incremental benefit — `useEffect` is the idiomatic React pattern for this case.
+
+### Coverage
+
+22 page-level components wired in this patch:
+
+- **Auth**: `/login`, `/register`, `/forgot-password`, `/reset-password`
+- **Dashboard root**: `/dashboard`
+- **Dashboard primary**: `/dashboard/scans`, `/dashboard/scans/[id]` (uses scan name when loaded), `/dashboard/scans/new`, `/dashboard/scans/schedules`, `/dashboard/scans/[id]/compare`, `/dashboard/findings`, `/dashboard/assets`, `/dashboard/compliance`, `/dashboard/reports`
+- **Settings**: `/dashboard/settings` (root index), `/dashboard/settings/profile`, `/dashboard/settings/organization`, `/dashboard/settings/team`, `/dashboard/settings/api-keys`, `/dashboard/settings/notifications`, `/dashboard/settings/audit-log`, `/dashboard/settings/scan-defaults`
+
+Each title is fully localised across all 5 locales (en / it / fr / de / es) — no new translation keys were added; the patch reuses the existing `t("title")` strings already maintained by every namespace.
+
+### Verified
+
+- `npm run build` green — 24/24 pages compile, no new TS errors.
+- Manual smoke: navigating between /dashboard, /dashboard/scans, /dashboard/findings, /login each updates the browser tab title to the localised page name + " — NIS2 Platform" suffix.
+- /dashboard/scans/[id] picks up the actual scan name once the scan hydrates (`scan?.name || ts("title")` fallback so the tab isn't blank during the loading window).
+
+### Deferred to v2.4.25
+
+- Mobile sidebar focus trap (Sheet/Drawer refactor).
+- Recharts colour palette tuning for deuteranopia (a11y-21).
+
 ## [2.4.23] - 2026-04-28
 
 Dedicated **WCAG 2.1 Level AA accessibility audit** of the entire frontend. A draconian sweep across every authenticated screen identified 30 a11y gaps — the patch closes the highest-impact 20 of them in one pass, covering keyboard users, screen-reader users, and users with colour-vision deficiencies.

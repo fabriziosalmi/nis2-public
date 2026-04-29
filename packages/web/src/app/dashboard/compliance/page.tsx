@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useScans } from "@/hooks/use-scans"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // NIS2 Art. 21(2) subsections — Italian text is the canonical legal
 // reference under D.Lgs 138/2024 and stays as-is regardless of locale.
@@ -40,6 +41,8 @@ function mapStatus(matrixStatus: string): "pass" | "partial" | "fail" | "manual"
 
 export default function CompliancePage() {
   const t = useTranslations("compliancePage")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const { data: scansData, isLoading } = useScans()
   // Status labels are translated; icons + colours stay constant. The
   // tuple shape mirrors the previous `statusConfig` object.

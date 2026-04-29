@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { useAssets } from "@/hooks/use-assets"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { useFormatDate } from "@/lib/dates"
 
 // v2.4.17 audit S-DRA-03: cron validation. Previously the schema
@@ -60,6 +61,8 @@ const cronPresetKeys = [
 export default function SchedulesPage() {
   const t = useTranslations("schedulesPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
   const user = useAuthStore((s) => s.user)
   const { data: assetsData } = useAssets()
