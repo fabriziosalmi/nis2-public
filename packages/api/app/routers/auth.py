@@ -3,7 +3,6 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import hashlib
 import logging
-import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -154,10 +153,10 @@ async def _bypass_rls_for_bootstrap(db: AsyncSession | None) -> None:
     await db.execute(text("SET LOCAL app.bypass_rls = 'on'"))
 
 
-def _slugify(name: str) -> str:
-    slug = re.sub(r"[^\w\s-]", "", name.lower().strip())
-    slug = re.sub(r"[\s_]+", "-", slug)
-    return slug[:128]
+# v2.4.18: `_slugify` moved to `app/utils/slug.py` (now `slugify`)
+# so `routers/organizations.py` can use the same logic for the new
+# create-org endpoint without duplicating code.
+from app.utils.slug import slugify as _slugify  # noqa: E402,F401
 
 
 def _build_token_response(

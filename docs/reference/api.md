@@ -83,6 +83,7 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | Method | Path | Description | Auth |
 |---|---|---|---|
 | GET | `/api/v1/organizations` | List organizations the current user belongs to | Yes |
+| POST | `/api/v1/organizations` | Create a new organization owned by the current user. Body: `{"name": "<string>"}` (1..256 chars). The slug is derived server-side from the name with a numeric suffix appended on collision. The caller is automatically added as an `accepted_at`-stamped admin member. `5/min/IP` rate-limited; audit-logged as `organization.created`. Returns the new `OrgResponse` with HTTP 201 | Yes |
 | GET | `/api/v1/organizations/{org_id}` | Get organization details | Yes |
 | PATCH | `/api/v1/organizations/{org_id}` | Update organization settings (admin only) | Yes |
 | GET | `/api/v1/organizations/{org_id}/members` | List organization members | Yes |
