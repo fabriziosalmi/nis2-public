@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.4.25] - 2026-04-29
+
+Closes the **second deferred item from the v2.4.23 a11y audit** — mobile sidebar focus trap (WCAG SC 2.4.3 Focus Order + 2.1.2 No Keyboard Trap).
+
+### Fixed — keyboard focus stays inside the open mobile drawer
+
+Pre-2.4.25 the mobile slide-out nav drawer had no focus management. Three concrete bugs:
+
+1. **Tab spilled out of the drawer**. A keyboard user opened the drawer, tabbed to the last nav link, hit Tab once more — focus left the drawer entirely and landed on whatever element happened to be in the dim main content behind it. The drawer was a *visual* modal but not a *programmatic* one.
+2. **No initial focus**. Opening the drawer didn't move focus inside it. The next Tab keystroke continued from wherever focus happened to be (typically the hamburger trigger), bypassing the drawer's links unless the user manually clicked one.
+3. **No focus restoration on close**. Closing the drawer (Esc, overlay click, or nav-link click) didn't return focus to the trigger button. Keyboard users lost their place in the page.
+4. **Closed drawer was still tabbable**. The slide-translated `-translate-x-full` moves the drawer offscreen visually but keeps its links in the Tab order. Pre-2.4.25 a mobile keyboard user tabbing through the main content would suddenly find focus on a link inside the invisible drawer behind the page.
+
+### How it works
+
+- **Two new refs in `Sidebar`**: `asideRef` (the drawer element, scope for the focus query) and `triggerRef` (the hamburger button, focus restore target).
+- **Existing `useEffect` extended**: when `mobileOpen` flips to `true`, focus the first focusable element inside the drawer; install a `keydown` listener that handles Escape (close) AND Tab (wrap focus inside the drawer using the de-facto tabbable selector). On close (cleanup), the listener is removed and focus is restored to the trigger.
+- **Tab wrap logic**: re-queries on every keystroke so dynamically added/removed elements (e.g. the destructive findings badge that appears when critical count > 0) participate. Shift+Tab from the first focusable wraps to the last; Tab from the last wraps to the first.
+- **`inert` when closed**: React 19 supports `inert` natively as a boolean prop. We add it to the drawer when `mobileOpen=false` so the browser refuses to focus anything inside the slid-offscreen panel — eliminating bug #4.
+- **Drawer marked `role="dialog"` + `aria-modal="true"`**: AT now recognise it as a modal panel; combined with the trap, screen-reader users get a proper modal-dialog announcement on open.
+
+### Verified
+
+- `npm run build` green — 24/24 pages compile, no new TS errors.
+- Manual keyboard smoke: open hamburger via Enter, focus lands on first nav link, Tab walks down to "Logout", Tab once more wraps back to the first link, Shift+Tab from first link wraps to "Logout", Esc closes the drawer and focus returns to the hamburger trigger.
+- With drawer closed, Tabbing through the main content never touches drawer-internal elements (verified by inspecting `document.activeElement` across a full Tab cycle).
+
+### Deferred
+
+- Recharts colour palette tuning for deuteranopia (a11y-21) — currently a non-issue: the dashboard charts use a single dark-blue series with no per-bar palette where deuteranopia matters. Will revisit if multi-series charts are added.
+
 ## [2.4.24] - 2026-04-29
 
 Closes the **first deferred item from the v2.4.23 a11y audit** — per-page `<title>` (a11y-11 / WCAG SC 2.4.2 Page Titled).
