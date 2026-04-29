@@ -42,6 +42,9 @@ const categoryOptions = ["all", "TLS", "Headers", "DNS", "Web", "Ports", "WHOIS"
 
 export default function FindingsPage() {
   const t = useTranslations("findings")
+  // v2.4.23 audit a11y namespace for accessibility-only strings
+  // (filter Select labels, checkbox labels, expand/collapse buttons).
+  const ta = useTranslations("a11y")
   const [severityFilter, setSeverityFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -187,15 +190,22 @@ export default function FindingsPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <CardTitle className="text-sm font-medium">{t("filters")}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
+          {/* v2.4.23 audit a11y-13 (WCAG SC 4.1.2 / 3.3.2): the
+              filter Selects relied on a placeholder string for
+              their label, which is invisible to screen-readers
+              once a value is picked ("All severities" replaces
+              "Severity" in the visual trigger). aria-label gives
+              each Select a stable accessible name independent of
+              its current value. */}
           <div className="flex flex-wrap gap-3">
             <div className="w-40">
               <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("severity")}>
                   <SelectValue placeholder={t("severity")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -207,7 +217,7 @@ export default function FindingsPage() {
             </div>
             <div className="w-40">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("status")}>
                   <SelectValue placeholder={t("status")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,7 +229,7 @@ export default function FindingsPage() {
             </div>
             <div className="w-40">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("category")}>
                   <SelectValue placeholder={t("category")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -238,7 +248,7 @@ export default function FindingsPage() {
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
           <span className="text-sm font-medium">{t("selectedCount", { count: selectedIds.length })}</span>
           <Select value={bulkStatus} onValueChange={setBulkStatus}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-48" aria-label={t("setStatusPlaceholder")}>
               <SelectValue placeholder={t("setStatusPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
@@ -248,13 +258,13 @@ export default function FindingsPage() {
             </SelectContent>
           </Select>
           <Button size="sm" onClick={handleBulkUpdate} disabled={!bulkStatus || updateFinding.isPending}>
-            {updateFinding.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            {updateFinding.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden="true" />}
             {t("apply")}
           </Button>
           {/* v2.4.17 audit O-DRA-04: bulk-export selected findings
               as CSV for sharing with teams / external tooling. */}
           <Button variant="outline" size="sm" onClick={handleBulkExport}>
-            <Download className="mr-2 h-3 w-3" />
+            <Download className="mr-2 h-3 w-3" aria-hidden="true" />
             {t("exportCsv")}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
@@ -287,14 +297,22 @@ export default function FindingsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
+                    {/* v2.4.23 audit a11y-04 (WCAG SC 4.1.2): the
+                        select-all checkbox had no label — SR users
+                        heard "checkbox" with no idea what toggling
+                        it would do. aria-label gives it a stable
+                        name regardless of selection state. */}
                     <input
                       type="checkbox"
                       checked={selectedIds.length === findings.length && findings.length > 0}
                       onChange={toggleAll}
+                      aria-label={ta("selectAllRows")}
                       className="h-4 w-4 rounded"
                     />
                   </TableHead>
-                  <TableHead className="w-6"></TableHead>
+                  <TableHead className="w-6">
+                    <span className="sr-only">{ta("expandRow")}</span>
+                  </TableHead>
                   <TableHead>{t("severity")}</TableHead>
                   <TableHead>{t("category")}</TableHead>
                   <TableHead>{t("message")}</TableHead>
@@ -311,19 +329,50 @@ export default function FindingsPage() {
                       onClick={() => setExpandedId(expandedId === finding.id ? null : finding.id)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
+                        {/* v2.4.23 audit a11y-17 (WCAG SC 4.1.2):
+                            per-row checkbox now names the finding it
+                            selects (severity + truncated message) so
+                            SR users navigating a table of 50+ rows
+                            can tell which row they're toggling. */}
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(finding.id)}
                           onChange={() => toggleSelect(finding.id)}
+                          aria-label={ta("selectRow", { label: finding.message?.slice(0, 60) || finding.id })}
                           className="h-4 w-4 rounded"
                         />
                       </TableCell>
-                      <TableCell>
-                        {expandedId === finding.id ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {/* v2.4.23 audit a11y-18 (WCAG SC 2.1.1
+                            Keyboard / 4.1.2 Name, Role, Value): the
+                            row was expandable only by clicking
+                            anywhere on it — no keyboard equivalent,
+                            no programmatic role, no aria-expanded
+                            state. Now a real <button> in the chevron
+                            cell handles the toggle for keyboard
+                            users while the row-click stays for
+                            mouse users (e.stopPropagation on the
+                            checkbox cell prevents double-toggle). */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setExpandedId(expandedId === finding.id ? null : finding.id)
+                          }}
+                          aria-expanded={expandedId === finding.id}
+                          aria-label={
+                            expandedId === finding.id
+                              ? ta("collapseRow")
+                              : ta("expandRow")
+                          }
+                          className="flex items-center justify-center rounded p-0.5 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          {expandedId === finding.id ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          )}
+                        </button>
                       </TableCell>
                       <TableCell>
                         <Badge variant={severityVariant[finding.severity] || "info"}>

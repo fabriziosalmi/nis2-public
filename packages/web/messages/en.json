@@ -41,7 +41,25 @@
     "apiKeys": "API Keys",
     "notifications": "Notifications",
     "auditLog": "Audit Log",
-    "criticalBadgeAria": "critical findings"
+    "criticalBadgeAria": "critical findings",
+    "primary": "Primary",
+    "settings": "Settings",
+    "criticalCountAnnouncement": "{count, plural, one {# critical finding} other {# critical findings}} require attention"
+  },
+  "a11y": {
+    "skipToContent": "Skip to main content",
+    "themeToggle": "Theme: {current}",
+    "languageSwitcher": "Language: {current}",
+    "openNavigation": "Open navigation menu",
+    "closeNavigation": "Close navigation menu",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "breadcrumb": "Breadcrumb",
+    "userMenu": "Open user menu for {name}",
+    "selectAllRows": "Select all rows",
+    "selectRow": "Select row: {label}",
+    "expandRow": "Expand row details",
+    "collapseRow": "Collapse row details"
   },
   "dashboard": {
     "title": "Dashboard",

@@ -41,7 +41,25 @@
     "apiKeys": "Chiavi API",
     "notifications": "Notifiche",
     "auditLog": "Registro Audit",
-    "criticalBadgeAria": "risultati critici"
+    "criticalBadgeAria": "risultati critici",
+    "primary": "Principale",
+    "settings": "Impostazioni",
+    "criticalCountAnnouncement": "{count, plural, one {# risultato critico richiede} other {# risultati critici richiedono}} attenzione"
+  },
+  "a11y": {
+    "skipToContent": "Vai al contenuto principale",
+    "themeToggle": "Tema: {current}",
+    "languageSwitcher": "Lingua: {current}",
+    "openNavigation": "Apri menu di navigazione",
+    "closeNavigation": "Chiudi menu di navigazione",
+    "expandSidebar": "Espandi barra laterale",
+    "collapseSidebar": "Riduci barra laterale",
+    "breadcrumb": "Percorso di navigazione",
+    "userMenu": "Apri menu utente per {name}",
+    "selectAllRows": "Seleziona tutte le righe",
+    "selectRow": "Seleziona riga: {label}",
+    "expandRow": "Espandi dettagli riga",
+    "collapseRow": "Riduci dettagli riga"
   },
   "dashboard": {
     "title": "Dashboard",
