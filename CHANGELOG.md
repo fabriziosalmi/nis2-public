@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.4.17] - 2026-04-29
+
+Closes the entire **S-DRA-* / O-DRA-*** polish backlog from the v2.4.14 audit. All 5 SERIOUS items + 4 of 5 OPPORTUNITIES (the 5th, "create new organization self-serve", remains scoped for a future release that adds the BE endpoint). Pure FE patch — no backend changes.
+
+### Fixed (audit S-DRA-*)
+
+- **S-DRA-01 / Date format ignored the app locale.** Every page rendering a date called `format(new Date(...), "MMM d, yyyy")` from `date-fns` directly, which falls back to en-US regardless of the next-intl locale. New `useFormatDate` hook in `lib/dates.ts` bridges `next-intl`'s `useLocale()` to date-fns' `Locale` objects (en/it/fr/de/es bundled — only the 5 the UI ships, so no 60+ unused locale chunks bloat the bundle). Applied to **7 pages**: dashboard, scans list, scan detail, scan schedules, audit log, api-keys list, reports, team. Italian users now see "28 apr 2026" instead of "Apr 28, 2026".
+- **S-DRA-02 / Findings filter not debounced.** Each click on the severity / status / category Select dropdowns fired `useFindings(params)` immediately — three quick clicks = three concurrent `/api/v1/findings` requests with no arrival-order guarantee. The table could end up showing the second click's results rather than the third. New `useDebounce` hook (250ms — UX sweet spot, faster feels twitchy on dropdowns, slower feels laggy). Applied to all three filters.
+- **S-DRA-03 / Cron expression had no client-side validation.** `cron_expression` schema only required `min(5)` chars, so "abcde" passed and the API returned a generic 422. Added a regex enforcing the 5-field shape (minute / hour / day / month / weekday) — accepts numbers, lists `1,2,3`, ranges `1-5`, wildcards `*`, and steps `*/2`. Server-side `croniter` still owns the field-level semantics (range bounds, step validity); this regex is a fast-fail to give the user a clear error before round-trip. Error messages are i18n keys (matching the project pattern) and a permanent help line under the input explains the format.
+- **S-DRA-04 / Reports pagination was hardcoded English.** "Previous" / "Page N" / "Next" rendered as literal strings. Re-uses the `scans` namespace's existing pagination keys (same widget on both pages — no need to mint duplicates).
+- **S-DRA-05 / Severity badge value rendered raw.** The findings page rendered `{finding.severity}` directly ("critical", "high", "medium" lowercase letterali) next to a translated table header — visually mismatched. Now goes through `t(severity.toLowerCase())` resolved against the `findings` namespace. Same fix applied to status badges (was rendering `finding.status.replace("_", " ")` → "false positive" lowercase) — now mapped through proper i18n keys (camelCase `inProgress`, `falsePositive`).
+
+### Added (audit O-DRA-*)
+
+- **O-DRA-01 / `Cmd+K` command palette.** New `<CommandPalette>` component built on `cmdk` (already in dependencies). Mounted in the dashboard layout so the keyboard shortcut listener attaches once and the dialog is reachable from every authenticated screen. v1 lists every primary navigation entry plus action commands ("New scan", "Manage schedules") with their lucide icons; cmdk gives us fuzzy-search filtering and the standard ⌘K UX. Each command is searchable by **both** its localised label AND its canonical key, so an Italian user typing "scansioni" and an English user typing "scans" hit the same row. Cross-resource search (scan names, finding targets) is intentionally postponed — it needs a backend search endpoint we don't have yet.
+- **O-DRA-03 / Cron presets** — already shipped previously as `presets.dailyAt9` / `weeklyMonday` / etc. in the schedules form; the v2.4.14 audit was a false flag. Confirmed working with the new validation in place.
+- **O-DRA-04 / Bulk export findings as CSV.** New "Export CSV" button in the bulk actions bar (visible alongside "Apply" and "Clear" once at least one row is selected). Generated client-side from already-loaded TanStack Query data — no new backend endpoint needed. RFC 4180 quote-escaping; UTF-8 BOM prefix so Excel imports accented characters cleanly. Filename pattern `nis2-findings-<yyyy-MM-dd>.csv` matches the reports module convention.
+- **O-DRA-05 / Sidebar badge with critical findings count.** Destructive-pill badge next to the "Findings" nav item showing the count of severity-critical findings in the active org. Pulled from the existing `useFindingStats()` hook (no new endpoint). On the collapsed sidebar (icon only) the badge degrades to a tiny dot so it doesn't fight the icon for space; on the expanded sidebar it shows the count (with `99+` overflow). `aria-label` includes the count for screen-reader users.
+
+### Polished
+
+- **N-DRA-03 / Status label casing on findings table.** Was `finding.status.replace("_", " ")` → "false positive" lowercase. Now mapped through localised camelCase keys.
+- **`<a href="mailto:">` consultation CTA**, server-side `<Link>` rendering, etc. — no changes; their audit notes were future-iteration nudges.
+
+### i18n totals
+
+- **+17 leaf keys × 5 locales = 85 new translations.**
+- All 5 locale files validate as JSON and re-pass parity check at **658 leaf keys** (was 641 in v2.4.16).
+- New keys land in `nav.criticalBadgeAria`, `findings.exportCsv` / `exportedCount`, `schedulesPage.{nameRequired,cronRequired,cronInvalid,cronHelp}`, and the brand-new `commandPalette` namespace (10 keys).
+
+### Verified
+
+- 75 unit + **50** e2e (no test count change — backend untouched) = **125 green**.
+- `ruff check` matches CI's exact invocation, all clean.
+- TypeScript: 16 pre-existing recharts errors in `dashboard/page.tsx` and `reports/page.tsx` unchanged (Next.js production build tolerates them; CI Web Build still passes).
+- All touched FE pages return 200 against the running dev stack; no `MISSING_MESSAGE` warnings in the dev container logs.
+
+### Postponed
+
+- **"Create new organization" self-serve** — currently only path to a 2nd membership is via invite. A `POST /api/v1/organizations` route owned by `current_user` is reasonable but out of scope for a polish patch. Scoped for v2.4.18.
+- **Command palette v2** — cross-resource search (scans by name, findings by target, assets by hostname). Needs a backend search endpoint. Scoped for a future release.
+
 ## [2.4.16] - 2026-04-29
 
 Closes the last blocker from the v2.4.14 draconian UX audit (B-DRA-02): a user with memberships in multiple organizations can now switch between client tenants without logging out. README has marketed multi-tenancy "for NIS2 consultants managing multiple clients" since v1.0; until this release there was no UI to act on it. Backend already had RLS policies on every tenant-scoped table and the JWT carried `org_id` (since B10 in v2.4.12) — the missing pieces were the **switch endpoint** and the **switcher UI**.

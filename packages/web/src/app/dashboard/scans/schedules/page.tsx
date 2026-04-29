@@ -22,10 +22,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 import { useAssets } from "@/hooks/use-assets"
+import { useFormatDate } from "@/lib/dates"
+
+// v2.4.17 audit S-DRA-03: cron validation. Previously the schema
+// only required `min(5)` chars, so "abcde" passed and the API
+// returned a generic 422 with no actionable hint. The regex here
+// validates the 5-field shape (minute / hour / day / month / DoW),
+// allowing numbers, lists (1,2,3), ranges (1-5), wildcards (*) and
+// steps (*/2). Field-level semantics (range bounds, valid steps)
+// are still enforced by croniter on the server — this regex is
+// just a fast-fail to give the user a clear error before round-trip.
+//
+// Error strings are i18n keys resolved via t(error.message) at
+// render — same pattern as login/register/profile/etc.
+const CRON_REGEX = /^\s*[\d*/,\-]+\s+[\d*/,\-]+\s+[\d*/,\-]+\s+[\d*/,\-]+\s+[\d*/,\-]+\s*$/
 
 const scheduleSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  cron_expression: z.string().min(5, "Cron expression required"),
+  name: z.string().min(1, "nameRequired"),
+  cron_expression: z
+    .string()
+    .min(5, "cronRequired")
+    .regex(CRON_REGEX, "cronInvalid"),
 })
 
 type ScheduleForm = z.infer<typeof scheduleSchema>
@@ -43,6 +60,7 @@ const cronPresetKeys = [
 export default function SchedulesPage() {
   const t = useTranslations("schedulesPage")
   const tc = useTranslations("common")
+  const formatDate = useFormatDate()
   const user = useAuthStore((s) => s.user)
   const { data: assetsData } = useAssets()
   const [schedules, setSchedules] = useState<any[]>([])
@@ -154,13 +172,20 @@ export default function SchedulesPage() {
               <div className="space-y-2">
                 <Label>{t("scheduleName")}</Label>
                 <Input placeholder={t("scheduleNamePlaceholder")} {...register("name")} />
-                {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+                {errors.name && (
+                  <p className="text-xs text-destructive">{t(errors.name.message as any)}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label>{t("cronExpression")}</Label>
                 <Input placeholder="0 9 * * 1" {...register("cron_expression")} />
-                {errors.cron_expression && <p className="text-xs text-destructive">{errors.cron_expression.message}</p>}
+                {errors.cron_expression && (
+                  <p className="text-xs text-destructive">
+                    {t(errors.cron_expression.message as any)}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">{t("cronHelp")}</p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {cronPresetKeys.map((p) => (
                     <Badge
@@ -255,7 +280,7 @@ export default function SchedulesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {s.last_run_at ? new Date(s.last_run_at).toLocaleString() : t("never")}
+                      {s.last_run_at ? formatDate(s.last_run_at, "Pp") : t("never")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">

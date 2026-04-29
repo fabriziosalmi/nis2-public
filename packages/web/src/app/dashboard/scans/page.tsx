@@ -5,7 +5,7 @@
 
 import Link from "next/link"
 import { Plus, Loader2, CalendarClock, Radar } from "lucide-react"
-import { format } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,7 @@ export default function ScansPage() {
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page)
   const t = useTranslations("scans")
+  const formatDate = useFormatDate()
   const scans = data?.items || []
   const total = data?.total || 0
 
@@ -117,7 +118,7 @@ export default function ScansPage() {
                     <TableCell>{scan.hosts_scanned || 0}</TableCell>
                     <TableCell>{(scan.findings_critical || 0) + (scan.findings_high || 0) + (scan.findings_medium || 0) + (scan.findings_low || 0)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {scan.created_at ? format(new Date(scan.created_at), "MMM d, yyyy HH:mm") : "--"}
+                      {formatDate(scan.created_at, "Pp")}
                     </TableCell>
                   </TableRow>
                 ))}
