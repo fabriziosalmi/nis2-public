@@ -662,6 +662,13 @@
     "noFindings": "Nessun finding rilevato — ottimo risultato!",
     "findingsPending": "I findings appariranno al completamento della scansione."
   },
+  "orgSwitcher": {
+    "currentOrg": "Organizzazione attiva",
+    "switchTo": "Passa a",
+    "switchedTo": "Passato a {name}",
+    "switchFailed": "Impossibile cambiare organizzazione",
+    "trigger": "Organizzazione attiva: {name}. Clicca per cambiare."
+  },
   "scansComparePage": {
     "title": "Confronto Scansioni",
     "subtitle": "Confronta i findings tra due scansioni per monitorare i progressi",

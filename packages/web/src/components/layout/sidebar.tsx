@@ -31,6 +31,7 @@ import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { OrgSwitcher } from "@/components/layout/org-switcher"
 import { useAuthStore } from "@/stores/auth-store"
 import { useState } from "react"
 
@@ -96,6 +97,12 @@ export function Sidebar() {
           </Button>
         )}
       </div>
+
+      {/* Org switcher (audit B-DRA-02). The component renders its
+          own border+padding wrapper when visible, and `null` for
+          users with a single membership — single-tenant installs see
+          no extra chrome. */}
+      <OrgSwitcher collapsed={collapsed} />
 
       {/* Main navigation */}
       <div className="flex-1 overflow-y-auto py-4">

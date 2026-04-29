@@ -33,6 +33,7 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    SwitchOrgRequest,
     TokenResponse,
     UserResponse,
     UserUpdate,
@@ -571,6 +572,101 @@ async def change_password(
     role = membership.role if membership else None
     _build_token_response(response, current_user, org_id, role, iat_override=next_second)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Switch active organization (audit B-DRA-02, v2.4.16)
+# ---------------------------------------------------------------------------
+
+@router.post("/switch-org", response_model=TokenResponse)
+@limiter.limit("10/minute")
+async def switch_org(
+    request: Request,
+    response: Response,
+    payload: SwitchOrgRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Switch the active organization for this session.
+
+    Multi-tenant context: a NIS2 consultant managing 3 clients holds 3
+    memberships, but every RLS-scoped query is keyed on the JWT's
+    `org_id` claim. Mutating client state is therefore not enough —
+    we have to mint a fresh token with the new claim and rotate the
+    cookies.
+
+    Contract:
+      * 200 + new TokenResponse on success. Cookies are rotated via
+        `_build_token_response` (same helper as /login, /register,
+        /refresh, /change-password) — the FE picks up the new
+        access_token / refresh_token / csrf_token transparently.
+      * 403 if the caller has no membership in the target org. We
+        surface this as "you are not a member" rather than 404 because
+        the org may exist; the membership doesn't.
+      * 422 if the org_id isn't a valid UUID (Pydantic enforces this
+        before we touch the DB).
+      * Rate-limited 10/minute/IP — UI action, not credential surface;
+        the limit exists to make brute-force enumeration of org IDs
+        uninteresting (combined with the RLS guard, which already
+        flatly refuses cross-org reads).
+
+    Audit log entry `user.org_switched` records `from_org_id` and
+    `to_org_id` so the compliance team can answer "when did this
+    consultant last access the Acme Corp tenant".
+    """
+    # Resolve the membership for the target org. We pull from the
+    # already-eager-loaded `current_user.memberships` rather than a
+    # second SQL hit — `get_current_user` does selectinload(memberships)
+    # for exactly this kind of follow-up check.
+    target_membership: Membership | None = next(
+        (m for m in current_user.memberships
+         if m.organization_id == payload.organization_id),
+        None,
+    )
+    if target_membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of the target organization",
+        )
+
+    # Capture the previous org_id from the JWT (resolved by
+    # get_current_user) so the audit log can record the transition.
+    # Falls back to None for legacy tokens minted before v2.4.12
+    # started writing org_id into the claims.
+    from app.dependencies import _resolve_active_org_id
+    previous_org_id = _resolve_active_org_id(request)
+
+    # Audit log entry. We log under the *target* org so it shows up in
+    # the org the user is moving to — that's where the security team
+    # will look for "who accessed our tenant today". The `from_org_id`
+    # in details lets a curious admin trace the path.
+    from app.middleware.audit import log_action
+    await log_action(
+        db,
+        org_id=target_membership.organization_id,
+        user_id=current_user.id,
+        action="user.org_switched",
+        resource_type="organization",
+        resource_id=str(target_membership.organization_id),
+        details={
+            "from_org_id": str(previous_org_id) if previous_org_id else None,
+            "to_org_id": str(target_membership.organization_id),
+            "to_role": target_membership.role,
+        },
+        request=request,
+    )
+
+    # Mint new tokens with the target org_id + the user's role IN that
+    # org. The FE's onSuccess handler clears the TanStack Query cache
+    # so every screen re-fetches with the new RLS scope; the previous
+    # access_token cookie is replaced by Set-Cookie in the response
+    # below.
+    return _build_token_response(
+        response,
+        current_user,
+        target_membership.organization_id,
+        target_membership.role,
+    )
 
 
 # ---------------------------------------------------------------------------

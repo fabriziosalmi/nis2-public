@@ -662,6 +662,13 @@
     "noFindings": "No findings detected — great result!",
     "findingsPending": "Findings will appear when the scan completes."
   },
+  "orgSwitcher": {
+    "currentOrg": "Active organization",
+    "switchTo": "Switch to",
+    "switchedTo": "Switched to {name}",
+    "switchFailed": "Could not switch organization",
+    "trigger": "Active organization: {name}. Click to switch."
+  },
   "scansComparePage": {
     "title": "Scan Comparison",
     "subtitle": "Compare findings between two scans to track progress",

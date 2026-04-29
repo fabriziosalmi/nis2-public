@@ -662,6 +662,13 @@
     "noFindings": "Aucune découverte — excellent résultat !",
     "findingsPending": "Les découvertes apparaîtront à la fin de l'analyse."
   },
+  "orgSwitcher": {
+    "currentOrg": "Organisation active",
+    "switchTo": "Basculer vers",
+    "switchedTo": "Basculé vers {name}",
+    "switchFailed": "Impossible de changer d'organisation",
+    "trigger": "Organisation active : {name}. Cliquez pour basculer."
+  },
   "scansComparePage": {
     "title": "Comparaison d'analyses",
     "subtitle": "Comparez les découvertes entre deux analyses pour suivre les progrès",
