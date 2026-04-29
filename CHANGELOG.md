@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.4.15] - 2026-04-29
+
+This release closes the i18n / dead-code / destructive-action backlog flagged by the v2.4.14 draconian UX audit. No backend changes — purely frontend cleanup. The recurring theme: pages that *had* an i18n namespace defined but never imported `useTranslations`, plus a few fake-UX leftovers from earlier prototypes.
+
+### Fixed (audit B-DRA-* — UI/UX backlog)
+
+- **B-DRA-01 / Fake search bar killed.** `components/layout/header.tsx` rendered a `<Button>` styled as a search input with a `Ctrl+K` kbd hint and no `onClick` — a Potemkin search the user could click forever. Removed. The `header.searchPlaceholder` i18n key is left in the bundle so a real `cmdk` command palette (planned for v2.4.16+) can wire up without a translation round.
+- **B-DRA-03 / Dashboard landing page wasn't translated.** `app/dashboard/page.tsx` — the most-visited page after login — never imported `useTranslations`. Every KPI label, chart title, empty state, table header was hardcoded English even though the `dashboard` namespace in `messages/*.json` already had keys for nearly all of it. Wired up; severity labels in the chart now route through the `findings` namespace so the BarChart axis localises with the rest of the UI; status badges in "Recent Scans" use the `scans` namespace.
+- **B-DRA-04 / `/dashboard/scans/new` form was 100% hardcoded English.** Form titles, Card sections, feature row labels (`["dns_checks", "DNS", "DNS record analysis"]`), advanced settings, and three `toast.error / toast.success` calls — all literal strings on the most critical user flow (launching a scan). New `scansNewPage` namespace (40 keys × 5 locales = 200 translations).
+- **B-DRA-05 / `/dashboard/scans/[id]/compare` was 100% hardcoded English.** Page titled "Scan Comparison", "Select Scan to Compare Against", "New Findings", "Resolved", "Persistent" — none of it through `t()`. New `scansComparePage` namespace (19 keys × 5 locales = 95 translations); table headers reuse the `findings` namespace.
+- **B-DRA-06 / `/dashboard/scans/[id]` had hardcoded ITALIAN.** Worse than hardcoded English — the page mixed "Scansione non trovata", "Riepilogo Esecutivo", "Matrice Conformità NIS2 Art. 21", "Host analizzati", tab labels in Italian into an otherwise-English UI. Leftover from the original Italian prototype that survived the i18n round 1 sweep. New `scanDetailsPage` namespace (29 keys × 5 locales = 145 translations); compliance status labels reuse `compliancePage`; severity labels reuse `findings`.
+- **B-DRA-07 / Dead `sampleFindings` array shipped fake employee emails.** `app/dashboard/findings/page.tsx` had a 12-row hardcoded array (`john@example.com`, `jane@example.com` as `assigned_to` values) declared at module scope and **never referenced** — pure dead code dating from before v2.4.5's mock kill. The route already uses `useFindings` against the real API. Deleted.
+- **B-DRA-08 / Member removal had no confirmation dialog.** `app/dashboard/settings/team/page.tsx` — clicking "Remove Member" in the row dropdown fired `handleRemove()` immediately. A misclick removed a colleague; the only feedback was a success toast after the fact. Now routes through a single `<Dialog>` driven by a `confirmAction` state. Confirms on **two destructive actions**: any removal, and any role change that demotes an admin (`admin → auditor / viewer`). Promotions and lateral non-admin moves stay one-click — friction would outweigh the regret cost. 5 new keys in `teamPage` namespace (`confirmRemoveTitle`, `confirmRemoveDescription`, `confirmDemoteTitle`, `confirmDemoteDescription`, `confirmDemoteAction`) × 5 locales = 25 translations.
+- **B-DRA-09 / Organization settings zod error was a literal English string.** `app/dashboard/settings/organization/page.tsx:22` had `z.string().min(1, "Organization name is required")` instead of an i18n key. Aligned with the login / register / profile pattern — error message is a key resolved via `t(error.message)` at render. Added `organizationPage.nameRequired`.
+
+### Polished (audit N-DRA-*)
+
+- **N-DRA-01 / Avatar fallback initial.** `components/layout/header.tsx` fell back to a hardcoded "U" when `user.full_name` was empty. Now prefers the first letter of the email (always present for an authed user); only falls back to "U" when both are absent — which only happens during the brief window before `/auth/me` hydrates.
+
+### i18n totals
+
+- **+99 leaf keys × 5 locales = 495 new translations.**
+- All 5 locale files validate as JSON and re-pass parity check at **636 leaf keys** (was 537 in v2.4.14).
+- **Zero MISSING_MESSAGE warnings** in the dev container logs after dashboard / scans-new / scans-detail / scans-compare / team / organization page renders.
+
+### Verified
+
+- 75 unit + **46** e2e (no test count change — backend untouched) = **121 green**.
+- TypeScript: 16 pre-existing recharts errors in `dashboard/page.tsx` and `reports/page.tsx` unchanged (Next.js production build tolerates them; CI Web Build still passes).
+- All four touched FE pages (`/dashboard`, `/dashboard/scans/new`, `/dashboard/settings/team`, `/dashboard/settings/organization`) return 200 against the running dev stack.
+- IT locale spot-check: dashboard renders "Scansioni Totali", "Punteggio Medio", "Risultati Totali", "Asset Monitorati", "Hai bisogno di supporto esperto…", "Richiedi consulenza" — fully localised.
+
+### Known limitations / postponed
+
+- **B-DRA-02 (multi-tenant org switcher)** — `api.listOrgs()` exists but no UI consumes it. Scoped to v2.4.16 because it needs a backend `POST /auth/switch-org` endpoint that remints the JWT with the new `org_id`, plus a dropdown in the user menu. Larger than fits this patch.
+- **S-DRA-01..05 + remaining N-DRA / O-DRA** (date-locale via next-intl, findings-filter debouncing, cron preset chips, sticky table headers, locale-aware severity badges, real `cmdk` command palette) — bundled into v2.4.16+ polish + features.
+
 ## [2.4.14] - 2026-04-28
 
 ### Fixed (CI)

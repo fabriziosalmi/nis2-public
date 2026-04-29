@@ -81,6 +81,24 @@ export default function TeamPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false)
 
+  // v2.4.15 audit B-DRA-08: a one-click "Remove Member" used to be a
+  // destructive action with no confirmation — a misclick removed a
+  // colleague immediately and the only feedback was a success toast.
+  // This `confirmAction` state holds whichever destructive action is
+  // pending so the single <ConfirmDialog> below can render the right
+  // body. We confirm on:
+  //   - any member removal (always destructive)
+  //   - role changes that DEMOTE an admin (admin → auditor / viewer):
+  //     server-side last-admin guard catches the truly fatal case, but
+  //     a quick misclick still strips an admin's privileges.
+  // Promotions and lateral moves between non-admin roles aren't
+  // confirmed — the friction would outweigh the regret cost.
+  const [confirmAction, setConfirmAction] = useState<
+    | { kind: "remove"; memberId: string; fullName: string }
+    | { kind: "demote"; memberId: string; fullName: string; fromRole: string; toRole: Role }
+    | null
+  >(null)
+
   const {
     register,
     handleSubmit,
@@ -102,7 +120,24 @@ export default function TeamPage() {
     }
   }
 
-  const handleRoleChange = async (memberId: string, newRole: Role) => {
+  // The user clicked "Set as <role>". Promotions / lateral moves go
+  // through to the API directly; demotions of an admin route through
+  // the confirmation dialog first.
+  const requestRoleChange = (memberId: string, fullName: string, fromRole: string, newRole: Role) => {
+    if (fromRole === "admin" && newRole !== "admin") {
+      setConfirmAction({
+        kind: "demote",
+        memberId,
+        fullName,
+        fromRole,
+        toRole: newRole,
+      })
+      return
+    }
+    void doRoleChange(memberId, newRole)
+  }
+
+  const doRoleChange = async (memberId: string, newRole: Role) => {
     try {
       await updateRole.mutateAsync({ memberId, role: newRole })
       toast.success(t("roleUpdated", { role: newRole }))
@@ -111,12 +146,30 @@ export default function TeamPage() {
     }
   }
 
-  const handleRemove = async (memberId: string, name: string) => {
+  // The user clicked "Remove Member". Always confirms before firing.
+  const requestRemove = (memberId: string, fullName: string) => {
+    setConfirmAction({ kind: "remove", memberId, fullName })
+  }
+
+  const doRemove = async (memberId: string, name: string) => {
     try {
       await removeMember.mutateAsync(memberId)
       toast.success(t("memberRemoved", { name }))
     } catch (err: any) {
       toast.error(t("removeFailed"), { description: err.message })
+    }
+  }
+
+  const onConfirm = async () => {
+    if (!confirmAction) return
+    const action = confirmAction
+    // Close the dialog before awaiting — the user shouldn't see the
+    // confirm button stay clickable while the request is in-flight.
+    setConfirmAction(null)
+    if (action.kind === "remove") {
+      await doRemove(action.memberId, action.fullName)
+    } else if (action.kind === "demote") {
+      await doRoleChange(action.memberId, action.toRole)
     }
   }
 
@@ -198,6 +251,47 @@ export default function TeamPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* v2.4.15 audit B-DRA-08: confirmation dialog for destructive
+          actions (remove, admin-demotion). Shared single instance —
+          which destructive action to confirm comes from `confirmAction`
+          state. Closing the dialog cancels; clicking the confirm button
+          fires `onConfirm` which awaits the mutation and clears state. */}
+      <Dialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.kind === "remove"
+                ? t("confirmRemoveTitle")
+                : t("confirmDemoteTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.kind === "remove"
+                ? t("confirmRemoveDescription", { name: confirmAction.fullName })
+                : confirmAction?.kind === "demote"
+                  ? t("confirmDemoteDescription", {
+                      name: confirmAction.fullName,
+                      from: t(confirmAction.fromRole as any),
+                      to: t(confirmAction.toRole as any),
+                    })
+                  : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+              {tc("cancel")}
+            </Button>
+            <Button
+              variant={confirmAction?.kind === "remove" ? "destructive" : "default"}
+              onClick={onConfirm}
+            >
+              {confirmAction?.kind === "remove"
+                ? t("removeMember")
+                : t("confirmDemoteAction")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="p-0">
@@ -293,7 +387,7 @@ export default function TeamPage() {
                               {ROLES.filter((r) => r !== member.role).map((r) => (
                                 <DropdownMenuItem
                                   key={r}
-                                  onClick={() => handleRoleChange(member.id, r)}
+                                  onClick={() => requestRoleChange(member.id, fullName, member.role, r)}
                                 >
                                   {t(`setAs${r.charAt(0).toUpperCase()}${r.slice(1)}` as any)}
                                 </DropdownMenuItem>
@@ -301,7 +395,7 @@ export default function TeamPage() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => handleRemove(member.id, fullName)}
+                                onClick={() => requestRemove(member.id, fullName)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 {t("removeMember")}

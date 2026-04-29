@@ -5,8 +5,8 @@
 
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Suspense } from "react"
-import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight, Loader2 } from "lucide-react"
+import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -36,7 +36,14 @@ function StatusBadge({ status }: { status: string }) {
     completed: "border-green-500 text-green-600 bg-green-50",
     failed: "border-red-500 text-red-600 bg-red-50",
   }
-  return <Badge variant="outline" className={variants[status] || ""}>{status}</Badge>
+  // Lookup is namespaced to `scans` because the same status enum drives
+  // the /scans table — same labels, same colours, one source of truth.
+  const ts = useTranslations("scans")
+  return (
+    <Badge variant="outline" className={variants[status] || ""}>
+      {ts(status as any)}
+    </Badge>
+  )
 }
 
 function ScoreDisplay({ score }: { score: number | null | undefined }) {
@@ -49,6 +56,17 @@ function ScoreDisplay({ score }: { score: number | null | undefined }) {
 }
 
 export default function DashboardPage() {
+  // v2.4.15 audit B-DRA-03: this landing page used to render every
+  // string hardcoded in English, even though the `dashboard` namespace
+  // in messages/*.json already had keys for almost everything. Wiring
+  // up `useTranslations` here closes the gap for IT/FR/DE/ES users
+  // without adding new translations on the existing keys.
+  const t = useTranslations("dashboard")
+  // Severity labels (Critical/High/Medium/Low) live in the `findings`
+  // namespace; reuse those rather than mint duplicates.
+  const tf = useTranslations("findings")
+  const tc = useTranslations("common")
+
   const { data: scansData, isLoading: scansLoading } = useScans()
   const { data: statsData } = useFindingStats()
   const { data: assetsData } = useAssets()
@@ -66,12 +84,14 @@ export default function DashboardPage() {
   const totalFindings = scans.reduce((sum: number, s: any) =>
     sum + (s.findings_critical || 0) + (s.findings_high || 0) + (s.findings_medium || 0) + (s.findings_low || 0), 0)
 
-  // Build chart data from real scans
+  // Build chart data from real scans. Severity labels come from the
+  // findings namespace so the chart axis localises with the rest of
+  // the UI.
   const severityChartData = hasData ? [
-    { severity: "Critical", count: scans.reduce((s: number, sc: any) => s + (sc.findings_critical || 0), 0) },
-    { severity: "High", count: scans.reduce((s: number, sc: any) => s + (sc.findings_high || 0), 0) },
-    { severity: "Medium", count: scans.reduce((s: number, sc: any) => s + (sc.findings_medium || 0), 0) },
-    { severity: "Low", count: scans.reduce((s: number, sc: any) => s + (sc.findings_low || 0), 0) },
+    { severity: tf("critical"), count: scans.reduce((s: number, sc: any) => s + (sc.findings_critical || 0), 0) },
+    { severity: tf("high"), count: scans.reduce((s: number, sc: any) => s + (sc.findings_high || 0), 0) },
+    { severity: tf("medium"), count: scans.reduce((s: number, sc: any) => s + (sc.findings_medium || 0), 0) },
+    { severity: tf("low"), count: scans.reduce((s: number, sc: any) => s + (sc.findings_low || 0), 0) },
   ] : []
 
   const trendData = completedScans
@@ -83,33 +103,43 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      title: "Total Scans",
+      title: t("totalScans"),
       value: scansData?.total?.toString() || "0",
-      change: completedScans.length > 0 ? `${completedScans.length} completed` : "No scans yet",
+      change: completedScans.length > 0
+        ? t("completed", { count: completedScans.length })
+        : t("noScansYet"),
       icon: Radar,
       bg: "bg-blue-500/10",
       iconColor: "text-blue-600",
     },
     {
-      title: "Average Score",
+      title: t("averageScore"),
       value: avgScore?.toString() || "--",
-      change: avgScore ? (avgScore > 80 ? "Good compliance" : avgScore > 60 ? "Needs improvement" : "Action required") : "Run a scan",
+      change: avgScore
+        ? avgScore > 80
+          ? t("goodCompliance")
+          : avgScore > 60
+            ? t("needsImprovement")
+            : t("actionRequired")
+        : t("runAScan"),
       icon: ShieldCheck,
       bg: "bg-green-500/10",
       iconColor: "text-green-600",
     },
     {
-      title: "Total Findings",
+      title: t("totalFindings"),
       value: totalFindings.toString(),
-      change: statsData?.open ? `${statsData.open} open` : "Across all scans",
+      change: statsData?.open
+        ? t("openFindings", { count: statsData.open })
+        : t("acrossAllScans"),
       icon: AlertTriangle,
       bg: "bg-orange-500/10",
       iconColor: "text-orange-600",
     },
     {
-      title: "Assets Monitored",
+      title: t("assetsMonitored"),
       value: assetsData?.total?.toString() || "0",
-      change: assetsData?.total > 0 ? "Active targets" : "Add assets to start",
+      change: assetsData?.total > 0 ? t("activeTargets") : t("addAssetsToStart"),
       icon: Server,
       bg: "bg-purple-500/10",
       iconColor: "text-purple-600",
@@ -120,13 +150,13 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">NIS2 compliance overview and recent activity</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button asChild className="shrink-0 w-fit">
           <Link href="/dashboard/scans/new">
             <Plus className="mr-2 h-4 w-4" />
-            New Scan
+            {t("newScan")}
           </Link>
         </Button>
       </div>
@@ -154,8 +184,8 @@ export default function DashboardPage() {
         <div className="grid gap-4 lg:grid-cols-7">
           <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>Findings by Severity</CardTitle>
-              <CardDescription>Distribution across severity levels</CardDescription>
+              <CardTitle>{t("findingsBySeverity")}</CardTitle>
+              <CardDescription>{t("severityDistribution")}</CardDescription>
             </CardHeader>
             <CardContent>
               {severityChartData.some((d) => d.count > 0) ? (
@@ -169,15 +199,15 @@ export default function DashboardPage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">No findings data</div>
+                <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">{t("noFindingsData")}</div>
               )}
             </CardContent>
           </Card>
 
           <Card className="lg:col-span-4">
             <CardHeader>
-              <CardTitle>Compliance Score Trend</CardTitle>
-              <CardDescription>Score progression across scans</CardDescription>
+              <CardTitle>{t("complianceScoreTrend")}</CardTitle>
+              <CardDescription>{t("scoreProgression")}</CardDescription>
             </CardHeader>
             <CardContent>
               {trendData.length > 1 ? (
@@ -192,7 +222,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
-                  {trendData.length === 1 ? "Need at least 2 scans for trend" : "No completed scans yet"}
+                  {trendData.length === 1 ? t("needTwoScans") : t("noCompletedScans")}
                 </div>
               )}
             </CardContent>
@@ -207,21 +237,19 @@ export default function DashboardPage() {
             <div className="rounded-full bg-primary/10 p-4 mb-4">
               <ShieldCheck className="h-10 w-10 text-primary" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Welcome to NIS2 Platform</h3>
-            <p className="text-muted-foreground mb-6 max-w-md">
-              Get started by adding your assets (domains, IPs) and running your first compliance scan against NIS2 Directive requirements.
-            </p>
+            <h3 className="text-xl font-semibold mb-2">{t("welcome")}</h3>
+            <p className="text-muted-foreground mb-6 max-w-md">{t("welcomeDescription")}</p>
             <div className="flex gap-3">
               <Button variant="outline" asChild>
                 <Link href="/dashboard/assets">
                   <Server className="mr-2 h-4 w-4" />
-                  Add Assets
+                  {t("addAssets")}
                 </Link>
               </Button>
               <Button asChild>
                 <Link href="/dashboard/scans/new">
                   <Radar className="mr-2 h-4 w-4" />
-                  Run First Scan
+                  {t("runFirstScan")}
                 </Link>
               </Button>
             </div>
@@ -234,12 +262,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Recent Scans</CardTitle>
-              <CardDescription>Latest compliance scans and their results</CardDescription>
+              <CardTitle>{t("recentScans")}</CardTitle>
+              <CardDescription>{t("recentScansDescription")}</CardDescription>
             </div>
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/scans">
-                View all
+                {tc("viewAll")}
                 <ArrowUpRight className="ml-1 h-3 w-3" />
               </Link>
             </Button>
@@ -248,11 +276,11 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Findings</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("score")}</TableHead>
+                  <TableHead>{t("findingsColumn")}</TableHead>
+                  <TableHead>{t("date")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -279,12 +307,12 @@ export default function DashboardPage() {
       <Card className="bg-muted/30 border-muted">
         <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 py-5">
           <div>
-            <p className="text-sm font-medium">Need expert help with NIS2 compliance, certificate remediation, or custom assessments?</p>
-            <p className="text-xs text-muted-foreground">Private scans, incident response, staff training, and ongoing monitoring available.</p>
+            <p className="text-sm font-medium">{t("needExpertHelp")}</p>
+            <p className="text-xs text-muted-foreground">{t("needExpertDescription")}</p>
           </div>
           <Button variant="outline" size="sm" asChild className="shrink-0">
             <a href="mailto:fabrizio.salmi@gmail.com">
-              Request Consultation
+              {t("requestConsultation")}
             </a>
           </Button>
         </CardContent>

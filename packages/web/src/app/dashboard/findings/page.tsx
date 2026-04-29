@@ -21,20 +21,11 @@ import {
 import { useFindings, useUpdateFinding } from "@/hooks/use-findings"
 import { cn } from "@/lib/utils"
 
-const sampleFindings = [
-  { id: "f1", severity: "critical", category: "TLS", message: "TLS 1.1 detected - deprecated and insecure protocol version. Should upgrade to TLS 1.2 or higher.", target: "legacy.example.com", status: "open", assigned_to: null, scan_name: "Production Scan" },
-  { id: "f2", severity: "critical", category: "Ports", message: "Unencrypted FTP (port 21) exposed to the internet", target: "files.example.com", status: "open", assigned_to: "john@example.com", scan_name: "Production Scan" },
-  { id: "f3", severity: "high", category: "Headers", message: "Missing Content-Security-Policy header allows potential XSS attacks", target: "api.example.com", status: "open", assigned_to: null, scan_name: "API Scan" },
-  { id: "f4", severity: "high", category: "Headers", message: "Missing X-Frame-Options header allows clickjacking", target: "legacy.example.com", status: "acknowledged", assigned_to: "jane@example.com", scan_name: "Production Scan" },
-  { id: "f5", severity: "high", category: "DNS", message: "SPF record too permissive - allows unauthorized senders", target: "example.com", status: "open", assigned_to: null, scan_name: "DNS Audit" },
-  { id: "f6", severity: "medium", category: "DNS", message: "DNSSEC not configured for the domain", target: "example.com", status: "open", assigned_to: null, scan_name: "DNS Audit" },
-  { id: "f7", severity: "medium", category: "TLS", message: "Weak cipher suite enabled: TLS_RSA_WITH_AES_128_CBC_SHA", target: "api.example.com", status: "acknowledged", assigned_to: "john@example.com", scan_name: "API Scan" },
-  { id: "f8", severity: "medium", category: "Web", message: "Missing Strict-Transport-Security header", target: "staging.example.com", status: "resolved", assigned_to: null, scan_name: "Staging Scan" },
-  { id: "f9", severity: "low", category: "Headers", message: "Missing X-Content-Type-Options header", target: "cdn.example.com", status: "open", assigned_to: null, scan_name: "CDN Scan" },
-  { id: "f10", severity: "low", category: "WHOIS", message: "Domain expires within 90 days", target: "example.com", status: "open", assigned_to: null, scan_name: "DNS Audit" },
-  { id: "f11", severity: "info", category: "DNS", message: "Multiple A records detected (load balancing)", target: "api.example.com", status: "open", assigned_to: null, scan_name: "API Scan" },
-  { id: "f12", severity: "info", category: "Web", message: "Server header exposes technology stack", target: "prod.example.com", status: "false_positive", assigned_to: null, scan_name: "Production Scan" },
-]
+// v2.4.5 killed the /dashboard mock data; the equivalent `sampleFindings`
+// array on this page lingered until v2.4.15 as dead code (declared but
+// never referenced — the route uses `useFindings` against the real API).
+// Removing it here closes the audit nit so the bundle no longer ships
+// fake employee emails (john@example.com / jane@example.com) to clients.
 
 const severityVariant: Record<string, "critical" | "high" | "medium" | "low" | "info"> = {
   critical: "critical",

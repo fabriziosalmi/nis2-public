@@ -1,12 +1,13 @@
 // Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
-// NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+// NIS2 Compliance Platform — https://github.com/fabriziosalmi/messages
 "use client"
 
 import { use } from "react"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Clock, CheckCircle, XCircle, AlertTriangle, GitCompareArrows, Radar } from "lucide-react"
+import { ArrowLeft, Loader2, Clock, CheckCircle, AlertTriangle, GitCompareArrows, Radar } from "lucide-react"
 import { format } from "date-fns"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +22,19 @@ const severityVariant: Record<string, "critical" | "high" | "medium" | "low" | "
 }
 
 function ComplianceStatus({ status }: { status: string }) {
+  // Status labels live in the `compliancePage` namespace — same enum
+  // (compliant / partial / nonCompliant / manualReview) the matrix
+  // page already uses. v2.4.15 i18n cleanup.
+  const tc = useTranslations("compliancePage")
   const s = (status || "").toLowerCase()
-  let config = { icon: Clock, color: "text-muted-foreground", label: "Manuale" }
-  if (s.includes("automated") && !s.includes("partial")) config = { icon: CheckCircle, color: "text-green-600", label: "Conforme" }
-  else if (s.includes("partial")) config = { icon: AlertTriangle, color: "text-yellow-600", label: "Parziale" }
-  else if (s.includes("manual")) config = { icon: Clock, color: "text-muted-foreground", label: "Manuale" }
+  let config = { icon: Clock, color: "text-muted-foreground", label: tc("manual") }
+  if (s.includes("automated") && !s.includes("partial")) {
+    config = { icon: CheckCircle, color: "text-green-600", label: tc("compliant") }
+  } else if (s.includes("partial")) {
+    config = { icon: AlertTriangle, color: "text-yellow-600", label: tc("partial") }
+  } else if (s.includes("manual")) {
+    config = { icon: Clock, color: "text-muted-foreground", label: tc("manual") }
+  }
   return (
     <div className={cn("flex items-center gap-1.5", config.color)}>
       <config.icon className="h-4 w-4" />
@@ -34,7 +43,16 @@ function ComplianceStatus({ status }: { status: string }) {
   )
 }
 
+// v2.4.15 audit B-DRA-06: this page used to ship hardcoded ITALIAN
+// ("Scansione non trovata", "Riepilogo Esecutivo", "Host analizzati"
+// etc.) mixed in with the otherwise-English UI — a leftover from the
+// initial Italian prototype that survived the i18n round 1 sweep.
+// All user-facing strings now route through the `scanDetailsPage`
+// namespace so the page localises correctly across all 5 locales.
 export default function ScanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useTranslations("scanDetailsPage")
+  const ts = useTranslations("scans")
+  const tf = useTranslations("findings")
   const { id } = use(params)
   const { data: scan, isLoading } = useScan(id)
   const { data: resultsData } = useScanResults(id)
@@ -55,9 +73,9 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <Radar className="h-10 w-10 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium">Scansione non trovata</h3>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">La scansione richiesta non esiste o non hai i permessi.</p>
-        <Button variant="outline" asChild><Link href="/dashboard/scans">Torna alle scansioni</Link></Button>
+        <h3 className="text-lg font-medium">{t("notFoundTitle")}</h3>
+        <p className="text-sm text-muted-foreground mt-1 mb-4">{t("notFoundDescription")}</p>
+        <Button variant="outline" asChild><Link href="/dashboard/scans">{t("backToScans")}</Link></Button>
       </div>
     )
   }
@@ -80,49 +98,49 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
               scan.status === "running" && "border-blue-500 text-blue-600 animate-pulse",
               scan.status === "failed" && "border-red-500 text-red-600",
               scan.status === "pending" && "border-yellow-500 text-yellow-600",
-            )}>{scan.status}</Badge>
+            )}>{ts(scan.status as any)}</Badge>
             {scan.status === "completed" && (
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/dashboard/scans/${id}/compare`}>
-                  <GitCompareArrows className="mr-2 h-4 w-4" />Compara
+                  <GitCompareArrows className="mr-2 h-4 w-4" />{t("compare")}
                 </Link>
               </Button>
             )}
           </div>
           <p className="text-muted-foreground">
-            {scan.created_at && format(new Date(scan.created_at), "d MMM yyyy 'alle' HH:mm")}
-            {scan.duration_seconds && ` — Durata: ${scan.duration_seconds}s`}
+            {scan.created_at && format(new Date(scan.created_at), "yyyy-MM-dd HH:mm")}
+            {scan.duration_seconds && ` — ${t("duration", { seconds: scan.duration_seconds })}`}
           </p>
         </div>
         {score !== null && score !== undefined && (
           <div className="text-center px-4">
             <div className={cn("text-4xl font-bold", score > 80 ? "text-green-600" : score > 60 ? "text-yellow-600" : "text-red-600")}>{score}</div>
-            <p className="text-xs text-muted-foreground">Score</p>
+            <p className="text-xs text-muted-foreground">{t("score")}</p>
           </div>
         )}
       </div>
 
       {/* Stats row */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{scan.hosts_scanned || 0}</p><p className="text-xs text-muted-foreground">Host analizzati</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{scan.hosts_alive || 0}</p><p className="text-xs text-muted-foreground">Host attivi</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-red-600">{scan.findings_critical || 0}</p><p className="text-xs text-muted-foreground">Critici</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-orange-600">{scan.findings_high || 0}</p><p className="text-xs text-muted-foreground">Alti</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-yellow-600">{(scan.findings_medium || 0) + (scan.findings_low || 0)}</p><p className="text-xs text-muted-foreground">Medi+Bassi</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{scan.hosts_scanned || 0}</p><p className="text-xs text-muted-foreground">{t("hostsScanned")}</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{scan.hosts_alive || 0}</p><p className="text-xs text-muted-foreground">{t("hostsAlive")}</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-red-600">{scan.findings_critical || 0}</p><p className="text-xs text-muted-foreground">{tf("critical")}</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-orange-600">{scan.findings_high || 0}</p><p className="text-xs text-muted-foreground">{tf("high")}</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-yellow-600">{(scan.findings_medium || 0) + (scan.findings_low || 0)}</p><p className="text-xs text-muted-foreground">{t("mediumLow")}</p></CardContent></Card>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Panoramica</TabsTrigger>
-          <TabsTrigger value="results">Risultati ({results.length})</TabsTrigger>
-          <TabsTrigger value="findings">Findings ({findings.length || totalFindings})</TabsTrigger>
+          <TabsTrigger value="overview">{t("tabOverview")}</TabsTrigger>
+          <TabsTrigger value="results">{t("tabResults", { count: results.length })}</TabsTrigger>
+          <TabsTrigger value="findings">{t("tabFindings", { count: findings.length || totalFindings })}</TabsTrigger>
         </TabsList>
 
         {/* Overview tab */}
         <TabsContent value="overview" className="space-y-4">
           {scan.executive_summary && (
             <Card>
-              <CardHeader><CardTitle>Riepilogo Esecutivo</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t("executiveSummary")}</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground leading-relaxed">{scan.executive_summary}</p>
               </CardContent>
@@ -133,8 +151,8 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
           {scan.compliance_matrix && Object.keys(scan.compliance_matrix).length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Matrice Conformita NIS2 Art. 21</CardTitle>
-                <CardDescription>Stato di ogni area basato sui check automatici</CardDescription>
+                <CardTitle>{t("complianceMatrixTitle")}</CardTitle>
+                <CardDescription>{t("complianceMatrixDescription")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
@@ -159,22 +177,22 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         <TabsContent value="results">
           <Card>
             <CardHeader>
-              <CardTitle>Risultati per Host</CardTitle>
-              <CardDescription>Dettaglio scansione per ogni target analizzato</CardDescription>
+              <CardTitle>{t("resultsTitle")}</CardTitle>
+              <CardDescription>{t("resultsDescription")}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               {results.length === 0 ? (
                 <div className="py-12 text-center text-muted-foreground text-sm">
-                  {scan.status === "completed" ? "Nessun risultato disponibile per questa scansione." : "I risultati appariranno al completamento della scansione."}
+                  {scan.status === "completed" ? t("noResults") : t("resultsPending")}
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Target</TableHead>
-                      <TableHead>IP</TableHead>
-                      <TableHead>Stato</TableHead>
-                      <TableHead>Porte Aperte</TableHead>
+                      <TableHead>{t("target")}</TableHead>
+                      <TableHead>{t("ip")}</TableHead>
+                      <TableHead>{t("hostState")}</TableHead>
+                      <TableHead>{t("openPorts")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -184,11 +202,11 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         <TableCell className="font-mono text-sm">{result.ip}</TableCell>
                         <TableCell>
                           <Badge variant={result.is_alive ? "secondary" : "outline"} className={result.is_alive ? "bg-green-100 text-green-800" : ""}>
-                            {result.is_alive ? "Attivo" : "Inattivo"}
+                            {result.is_alive ? t("hostAlive") : t("hostDead")}
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {(result.open_ports || []).join(", ") || "Nessuna"}
+                          {(result.open_ports || []).join(", ") || t("noPorts")}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -203,23 +221,23 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         <TabsContent value="findings">
           <Card>
             <CardHeader>
-              <CardTitle>Findings</CardTitle>
-              <CardDescription>Problemi di sicurezza rilevati durante la scansione</CardDescription>
+              <CardTitle>{t("findingsTitle")}</CardTitle>
+              <CardDescription>{t("findingsDescription")}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               {findings.length === 0 ? (
                 <div className="py-12 text-center text-muted-foreground text-sm">
-                  {scan.status === "completed" ? "Nessun finding rilevato — ottimo risultato!" : "I findings appariranno al completamento della scansione."}
+                  {scan.status === "completed" ? t("noFindings") : t("findingsPending")}
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Severita</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Descrizione</TableHead>
-                      <TableHead>Target</TableHead>
-                      <TableHead>Rimedio</TableHead>
+                      <TableHead>{tf("severity")}</TableHead>
+                      <TableHead>{tf("category")}</TableHead>
+                      <TableHead>{tf("message")}</TableHead>
+                      <TableHead>{tf("target")}</TableHead>
+                      <TableHead>{tf("remediation")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -227,7 +245,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                       <TableRow key={finding.id}>
                         <TableCell>
                           <Badge variant={severityVariant[finding.severity] || "secondary"}>
-                            {finding.severity}
+                            {tf((finding.severity || "").toLowerCase() as any)}
                           </Badge>
                         </TableCell>
                         <TableCell><Badge variant="outline">{finding.category}</Badge></TableCell>
