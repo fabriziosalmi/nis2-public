@@ -22,6 +22,7 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | POST | `/api/v1/auth/change-password` | Rotate the user's password. Verifies `current_password`, hashes `new_password`, stamps `password_changed_at` so every other still-active session is invalidated on its next request, re-issues this session's cookies. `5/min/IP` rate-limited | Yes |
 | POST | `/api/v1/auth/forgot-password` | Kick off the email-based reset flow. Always returns 204 regardless of whether the email exists, so the response can't be used to enumerate registered users. `5/min/IP` rate-limited | No |
 | POST | `/api/v1/auth/reset-password` | Complete the reset flow with a single-use token (delivered out-of-band by email) and a new password. Tokens are sha256-hashed at rest, expire after `RESET_TOKEN_TTL_MINUTES` (default 30), and a single 400 covers `{unknown, expired, used}` — no oracle on which one applies. `10/min/IP` rate-limited | No |
+| POST | `/api/v1/auth/switch-org` | Switch the active organization for the current session. Body: `{"organization_id": "<uuid>"}`. Validates the caller has a membership for the target org (403 otherwise — the org may exist but the membership doesn't), then mints fresh access / refresh / csrf tokens with the new `org_id` claim and rotates the cookies. Returns `TokenResponse` (same shape as `/login`). Used by the web client's org-switcher dropdown; SDKs can call it the same way. `10/min/IP` rate-limited | Yes |
 
 ## Scans
 

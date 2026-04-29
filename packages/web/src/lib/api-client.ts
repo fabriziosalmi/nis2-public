@@ -203,6 +203,33 @@ class ApiClient {
     })
   }
 
+  /**
+   * v2.4.16 audit B-DRA-02: switch the active organization.
+   *
+   * Posts the target org_id; the API mints fresh access/refresh/csrf
+   * tokens with the new org_id claim and rotates the cookies via
+   * Set-Cookie. Returns the same TokenResponse shape as /login so the
+   * caller can update the auth-store with the new user + org_id.
+   *
+   * The caller is expected to clear the TanStack Query cache after a
+   * successful switch — every screen's data is RLS-scoped, so stale
+   * cache from the previous org would render the wrong tenant's
+   * scans / findings / assets.
+   */
+  async switchOrg(organizationId: string) {
+    return this.request<{
+      access_token: string
+      refresh_token: string
+      csrf_token: string
+      token_type: string
+      user: any
+      org_id: string | null
+    }>('/api/v1/auth/switch-org', {
+      method: 'POST',
+      body: JSON.stringify({ organization_id: organizationId }),
+    })
+  }
+
   // ------------------------------------------------------------------- Scans
   async listScans(page = 1, limit = 20) {
     return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`)

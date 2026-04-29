@@ -597,6 +597,233 @@ class TestApiKeyAuth:
         )
 
 
+# ---------------------------------------------------------------------------
+# Org switcher (audit B-DRA-02, v2.4.16). Placed BEFORE the password-rotation
+# block for the same reason as TestApiKeyAuth — the module-scoped `client`
+# fixture's JWT must still be valid when we read it for the 422/403/auth
+# probes. The full multi-org round-trip uses its own fresh httpx.Client so
+# it doesn't disturb the module fixture's cookies.
+# ---------------------------------------------------------------------------
+
+class TestOrgSwitch:
+    """v2.4.16: switch active organization for multi-tenant users.
+
+    Validates the four behaviours that matter:
+      * 422 on a malformed UUID (Pydantic schema)
+      * 403 on a UUID the user has no membership in (the security
+        guarantee — RLS already refuses cross-org reads, but the
+        switch endpoint must not even hand out a token for an org
+        the caller can't access)
+      * 401 on no auth (cookie or Bearer missing)
+      * 200 + new TokenResponse with the new org_id claim on the
+        happy path (multi-org user switching between two memberships)
+    """
+
+    def test_switch_with_invalid_uuid_422(self, client: httpx.Client, auth: dict):
+        # Pydantic catches this before the route body runs, so no DB
+        # work happens. The response shape is the standard FastAPI
+        # validation envelope.
+        resp = client.post(
+            "/api/v1/auth/switch-org",
+            json={"organization_id": "not-a-uuid"},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 422, f"{resp.status_code}: {resp.text}"
+        assert "uuid" in resp.text.lower()
+
+    def test_switch_to_unknown_org_403(self, client: httpx.Client, auth: dict):
+        # Well-formed UUID the user definitely has no membership for.
+        # We surface 403 (rather than 404) to keep the caller honest:
+        # the org may exist; the membership doesn't.
+        bogus_uuid = "00000000-0000-0000-0000-000000000000"
+        resp = client.post(
+            "/api/v1/auth/switch-org",
+            json={"organization_id": bogus_uuid},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 403, f"{resp.status_code}: {resp.text}"
+        assert "not a member" in resp.text.lower()
+
+    def test_switch_unauthenticated_401(self):
+        # Fresh httpx.Client — no cookies, no Authorization header.
+        # Should never reach the route logic. The CSRF middleware lets
+        # this through (no cookie session to defend), so the 401 comes
+        # from get_current_user.
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.post(
+                "/api/v1/auth/switch-org",
+                json={"organization_id": "00000000-0000-0000-0000-000000000000"},
+            )
+            assert resp.status_code == 401, f"{resp.status_code}: {resp.text}"
+
+    def test_full_round_trip_multi_org(self, client: httpx.Client, auth: dict):
+        """End-to-end: register a temp user → temp invites the canonical
+        test user (fabrizio) into the temp org → from fabrizio's
+        already-open module session, verify they see 2 orgs → switch
+        to temp org → verify the new JWT carries the new org_id claim
+        → switch back → cleanup the membership.
+
+        Login budget: ZERO extra /login. We deliberately reuse the
+        module-scoped `client` fixture rather than mint a fresh
+        fabrizio session — the suite already pays for ~10 /login
+        calls and the rate limit is 10/minute. The temp user's
+        session comes from the /register response (own slowapi
+        bucket — 10/minute), and we never re-login as the temp user.
+
+        Risk mitigation: switching the module client to temp_org and
+        back leaves a window where, if the switch-back errors, the
+        module client points at the wrong org for downstream tests.
+        We guard against that with a try/finally that always attempts
+        the switch-back, and assert on switch-back's outcome only at
+        the end so the FINALLY runs even if an earlier assertion
+        fires.
+        """
+        unique = uuid.uuid4().hex[:8]
+        temp_email = f"e2e-orgswitch-{unique}@example.com"
+        temp_password = "TempUserPw!2026"
+
+        # We open temp_client manually (not via `with`) so its session
+        # stays alive across the cleanup delete at the end. The outer
+        # try/finally guarantees we close it even if an assertion
+        # fires mid-test.
+        temp_client = httpx.Client(base_url=BASE_URL, timeout=5.0)
+        original_org_id = auth["org_id"]
+        switched_to_temp = False
+        fabrizio_membership_id: str | None = None
+        temp_org_id: str | None = None
+        temp_csrf: str | None = None
+
+        try:
+            # 1. Register a brand-new user → mints temp_user + temp_org
+            #    with temp_user as admin. /register sets cookies on the
+            #    response, so subsequent calls on temp_client carry the
+            #    session automatically — no /login needed.
+            register = temp_client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": temp_email,
+                    "password": temp_password,
+                    "full_name": "Org-Switch E2E Temp",
+                    "org_name": f"Temp Switch Org {unique}",
+                },
+            )
+            assert register.status_code == 201, (
+                f"register: {register.status_code} {register.text}"
+            )
+            temp_body = register.json()
+            temp_org_id = temp_body["org_id"]
+            temp_csrf = temp_body["csrf_token"]
+            assert temp_org_id, "temp register did not return an org_id"
+
+            # 2. From temp_user's session, invite fabrizio. The legacy
+            #    invite flow auto-binds the membership immediately (no
+            #    accept step yet — postponed B06+B07), so fabrizio
+            #    instantly has memberships in two orgs.
+            invite = temp_client.post(
+                f"/api/v1/organizations/{temp_org_id}/members",
+                json={"email": EMAIL, "role": "auditor"},
+                headers={"X-CSRF-Token": temp_csrf},
+            )
+            assert invite.status_code in (201, 409), (
+                f"invite: {invite.status_code} {invite.text}"
+            )
+            # 409 is harmless — a previous run may have left the
+            # membership behind. Look up the membership row either way
+            # so we have a member_id for the cleanup at the end.
+            members = temp_client.get(
+                f"/api/v1/organizations/{temp_org_id}/members"
+            )
+            assert members.status_code == 200
+            fabrizio_membership_id = next(
+                (m["id"] for m in members.json() if m["user"]["email"] == EMAIL),
+                None,
+            )
+            assert fabrizio_membership_id, (
+                "fabrizio membership not found in temp org after invite"
+            )
+
+            # 3. List orgs from fabrizio's already-open module session
+            #    — must now see at least 2 (the original + temp).
+            orgs = client.get("/api/v1/organizations")
+            assert orgs.status_code == 200
+            org_ids = {o["id"] for o in orgs.json()}
+            assert temp_org_id in org_ids, (
+                f"temp org missing from fabrizio's org list: {org_ids}"
+            )
+            assert len(org_ids) >= 2, (
+                f"expected ≥2 orgs after invite, got {len(org_ids)}"
+            )
+
+            # 4. Switch to the temp org. Response must include the
+            #    new org_id; cookies are rotated via Set-Cookie which
+            #    httpx applies to `client` automatically — every
+            #    subsequent module-fixture call until we switch back
+            #    is now scoped to temp_org.
+            switch = client.post(
+                "/api/v1/auth/switch-org",
+                json={"organization_id": temp_org_id},
+                headers=_csrf_headers(auth),
+            )
+            assert switch.status_code == 200, (
+                f"switch: {switch.status_code} {switch.text}"
+            )
+            switched_to_temp = True
+            switched_body = switch.json()
+            assert switched_body["org_id"] == temp_org_id, (
+                f"new JWT should carry temp_org_id, got "
+                f"{switched_body['org_id']}"
+            )
+            new_csrf = switched_body["csrf_token"]
+            # Sanity-check: /me must succeed under the rotated cookies.
+            me = client.get("/api/v1/auth/me")
+            assert me.status_code == 200
+
+            # 5. Switch back to the original org. This is also covered
+            #    in the finally block as a safety net, but doing it
+            #    here makes the success-path assertion explicit.
+            switch_back = client.post(
+                "/api/v1/auth/switch-org",
+                json={"organization_id": original_org_id},
+                headers={"X-CSRF-Token": new_csrf},
+            )
+            assert switch_back.status_code == 200
+            assert switch_back.json()["org_id"] == original_org_id
+            switched_to_temp = False
+            # Update the auth dict's csrf so any later test using
+            # `auth` headers gets the freshly rotated value. The
+            # other fields (user_id, org_id) are unchanged.
+            auth["csrf"] = switch_back.json()["csrf_token"]
+
+            # 6. Cleanup: remove fabrizio's membership from temp_org
+            #    from temp_user's still-open session. Done before the
+            #    finally so an assertion on cleanup actually surfaces.
+            cleanup = temp_client.delete(
+                f"/api/v1/organizations/{temp_org_id}/members/"
+                f"{fabrizio_membership_id}",
+                headers={"X-CSRF-Token": temp_csrf},
+            )
+            assert cleanup.status_code in (204, 404), (
+                f"cleanup: {cleanup.status_code} {cleanup.text}"
+            )
+        finally:
+            # Safety net: if we switched to temp_org but didn't get
+            # back (some assertion fired between step 4 and 5), force
+            # the module client back to original_org so downstream
+            # tests are not poisoned. Best-effort — if even this
+            # fails, downstream tests will surface the leak.
+            if switched_to_temp:
+                try:
+                    safety_csrf = client.cookies.get("csrf_token") or auth["csrf"]
+                    client.post(
+                        "/api/v1/auth/switch-org",
+                        json={"organization_id": original_org_id},
+                        headers={"X-CSRF-Token": safety_csrf},
+                    )
+                except Exception:
+                    pass
+            temp_client.close()
+
+
 class _PlaceholderForChangePassword_DoNotCollect:
     """The change-password flow lived here originally but was moved to
     the bottom of the file. See `TestChangePassword` after `TestAuditLogs`.
