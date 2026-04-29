@@ -6,7 +6,7 @@
 import { useTranslations } from "next-intl"
 
 import { usePathname, useRouter } from "next/navigation"
-import { Search, User, Settings, LogOut, ChevronRight } from "lucide-react"
+import { User, Settings, LogOut, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -43,11 +43,19 @@ export function Header() {
   const t = useTranslations()
   const breadcrumbs = getBreadcrumbs(pathname)
 
-  const initials = user?.full_name
-    ?.split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase() || "U"
+  // Avatar fallback: prefer initials from full_name, fall back to the
+  // first letter of the email (always present for an authed user), and
+  // only fall back to a generic "U" if neither is available — which in
+  // practice would only happen during the brief window before
+  // /auth/me hydrates. v2.4.15 audit nit (N-DRA-01).
+  const initials =
+    user?.full_name
+      ?.split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase() ||
+    user?.email?.[0]?.toUpperCase() ||
+    "U"
 
   const handleLogout = async () => {
     await logout()
@@ -73,14 +81,13 @@ export function Header() {
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
-        {/* Search */}
-        <Button variant="outline" size="sm" className="hidden md:flex gap-2 text-muted-foreground">
-          <Search className="h-4 w-4" />
-          <span>{t('header.searchPlaceholder')}</span>
-          <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-            <span className="text-xs">Ctrl</span>K
-          </kbd>
-        </Button>
+        {/* The header used to render a search button styled as an input
+            with a Ctrl+K kbd hint, but no command palette ever shipped
+            behind it — the `<Button>` had no onClick, no handler, no
+            destination. v2.4.15 removes the dead UX (audit B-DRA-01).
+            A real cmdk command palette is on the roadmap for v2.4.16+
+            and the `header.searchPlaceholder` i18n key is intentionally
+            kept in messages/*.json so it's ready to wire up. */}
 
         {/* Theme + language switchers */}
         <ThemeToggle />

@@ -11,6 +11,7 @@ import { z } from "zod"
 import { toast } from "sonner"
 import { Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,8 +25,13 @@ import { useAssets } from "@/hooks/use-assets"
 // the API and a confusing user experience (the user thinks they disabled
 // port_scan; the API enables it; the scan task crashes downstream looking
 // for `dns_checks` that aren't there). Reported by Davide F.
+//
+// The validation messages below are i18n KEYS, not literal strings — they
+// resolve to the `scansNewPage` namespace via t(error.message) at render
+// time (zod is initialised before useTranslations is available, same
+// pattern as login/register).
 const scanSchema = z.object({
-  name: z.string().min(1, "Scan name is required"),
+  name: z.string().min(1, "nameRequired"),
   scan_type: z.enum(["full", "quick", "custom"]),
   features: z.object({
     dns_checks: z.boolean(),
@@ -47,7 +53,13 @@ type ScanForm = z.infer<typeof scanSchema>
 // to "select" an asset with id="1", which then 400'd on submit because no
 // such Asset exists in the org's DB. Removed in v2.4.11 — show an empty
 // state instead, with a CTA to add real assets.
+//
+// v2.4.15 audit B-DRA-04: this page used to render every label, button
+// and toast in hardcoded English. Wired up to the new `scansNewPage`
+// i18n namespace below.
 export default function NewScanPage() {
+  const t = useTranslations("scansNewPage")
+  const tc = useTranslations("common")
   const router = useRouter()
   const createScan = useCreateScan()
   const { data: assetsData } = useAssets()
@@ -83,7 +95,7 @@ export default function NewScanPage() {
 
   const onSubmit = async (data: ScanForm) => {
     if (selectedAssets.length === 0) {
-      toast.error("Please select at least one asset")
+      toast.error(t("selectAssetError"))
       return
     }
     try {
@@ -91,12 +103,23 @@ export default function NewScanPage() {
         ...data,
         asset_ids: selectedAssets,
       })
-      toast.success("Scan created successfully")
+      toast.success(t("scanCreated"))
       router.push(`/dashboard/scans/${result.id}`)
     } catch (err: any) {
-      toast.error("Failed to create scan", { description: err.message })
+      toast.error(t("scanCreateFailed"), { description: err.message })
     }
   }
+
+  // Centralised feature catalogue. Bumping a key here automatically
+  // surfaces the new feature in the UI; the labels and hints come
+  // from the i18n bundle so the same row localises across all 5
+  // locales without code changes.
+  const featureRows = [
+    { key: "dns_checks" as const, label: t("featureDnsLabel"), hint: t("featureDnsHint") },
+    { key: "web_checks" as const, label: t("featureWebLabel"), hint: t("featureWebHint") },
+    { key: "port_scan" as const, label: t("featurePortsLabel"), hint: t("featurePortsHint") },
+    { key: "whois_checks" as const, label: t("featureWhoisLabel"), hint: t("featureWhoisHint") },
+  ]
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -107,8 +130,8 @@ export default function NewScanPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">New Scan</h1>
-          <p className="text-muted-foreground">Configure and launch a compliance scan</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
@@ -116,18 +139,18 @@ export default function NewScanPage() {
         {/* Basic info */}
         <Card>
           <CardHeader>
-            <CardTitle>Scan Details</CardTitle>
-            <CardDescription>Basic scan configuration</CardDescription>
+            <CardTitle>{t("detailsTitle")}</CardTitle>
+            <CardDescription>{t("detailsDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Scan Name</Label>
-              <Input id="name" placeholder="e.g., Production Full Scan" {...register("name")} />
-              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              <Label htmlFor="name">{t("scanNameLabel")}</Label>
+              <Input id="name" placeholder={t("scanNamePlaceholder")} {...register("name")} />
+              {errors.name && <p className="text-xs text-destructive">{t(errors.name.message as any)}</p>}
             </div>
 
             <div className="space-y-2">
-              <Label>Scan Type</Label>
+              <Label>{t("scanTypeLabel")}</Label>
               <div className="grid grid-cols-3 gap-3">
                 {(["full", "quick", "custom"] as const).map((type) => (
                   <button
@@ -140,11 +163,9 @@ export default function NewScanPage() {
                         : "border-input hover:border-primary/50"
                     }`}
                   >
-                    <span className="capitalize">{type}</span>
+                    <span>{t(`scanType${type.charAt(0).toUpperCase()}${type.slice(1)}` as any)}</span>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {type === "full" && "All checks enabled"}
-                      {type === "quick" && "Essential checks only"}
-                      {type === "custom" && "Choose features"}
+                      {t(`scanType${type.charAt(0).toUpperCase()}${type.slice(1)}Hint` as any)}
                     </p>
                   </button>
                 ))}
@@ -156,18 +177,18 @@ export default function NewScanPage() {
         {/* Assets */}
         <Card>
           <CardHeader>
-            <CardTitle>Target Assets</CardTitle>
-            <CardDescription>Select assets to include in the scan</CardDescription>
+            <CardTitle>{t("assetsTitle")}</CardTitle>
+            <CardDescription>{t("assetsDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             {assets.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
-                <p className="text-sm font-medium">No assets configured yet</p>
+                <p className="text-sm font-medium">{t("noAssetsTitle")}</p>
                 <p className="text-xs text-muted-foreground mt-1 mb-3">
-                  Add at least one domain, IP or CIDR before launching a scan.
+                  {t("noAssetsDescription")}
                 </p>
                 <Button variant="outline" size="sm" asChild>
-                  <Link href="/dashboard/assets">Manage assets</Link>
+                  <Link href="/dashboard/assets">{t("manageAssets")}</Link>
                 </Button>
               </div>
             ) : (
@@ -201,19 +222,12 @@ export default function NewScanPage() {
         {/* Feature toggles */}
         <Card>
           <CardHeader>
-            <CardTitle>Features</CardTitle>
-            <CardDescription>Select which checks to run</CardDescription>
+            <CardTitle>{t("featuresTitle")}</CardTitle>
+            <CardDescription>{t("featuresDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              {(
-                [
-                  ["dns_checks", "DNS", "DNS record analysis"],
-                  ["web_checks", "Web", "Web security headers & TLS"],
-                  ["port_scan", "Ports", "Open port scanning"],
-                  ["whois_checks", "WHOIS", "Domain registration data"],
-                ] as const
-              ).map(([key, label, hint]) => (
+              {featureRows.map(({ key, label, hint }) => (
                 <label
                   key={key}
                   className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer"
@@ -243,17 +257,17 @@ export default function NewScanPage() {
               className="flex w-full items-center justify-between"
             >
               <div className="text-left">
-                <CardTitle>Advanced Settings</CardTitle>
-                <CardDescription>Timeout, concurrency, and limits</CardDescription>
+                <CardTitle>{t("advancedTitle")}</CardTitle>
+                <CardDescription>{t("advancedDescription")}</CardDescription>
               </div>
-              <span className="text-sm text-muted-foreground">{showAdvanced ? "Hide" : "Show"}</span>
+              <span className="text-sm text-muted-foreground">{showAdvanced ? t("hide") : t("show")}</span>
             </button>
           </CardHeader>
           {showAdvanced && (
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="scan_timeout">Timeout (seconds)</Label>
+                  <Label htmlFor="scan_timeout">{t("timeoutLabel")}</Label>
                   <Input
                     id="scan_timeout"
                     type="number"
@@ -261,7 +275,7 @@ export default function NewScanPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="concurrency">Concurrency</Label>
+                  <Label htmlFor="concurrency">{t("concurrencyLabel")}</Label>
                   <Input
                     id="concurrency"
                     type="number"
@@ -269,7 +283,7 @@ export default function NewScanPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="max_hosts">Max Hosts</Label>
+                  <Label htmlFor="max_hosts">{t("maxHostsLabel")}</Label>
                   <Input
                     id="max_hosts"
                     type="number"
@@ -284,11 +298,11 @@ export default function NewScanPage() {
         {/* Submit */}
         <div className="flex justify-end gap-3">
           <Button variant="outline" asChild>
-            <Link href="/dashboard/scans">Cancel</Link>
+            <Link href="/dashboard/scans">{tc("cancel")}</Link>
           </Button>
           <Button type="submit" disabled={createScan.isPending}>
             {createScan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Start Scan
+            {t("startScan")}
           </Button>
         </div>
       </form>

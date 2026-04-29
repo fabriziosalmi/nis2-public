@@ -18,8 +18,13 @@ import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
 
+// The error message is an i18n KEY resolved via `t(error.message)` at
+// render — same pattern as login / register (zod is initialised before
+// the translations hook is available, so we can't call `t()` here).
+// `t` here is scoped to `organizationPage`, so we pass the bare key.
+// v2.4.15: was a hardcoded English literal until the audit caught it.
 const orgSchema = z.object({
-  name: z.string().min(1, "Organization name is required").max(256),
+  name: z.string().min(1, "nameRequired").max(256),
 })
 
 type OrgForm = z.infer<typeof orgSchema>
@@ -78,7 +83,7 @@ export default function OrganizationSettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="name">{t("name")}</Label>
               <Input id="name" placeholder={t("namePlaceholder")} {...register("name")} />
-              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              {errors.name && <p className="text-xs text-destructive">{t(errors.name.message as any)}</p>}
             </div>
 
             <div className="space-y-2">
