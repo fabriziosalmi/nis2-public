@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.4.26] - 2026-04-29
+
+API surface audit triage — closes the only **real** BLOCKER from the v2.4.25 audit pass plus one verified SERIOUS gap. The other "blockers" the audit agent flagged turned out to be false positives on close reading; this CHANGELOG documents what was actually broken vs. what was misread, so the audit trail is honest.
+
+### Audit transparency: 2 of 3 reported blockers were false positives
+
+The audit agent that ran after v2.4.25 reported 3 BLOCKER-class issues. Verifying each against the source:
+
+| # | Reported issue | Verdict |
+|---|---|---|
+| 1 | API key expiration race in `dependencies.py:297-303` — "request A proceeds with stale state" | **False positive.** The expiry check (`expires_at <= now`) is inline in the same request and raises 401 unconditionally if the key is expired. There is no window where a request "proceeds with stale state" — both concurrent requests on an expired key get rejected. The `is_active=False` flush is best-effort cleanup; even if it's rolled back, the next request still rejects via the inline expiry check. |
+| 2 | Missing `await db.commit()` after `db.delete()` across multiple routers | **False positive.** `get_db` is a context-manager dependency in `app/database.py:78-107` that calls `await session.commit()` at request close (after `yield session` returns), and rolls back on exception. The routers' `db.delete() + db.flush()` pattern is correct — flush sends the DELETE to the connection so subsequent queries in the same request see it gone, and the actual COMMIT is at the dependency boundary. The agent missed `get_db`. |
+| 3 | Cron expression validation no-op in `schedules.py:79-81` — accepts `"99 99 99 99 99"` | **REAL.** The route only checked field count, not field values. Bad input was accepted and the schedule silently never fired (the parser in `_should_run` swallows exceptions and returns False). Fixed in this patch. |
+
+Only #3 was a real bug. The agent's report on the other two was based on reading the route files in isolation without tracing the request lifecycle through the dependencies and middleware. The CHANGELOG records this so a future reader doesn't think a phantom security bug existed and was silently dropped.
+
+### Fixed — Cron expression validation (was BLOCKER #3)
+
+Pre-2.4.26 `POST /api/v1/schedules` only checked that `cron_expression` had 5 whitespace-separated fields. Strings like `"99 99 99 99 99"`, `"a b c d e"`, or `"@daily"` were accepted, persisted, and rendered in the UI as valid schedules — but never fired, because `app.tasks.scan_tasks._should_run` silently swallows parse exceptions and returns False. Particularly painful "looks valid, doesn't work" failure mode.
+
+**Fix**: new `app/utils/cron.py` with a `validate_cron(expr: str) -> None` function (raises `CronValidationError`, a `ValueError` subclass). Wired into `create_schedule` AND `update_schedule` (a PATCH could previously clobber a working schedule with a parse-fail string). The validator's accepted grammar is exactly the subset that `_should_run` understands — single source of truth, no acceptance/execution drift.
+
+**Accepted forms per field**: `*`, `N`, `N-M` (range), `N,M,K` (list), `*/S`, `N-M/S` (step). Field ranges enforced: minute 0-59, hour 0-23, day-of-month 1-31, month 1-12, day-of-week 0-7. Vixie keywords (`@daily`, `@hourly`, `@reboot`) and day names (`MON`, `TUE`) are explicitly rejected — silent acceptance + runtime parse failure is the exact mode this patch closes.
+
+**Tests**: 47 unit tests in `tests/test_cron_validator.py` covering accepted forms, field-count errors, range checks, range-form (inverted ranges, endpoint-at-boundary), step-form (zero/negative/empty), list-form (empty elements, out-of-range elements), and the rejection of Vixie keywords. The agent-flagged smoking gun (`"99 99 99 99 99"`) has its own pinned test.
+
+### Fixed — API key scope validation (verified SERIOUS, not BLOCKER)
+
+The `POST /api/v1/api-keys` endpoint stored `scopes` as an arbitrary list of strings without validation against any canonical vocabulary. `["yolo", "", "scan:read"]` was accepted, persisted, and returned to the UI — implying enforcement that didn't exist (no code anywhere reads `api_key.scopes` to authorise routes; that's a separate, larger behavioural change tracked for a follow-up).
+
+**Fix**: `app/routers/api_keys.py` now defines `VALID_API_KEY_SCOPES` (frozenset of 8 `<resource>:<verb>` strings) and a `_validate_scopes` helper that rejects unknown scopes, empty / whitespace-only strings, empty lists, duplicates, and non-string elements with HTTP 400. The error message lists the allowed scopes so the UI can show a hint without an extra round-trip.
+
+**Tests**: 15 unit tests in `tests/test_api_key_scopes.py` pinning every accepted form, every rejection class, and the vocabulary shape itself (so adding a scope is a deliberate two-line change to api_keys.py + the test, never an accident).
+
+### Verified
+
+- 62 new unit tests, all green (47 cron + 15 scope).
+- Existing standalone tests still pass — no regressions.
+- Local: `ENVIRONMENT=development pytest tests/test_target_validator.py tests/test_report_i18n.py tests/test_cron_validator.py tests/test_api_key_scopes.py` → **126 passed**.
+
+### Deferred to v2.4.27+
+
+- **Route-level enforcement of API key scopes** — currently scopes are validated at create/update time and stored, but no auth dependency reads them. Closing this requires deciding the per-route mapping (`/scans/*` → `scan:read`/`scan:write`, etc.) and is a behavioural change that wants its own patch with a clear migration story for existing keys.
+- **Recharts colour palette tuning for deuteranopia (a11y-21)** — still a non-issue: dashboard charts use a single dark-blue series. Will revisit if multi-series charts ship.
+
 ## [2.4.25] - 2026-04-29
 
 Closes the **second deferred item from the v2.4.23 a11y audit** — mobile sidebar focus trap (WCAG SC 2.4.3 Focus Order + 2.1.2 No Keyboard Trap).
