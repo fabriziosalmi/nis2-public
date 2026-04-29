@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 interface Channel {
   id: string
@@ -36,6 +37,8 @@ const eventValues = [
 export default function NotificationsPage() {
   const t = useTranslations("notificationsPage")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const [channels, setChannels] = useState<Channel[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [newType, setNewType] = useState<"email" | "webhook">("email")

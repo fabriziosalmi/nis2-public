@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useFindings, useUpdateFinding } from "@/hooks/use-findings"
 import { useDebounce } from "@/hooks/use-debounce"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
 // v2.4.5 killed the /dashboard mock data; the equivalent `sampleFindings`
@@ -45,6 +46,8 @@ export default function FindingsPage() {
   // v2.4.23 audit a11y namespace for accessibility-only strings
   // (filter Select labels, checkbox labels, expand/collapse buttons).
   const ta = useTranslations("a11y")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const [severityFilter, setSeverityFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")

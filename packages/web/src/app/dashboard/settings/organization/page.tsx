@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // The error message is an i18n KEY resolved via `t(error.message)` at
 // render — same pattern as login / register (zod is initialised before
@@ -31,6 +32,8 @@ type OrgForm = z.infer<typeof orgSchema>
 
 export default function OrganizationSettingsPage() {
   const t = useTranslations("organizationPage")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
   const [org, setOrg] = useState<any>(null)

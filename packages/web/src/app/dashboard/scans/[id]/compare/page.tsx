@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api-client"
 import { useScans } from "@/hooks/use-scans"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const severityColors: Record<string, string> = {
   CRITICAL: "destructive",
@@ -32,6 +33,8 @@ const severityColors: Record<string, string> = {
 export default function ScanComparePage() {
   const t = useTranslations("scansComparePage")
   const tf = useTranslations("findings")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const params = useParams()
   const scanId = params.id as string
   const { data: scansData } = useScans()

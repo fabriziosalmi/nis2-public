@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAssets, useCreateAsset, useDeleteAsset, useUpdateAsset } from "@/hooks/use-assets"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const assetSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -42,6 +43,8 @@ const typeColors: Record<string, string> = {
 export default function AssetsPage() {
   const t = useTranslations("assets")
   const tc = useTranslations("common")
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("title"))
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   // editingAsset null = create mode; non-null = edit mode pre-populating

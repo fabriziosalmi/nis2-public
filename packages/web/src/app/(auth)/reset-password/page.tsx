@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api } from "@/lib/api-client"
 import { Logo } from "@/components/brand/logo"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Audit B05 — completes the reset flow. Token comes from the URL
 // query string (?token=...) of the link in the email.
@@ -47,6 +48,8 @@ function ResetPasswordInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams?.get("token") || ""
+  // v2.4.24 audit a11y-11: per-page <title>.
+  useDocumentTitle(t("resetPasswordPage.title"))
 
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
