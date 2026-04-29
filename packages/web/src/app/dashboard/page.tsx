@@ -5,7 +5,7 @@
 
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight } from "lucide-react"
+import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight, CheckCircle2, XCircle } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -46,11 +46,27 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+// v2.4.23 audit a11y-05 (WCAG SC 1.4.1 Use of Color): the score
+// previously communicated band ("good" / "fair" / "poor") *only*
+// through the green / yellow / red text colour. That fails for
+// users with deuteranopia / protanopia (red-green color blindness)
+// and also for greyscale prints. Adding a band-specific icon
+// prefix (✓ / ! / ✗) ensures the rating is recognisable without
+// colour, and the aria-label makes the band name explicit for SR.
 function ScoreDisplay({ score }: { score: number | null | undefined }) {
   if (score === null || score === undefined) return <span className="text-muted-foreground">--</span>
+  const band = score > 80 ? "good" : score > 60 ? "fair" : "poor"
+  const Icon = band === "good" ? CheckCircle2 : band === "fair" ? AlertTriangle : XCircle
   return (
-    <span className={cn("font-bold", score > 80 ? "text-green-600" : score > 60 ? "text-yellow-600" : "text-red-600")}>
-      {score}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 font-bold",
+        band === "good" ? "text-green-600" : band === "fair" ? "text-yellow-600" : "text-red-600"
+      )}
+      aria-label={`${score} (${band})`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <span>{score}</span>
     </span>
   )
 }
@@ -196,16 +212,41 @@ export default function DashboardPage() {
               <CardDescription>{t("severityDistribution")}</CardDescription>
             </CardHeader>
             <CardContent>
+              {/* v2.4.23 audit a11y-16 (WCAG SC 1.1.1 Non-text Content):
+                  Recharts renders SVG with no programmatic data
+                  exposed to AT. Wrapping the chart in a labelled
+                  region gives the visualisation a name + role, and
+                  the sr-only data table below offers an equivalent
+                  textual representation that SR users can read. */}
               {severityChartData.some((d) => d.count > 0) ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={severityChartData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis dataKey="severity" type="category" width={70} tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(222.2, 47.4%, 11.2%)" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div role="img" aria-label={t("findingsBySeverity")}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={severityChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" />
+                      <YAxis dataKey="severity" type="category" width={70} tick={{ fontSize: 12 }} />
+                      <Tooltip contentStyle={{ borderRadius: "8px" }} />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(222.2, 47.4%, 11.2%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <table className="sr-only">
+                    <caption>{t("findingsBySeverity")}</caption>
+                    <thead>
+                      <tr>
+                        <th>{tf("severity")}</th>
+                        <th>{t("findingsColumn")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {severityChartData.map((d) => (
+                        <tr key={d.severity}>
+                          <td>{d.severity}</td>
+                          <td>{d.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">{t("noFindingsData")}</div>
               )}
@@ -219,15 +260,34 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {trendData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                    <Line type="monotone" dataKey="score" stroke="hsl(222.2, 47.4%, 11.2%)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div role="img" aria-label={t("complianceScoreTrend")}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={trendData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                      <Tooltip contentStyle={{ borderRadius: "8px" }} />
+                      <Line type="monotone" dataKey="score" stroke="hsl(222.2, 47.4%, 11.2%)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <table className="sr-only">
+                    <caption>{t("complianceScoreTrend")}</caption>
+                    <thead>
+                      <tr>
+                        <th>{t("date")}</th>
+                        <th>{t("score")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trendData.map((d: any, i: number) => (
+                        <tr key={i}>
+                          <td>{d.date}</td>
+                          <td>{d.score}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
                   {trendData.length === 1 ? t("needTwoScans") : t("noCompletedScans")}

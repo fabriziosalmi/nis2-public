@@ -113,9 +113,14 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             {scan.duration_seconds && ` — ${t("duration", { seconds: scan.duration_seconds })}`}
           </p>
         </div>
+        {/* v2.4.23 audit a11y-05: aria-label surfaces the band so
+            the score's colour-coding is supplemented by text. */}
         {score !== null && score !== undefined && (
           <div className="text-center px-4">
-            <div className={cn("text-4xl font-bold", score > 80 ? "text-green-600" : score > 60 ? "text-yellow-600" : "text-red-600")}>{score}</div>
+            <div
+              className={cn("text-4xl font-bold", score > 80 ? "text-green-600" : score > 60 ? "text-yellow-600" : "text-red-600")}
+              aria-label={`${score} (${score > 80 ? "good" : score > 60 ? "fair" : "poor"})`}
+            >{score}</div>
             <p className="text-xs text-muted-foreground">{t("score")}</p>
           </div>
         )}
