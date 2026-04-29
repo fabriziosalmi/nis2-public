@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,15 +15,108 @@ from app.middleware.audit import log_action
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
+from app.routers.auth import limiter  # share the single Limiter instance
 from app.schemas.organization import (
+    CreateOrgRequest,
     InviteMemberRequest,
     MemberResponse,
     OrgResponse,
     OrgUpdate,
     RoleUpdateRequest,
 )
+from app.utils.slug import slugify
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
+
+
+@router.post(
+    "",
+    response_model=OrgResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit("5/minute")
+async def create_organization(
+    request: Request,
+    payload: CreateOrgRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OrgResponse:
+    """v2.4.18 audit follow-up: self-serve organization creation.
+
+    Before this release the only path to a 2nd organization for a
+    user was to be invited into an existing one. This route lets a
+    consultant who already has org A spin up org B for a new client
+    without an admin reaching across to invite them — same pattern as
+    most multi-tenant SaaS (Vercel, Linear, etc.) where "create new
+    workspace" lives in the workspace switcher.
+
+    Behaviour:
+      - Mints a fresh `Organization` row with `name` from the payload,
+        slug derived via `slugify(name)` with `-1`, `-2`, ... suffixes
+        appended on collision (slug is a UNIQUE column).
+      - Creates a `Membership` for the calling user with `role="admin"`
+        and `accepted_at` stamped immediately — no invite/accept loop
+        for self-created orgs.
+      - Audit-logs `organization.created` under the new org_id so the
+        compliance team can answer "when was this tenant born".
+      - Rate-limited 5/minute/IP. Genuine org creation is rare; the
+        limit makes a runaway script obvious in the access logs.
+      - Returns the new `Organization` shape (matches `GET /{org_id}`).
+        Caller's UI is expected to follow up with `POST /auth/switch-org`
+        to move the active session into the new tenant; this route
+        intentionally does NOT remint the JWT itself so the user keeps
+        the option of staying in the current org context.
+    """
+    # 1. Derive a unique slug. Same loop pattern as auth.py:register.
+    base_slug = slugify(payload.name)
+    if not base_slug:
+        # Edge case: an org name composed entirely of unicode/emoji
+        # that slugify strips to "" would otherwise hit the UNIQUE
+        # index with empty strings. Fall back to a uuid-suffixed slug.
+        base_slug = f"org-{uuid.uuid4().hex[:8]}"
+    slug = base_slug
+    suffix = 0
+    while True:
+        existing = await db.execute(
+            select(Organization).where(Organization.slug == slug)
+        )
+        if not existing.scalar_one_or_none():
+            break
+        suffix += 1
+        slug = f"{base_slug}-{suffix}"
+
+    # 2. Create org + admin membership for the founder. Both rows
+    #    flush in a single transaction so a partial failure (DB
+    #    constraint, network blip) leaves no orphan org without an
+    #    admin to manage it.
+    org = Organization(name=payload.name, slug=slug)
+    db.add(org)
+    await db.flush()
+
+    membership = Membership(
+        user_id=current_user.id,
+        organization_id=org.id,
+        role="admin",
+        accepted_at=datetime.now(timezone.utc),
+    )
+    db.add(membership)
+    await db.flush()
+
+    # 3. Audit. Logged under the *new* org so it shows up in that
+    #    tenant's audit trail (which is where a curious admin will
+    #    look first when wondering "when was this org created").
+    await log_action(
+        db,
+        org_id=org.id,
+        user_id=current_user.id,
+        action="organization.created",
+        resource_type="organization",
+        resource_id=str(org.id),
+        details={"name": payload.name, "slug": slug, "self_created": True},
+        request=request,
+    )
+
+    return OrgResponse.model_validate(org)
 
 
 @router.get("", response_model=list[OrgResponse])

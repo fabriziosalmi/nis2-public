@@ -688,7 +688,17 @@
     "switchTo": "Passa a",
     "switchedTo": "Passato a {name}",
     "switchFailed": "Impossibile cambiare organizzazione",
-    "trigger": "Organizzazione attiva: {name}. Clicca per cambiare."
+    "trigger": "Organizzazione attiva: {name}. Clicca per cambiare.",
+    "createOrg": "Crea nuova organizzazione",
+    "createTitle": "Crea nuova organizzazione",
+    "createDescription": "Avvia un nuovo tenant per un cliente o progetto separato. Sarai impostato automaticamente come admin.",
+    "createNameLabel": "Nome dell'organizzazione",
+    "createNamePlaceholder": "Acme Corp",
+    "createNameRequired": "Il nome dell'organizzazione è obbligatorio",
+    "createCancel": "Annulla",
+    "createSubmit": "Crea organizzazione",
+    "createSuccess": "Creata {name}",
+    "createFailed": "Impossibile creare l'organizzazione"
   },
   "scansComparePage": {
     "title": "Confronto Scansioni",

@@ -1,5 +1,53 @@
 # Changelog
 
+## [2.4.18] - 2026-04-29
+
+Closes the **last open audit item** from the v2.4.14 draconian UX review: a user can now self-serve a new organization from the org-switcher dropdown without needing an admin elsewhere to invite them. With this release the entire B-DRA / S-DRA / N-DRA / O-DRA backlog is closed.
+
+### Added — `POST /api/v1/organizations`
+
+- **Body**: `{"name": "<string>"}` (1..256 chars). The slug is derived server-side from the name via `slugify()` (extracted to `app/utils/slug.py` so both `auth.register` and `organizations.create` share the implementation). On collision the route appends `-1`, `-2`, … until the slug is free; if the name slugifies to an empty string (unicode-only / emoji name) it falls back to `org-<8-hex>` so the UNIQUE index can't be hit with a blank slug.
+- **Authorization**: any authenticated user. The caller is automatically added as the new org's admin with `accepted_at = now()` — no invite/accept loop for self-created orgs.
+- **Audit log entry** `organization.created` written under the *new* org_id (so it shows up in that tenant's trail — where a curious admin will look first when wondering "when was this org born"). `details` records `name`, `slug`, and `self_created: true`.
+- **Rate limit** `5/min/IP`. Genuine org creation is a rare action (users typically own 1-3 orgs in their lifetime); the limit makes a runaway script obvious in the access logs.
+- **CSRF** required (state-changing, has session cookie).
+- Returns `OrgResponse` (same shape as `GET /{org_id}`) with HTTP 201. The FE caller is expected to follow up with `POST /auth/switch-org` to move into the new tenant; this route deliberately does **not** remint the JWT itself so a power user can stay in their current org context if they want.
+
+### Added — `<OrgSwitcher>` enhancement
+
+- New "Create new organization" entry in the dropdown footer (with a `Plus` icon, primary-coloured to read as an action). Opens a `<Dialog>` with a single name input.
+- **Visibility rule changed**: the switcher now renders for **single-org users too** — previously it was hidden when `orgs.length <= 1` since there was nothing to act on; now there's always the create-new entry point. (Empty/loading states still render `null`.)
+- On successful create:
+  1. The mutation invalidates the `["orgs"]` query so the dropdown's list refreshes,
+  2. **Auto-switches into the freshly-created org** — same UX as Vercel/Linear/etc. The user just spun up a tenant; they almost certainly want to land in it.
+  3. If the auto-switch itself fails (rate limit, network blip), the org-create still counts as a success — the user can switch manually from the dropdown.
+- `useCreateOrg()` hook in `hooks/use-orgs.ts`.
+- `api.createOrg({ name })` in `lib/api-client.ts`.
+
+### Refactored
+
+- `_slugify` extracted from `routers/auth.py` to `app/utils/slug.py` (now exported as `slugify`). Both call sites (`auth.register` and `organizations.create`) import from the same module so a future tweak to the slug rules propagates everywhere.
+
+### Verified
+
+- 75 unit + **53** e2e (was 50 in v2.4.17) = **128 green**.
+- New `TestCreateOrg` (3 tests):
+  - `test_create_with_empty_name_422` — Pydantic min_length=1
+  - `test_create_unauthenticated_401` — no cookie / Bearer
+  - `test_full_flow_register_create_switch` — register a temp user → from their session create a 2nd org → list orgs (must be 2, both with the user as admin) → switch into the new org → verify the JWT carries the new org_id → switch back. Pays **zero `/login`** by reusing /register's set-cookie throughout.
+- All 5 i18n locales validate clean and re-pass parity at **668 leaf keys** (was 658 in v2.4.17). +10 new keys × 5 locales = **50 new translations** under `orgSwitcher.create*`.
+- `ruff check` matches CI's exact invocation, all clean.
+- TypeScript: 16 pre-existing recharts errors in `dashboard/page.tsx` and `reports/page.tsx` unchanged (Next.js production build tolerates them).
+
+### Audit closeout
+
+This release closes the **last B-DRA / S-DRA / N-DRA / O-DRA item** from the v2.4.14 draconian UX audit. Across **5 patch releases** (v2.4.14 → v2.4.18) all 22 audit findings have been triaged: 19 fixed, 2 confirmed false flags, 1 deemed not worth fixing (color of empty-state icon — a tradeoff). See the v2.4.17 release notes for the full closeout matrix.
+
+### Postponed
+
+- A public **delete-organization** route — currently the only way to remove an org is via direct DB. Not urgent for self-hosted; add when SaaS / multi-tenant requirements demand it.
+- Per-org branding (logo, primary colour) configurable from the org settings page — nice-to-have for the consultant-managing-multiple-clients persona; not in scope for a self-serve-create patch.
+
 ## [2.4.17] - 2026-04-29
 
 Closes the entire **S-DRA-* / O-DRA-*** polish backlog from the v2.4.14 audit. All 5 SERIOUS items + 4 of 5 OPPORTUNITIES (the 5th, "create new organization self-serve", remains scoped for a future release that adds the BE endpoint). Pure FE patch — no backend changes.

@@ -295,6 +295,27 @@ class ApiClient {
     return this.request<any>('/api/v1/organizations')
   }
 
+  /**
+   * v2.4.18: self-serve organization creation. The current user
+   * becomes admin + accepted member of the new org automatically.
+   * Slug is derived server-side from `name`. The caller's UI is
+   * expected to follow up with `switchOrg(newOrgId)` if the user
+   * wants to move into the freshly-created tenant.
+   */
+  async createOrg(data: { name: string }) {
+    return this.request<{
+      id: string
+      name: string
+      slug: string
+      plan: string
+      created_at: string
+      updated_at: string
+    }>('/api/v1/organizations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async updateOrg(orgId: string, data: any) {
     return this.request<any>(`/api/v1/organizations/${orgId}`, { method: 'PATCH', body: JSON.stringify(data) })
   }

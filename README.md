@@ -167,7 +167,7 @@ These automated checks verify whether the security measures documented in your g
 | `/api/v1/assets` | 6 | Asset inventory management. Read endpoints accept API-key Bearer auth |
 | `/api/v1/api-keys` | 3 | Long-lived `nis2_*` Bearer tokens for CI/CD pipelines (raw value shown once) |
 | `/api/v1/audit-logs` | 1 | Read-only org-scoped audit trail (90-day retention) |
-| `/api/v1/organizations` | 7 | Org settings, members, role management |
+| `/api/v1/organizations` | 8 | Org settings, members, role management, **self-serve org creation** |
 | `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
 | `/api/v1/bia` | 5 | Business Impact Analysis |
 | `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT) |
@@ -188,6 +188,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 - Organization-based data isolation (`organization_id` filter on every protected query, enforced by Postgres `FORCE ROW LEVEL SECURITY` policies — even the table owner cannot bypass them)
 - RBAC: admin, auditor, viewer per organization
 - **Org switcher in the sidebar** — a user with memberships in multiple orgs can move between client tenants without logging out (`POST /api/v1/auth/switch-org` remints the JWT with the new `org_id` claim, the FE clears the TanStack Query cache so no stale data leaks, audit log records the transition)
+- **Self-serve org creation** — the switcher dropdown has a "Create new organization" footer entry that opens a dialog: enter a name, the API derives a unique slug, the user lands as `accepted_at`-stamped admin in the new tenant, and the FE auto-switches into it (`POST /api/v1/organizations`)
 - Executive PDF/CSV reports per client
 - Aggregated compliance dashboard across all organizations
 - Each client's data stays in the same self-hosted instance

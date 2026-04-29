@@ -824,6 +824,137 @@ class TestOrgSwitch:
             temp_client.close()
 
 
+# ---------------------------------------------------------------------------
+# Self-serve organization creation (audit follow-up, v2.4.18). Placed
+# before the password-rotation block for the same reason as TestOrgSwitch
+# and TestApiKeyAuth — any test using the module-scoped `client` fixture
+# must run while its JWT is still valid.
+# ---------------------------------------------------------------------------
+
+class TestCreateOrg:
+    """v2.4.18: self-serve organization creation via
+    `POST /api/v1/organizations`.
+
+    Validates the four behaviours that matter:
+      * 422 on empty name (Pydantic min_length=1)
+      * 401 on no auth (cookie / Bearer missing)
+      * 201 + new org with calling user as admin member
+      * full register → create-2nd-org → switch flow works end-to-end
+
+    Login budget: ZERO extra `/login` calls. The full-flow test
+    registers a fresh temp user (separate slowapi bucket from
+    /login), then uses that user's session for everything else —
+    no re-login needed at any step.
+    """
+
+    def test_create_with_empty_name_422(self, client: httpx.Client, auth: dict):
+        # Pydantic catches this before the route body runs.
+        resp = client.post(
+            "/api/v1/organizations",
+            json={"name": ""},
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 422, f"{resp.status_code}: {resp.text}"
+
+    def test_create_unauthenticated_401(self):
+        # Fresh httpx.Client — no cookies, no Authorization header.
+        with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
+            resp = c.post(
+                "/api/v1/organizations",
+                json={"name": "Should Not Create"},
+            )
+            assert resp.status_code == 401, f"{resp.status_code}: {resp.text}"
+
+    def test_full_flow_register_create_switch(self):
+        """Register a temp user (gives them org_a) → from their session
+        create a 2nd org → list orgs (must be 2, both with the user as
+        admin) → switch into the new org → verify the JWT carries the
+        new org_id → switch back.
+
+        Uses ONE httpx.Client across the whole flow so /register's
+        Set-Cookie carries through to all subsequent calls without
+        a /login round-trip. Slug uniqueness is verified implicitly:
+        the API derives the slug server-side from `name`, and we
+        check the response shape carries it.
+        """
+        unique = uuid.uuid4().hex[:8]
+        email = f"e2e-create-org-{unique}@example.com"
+        c = httpx.Client(base_url=BASE_URL, timeout=5.0)
+        try:
+            # 1. Register temp user → gets `Original Org <unique>` +
+            #    admin membership in it. /register sets cookies, so
+            #    subsequent calls on `c` are authenticated.
+            register = c.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": email,
+                    "password": "TempUserPw!2026",
+                    "full_name": "Create-Org E2E Temp",
+                    "org_name": f"Original Org {unique}",
+                },
+            )
+            assert register.status_code == 201, (
+                f"register: {register.status_code} {register.text}"
+            )
+            body = register.json()
+            original_org_id = body["org_id"]
+            csrf = body["csrf_token"]
+            assert original_org_id
+
+            # 2. Create a 2nd org from the same session.
+            create = c.post(
+                "/api/v1/organizations",
+                json={"name": f"Second Org {unique}"},
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert create.status_code == 201, (
+                f"create: {create.status_code} {create.text}"
+            )
+            new_org = create.json()
+            new_org_id = new_org["id"]
+            assert new_org["name"] == f"Second Org {unique}"
+            # Slug derives from name via slugify — should contain the
+            # unique suffix and be lowercase-hyphenated.
+            assert "second-org" in new_org["slug"]
+            assert unique in new_org["slug"]
+
+            # 3. List orgs — must now show 2, both with our user.
+            orgs = c.get("/api/v1/organizations")
+            assert orgs.status_code == 200
+            org_ids = {o["id"] for o in orgs.json()}
+            assert original_org_id in org_ids
+            assert new_org_id in org_ids
+            assert len(org_ids) == 2, (
+                f"expected exactly 2 orgs, got {len(org_ids)}: {org_ids}"
+            )
+
+            # 4. Switch into the new org. JWT carries the new org_id.
+            switch = c.post(
+                "/api/v1/auth/switch-org",
+                json={"organization_id": new_org_id},
+                headers={"X-CSRF-Token": csrf},
+            )
+            assert switch.status_code == 200
+            assert switch.json()["org_id"] == new_org_id
+            new_csrf = switch.json()["csrf_token"]
+
+            # Sanity: /me succeeds under the rotated cookies.
+            me = c.get("/api/v1/auth/me")
+            assert me.status_code == 200
+
+            # 5. Switch back to original. Two switches in one minute
+            #    exercises the rate-limit headroom.
+            switch_back = c.post(
+                "/api/v1/auth/switch-org",
+                json={"organization_id": original_org_id},
+                headers={"X-CSRF-Token": new_csrf},
+            )
+            assert switch_back.status_code == 200
+            assert switch_back.json()["org_id"] == original_org_id
+        finally:
+            c.close()
+
+
 class _PlaceholderForChangePassword_DoNotCollect:
     """The change-password flow lived here originally but was moved to
     the bottom of the file. See `TestChangePassword` after `TestAuditLogs`.

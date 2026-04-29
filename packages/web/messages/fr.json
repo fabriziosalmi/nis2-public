@@ -688,7 +688,17 @@
     "switchTo": "Basculer vers",
     "switchedTo": "Basculé vers {name}",
     "switchFailed": "Impossible de changer d'organisation",
-    "trigger": "Organisation active : {name}. Cliquez pour basculer."
+    "trigger": "Organisation active : {name}. Cliquez pour basculer.",
+    "createOrg": "Créer une nouvelle organisation",
+    "createTitle": "Créer une nouvelle organisation",
+    "createDescription": "Lancez un nouveau tenant pour un client ou projet distinct. Vous en serez automatiquement administrateur.",
+    "createNameLabel": "Nom de l'organisation",
+    "createNamePlaceholder": "Acme Corp",
+    "createNameRequired": "Le nom de l'organisation est obligatoire",
+    "createCancel": "Annuler",
+    "createSubmit": "Créer l'organisation",
+    "createSuccess": "Créée : {name}",
+    "createFailed": "Impossible de créer l'organisation"
   },
   "scansComparePage": {
     "title": "Comparaison d'analyses",

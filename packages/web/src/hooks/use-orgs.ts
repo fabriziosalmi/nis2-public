@@ -70,3 +70,22 @@ export function useSwitchOrg() {
     },
   })
 }
+
+/**
+ * v2.4.18: self-serve org creation. The mutation returns the new
+ * `OrgRow`; caller is expected to invalidate / refetch the orgs
+ * list (we do that here automatically) and optionally switch into
+ * the new org via `useSwitchOrg`.
+ */
+export function useCreateOrg() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => api.createOrg({ name }),
+    onSuccess: () => {
+      // The orgs list is keyed by user id (see useOrgs above); the
+      // new org belongs to the current user, so invalidating that
+      // exact query refetches and refreshes the switcher dropdown.
+      qc.invalidateQueries({ queryKey: ["orgs"] })
+    },
+  })
+}
