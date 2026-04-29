@@ -15,6 +15,7 @@ from app.dependencies import get_current_org
 from app.models.membership import Membership
 from app.models.scan_schedule import ScanSchedule
 from app.models.user import User
+from app.utils.cron import CronValidationError, validate_cron
 
 
 class ScheduleCreate(BaseModel):
@@ -75,10 +76,19 @@ async def create_schedule(
     if membership.role not in ("admin", "auditor"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    # Validate cron expression
-    parts = payload.cron_expression.strip().split()
-    if len(parts) != 5:
-        raise HTTPException(status_code=400, detail="Invalid cron expression. Must have 5 fields: minute hour day month weekday")
+    # v2.4.26 audit: validate the full cron expression (not just the
+    # field count). Pre-2.4.26 the API accepted "99 99 99 99 99" and
+    # the schedule silently never fired because the parser in
+    # scan_tasks._should_run swallows exceptions. Now bad input is
+    # rejected at create time with a message pointing at the
+    # offending field.
+    try:
+        validate_cron(payload.cron_expression)
+    except CronValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid cron expression: {exc}",
+        )
 
     config = {
         "asset_ids": [str(a) for a in payload.asset_ids],
@@ -117,6 +127,21 @@ async def update_schedule(
         raise HTTPException(status_code=404, detail="Schedule not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    # v2.4.26 audit: same cron validation as create_schedule. Pre-2.4.26
+    # a PATCH could clobber a valid schedule with a parse-fail string,
+    # silently bricking a previously-working scheduled scan. The check
+    # runs before any mutation so a 400 leaves the existing row intact.
+    new_cron = update_data.get("cron_expression")
+    if new_cron is not None:
+        try:
+            validate_cron(new_cron)
+        except CronValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid cron expression: {exc}",
+            )
+
     for field, value in update_data.items():
         if field == "features" and value is not None:
             config = schedule.config or {}

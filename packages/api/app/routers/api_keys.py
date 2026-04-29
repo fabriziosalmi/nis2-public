@@ -27,6 +27,77 @@ from app.models.user import User
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
+# v2.4.26 audit: canonical scope vocabulary.
+#
+# Pre-2.4.26 the API accepted any list of strings as `scopes` —
+# `["yolo", "", "scan:read"]` was a valid request. The UI then showed
+# the bogus scope to the user, who reasonably assumed the platform
+# enforced it. The first half of the gap (validation at create time)
+# is closed in this patch; route-level enforcement of these scopes is
+# a separate, larger behavioral change tracked for a follow-up.
+#
+# The vocabulary mirrors the implicit shape the project already uses
+# in `ApiKeyCreate.default` and the audit_log details — `<resource>:<verb>`
+# where verb is `read` or `write`. Adding a scope here is a one-line
+# change and ALWAYS additive (removing one would break existing keys).
+VALID_API_KEY_SCOPES: frozenset[str] = frozenset({
+    "scan:read",
+    "scan:write",
+    "asset:read",
+    "asset:write",
+    "finding:read",
+    "finding:write",
+    "report:read",
+    "report:write",
+})
+
+
+def _validate_scopes(scopes: Optional[list[str]]) -> list[str]:
+    """Raise HTTPException(400) on any unknown / empty / duplicate scope.
+
+    Returns the canonical list (deduplicated, order-preserved) on success.
+    None is treated as 'no override' — the schema default is applied
+    elsewhere; callers that pass None get None back.
+    """
+    if scopes is None:
+        return None  # type: ignore[return-value]
+    if not isinstance(scopes, list):
+        raise HTTPException(status_code=400, detail="scopes must be a list of strings")
+    if not scopes:
+        raise HTTPException(
+            status_code=400,
+            detail="scopes must not be empty (omit the field to use the default set)",
+        )
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for s in scopes:
+        if not isinstance(s, str) or not s.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="scopes contains an empty or non-string value",
+            )
+        s = s.strip()
+        if s not in VALID_API_KEY_SCOPES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"unknown scope '{s}'. Allowed: "
+                    f"{', '.join(sorted(VALID_API_KEY_SCOPES))}"
+                ),
+            )
+        if s in seen:
+            # A duplicate is almost certainly user error (UI bug or
+            # copy/paste); reject rather than silently dedupe so the
+            # caller knows.
+            raise HTTPException(
+                status_code=400,
+                detail=f"duplicate scope '{s}'",
+            )
+        seen.add(s)
+        cleaned.append(s)
+    return cleaned
+
+
 # --- Schemas ---
 
 class ApiKeyCreate(BaseModel):
@@ -92,6 +163,11 @@ async def create_api_key(
 ) -> ApiKeyCreated:
     user, membership = current_org
 
+    # v2.4.26 audit: validate scopes against the canonical vocabulary.
+    # On 400 the route returns before any DB write, so a bad request
+    # leaves no orphan key row.
+    cleaned_scopes = _validate_scopes(payload.scopes)
+
     # Generate key: nis2_<40 random chars>
     raw_key = f"nis2_{secrets.token_urlsafe(30)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
@@ -103,7 +179,7 @@ async def create_api_key(
         name=payload.name,
         key_hash=key_hash,
         key_prefix=key_prefix,
-        scopes=payload.scopes,
+        scopes=cleaned_scopes,
         is_active=True,
     )
     db.add(api_key)
@@ -119,7 +195,7 @@ async def create_api_key(
         action="api_key.created",
         resource_type="api_key",
         resource_id=str(api_key.id),
-        details={"name": payload.name, "prefix": key_prefix, "scopes": payload.scopes},
+        details={"name": payload.name, "prefix": key_prefix, "scopes": cleaned_scopes},
     )
 
     # Pydantic v2 doesn't accept `update=` on `model_validate`. Build the
