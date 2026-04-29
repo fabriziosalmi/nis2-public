@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.4.19] - 2026-04-29
+
+**Reports module hotfix release.** Closes a chain of blockers in the reports pipeline that surfaced the moment a user actually tried to generate one — five separate causes, all hidden behind each other. Plus a draconian audit pass on the security surface of the report endpoints.
+
+### Fixed — Reports could never generate or download
+
+The user's first scan ("fab") sat at `pending` for ~10 minutes. Investigation surfaced **five sequential bugs**, each of which independently broke the reports flow:
+
+1. **Celery worker had `[tasks]` empty.** `app/tasks/celery_app.py` constructed the Celery app but never imported `scan_tasks` / `report_tasks`, so the `@celery_app.task` decorators never ran. Beat queued `check_scheduled_scans` every minute; the worker logged `Received unregistered task` and discarded the message. Symptom: scans submitted from the UI sat in `pending` forever. **Fix**: explicit imports at the bottom of `celery_app.py` (after the celery_app object is fully constructed, so the task modules can `from app.tasks.celery_app import celery_app` without a circular import).
+2. **`Future attached to a different loop` in the worker.** `run_scan_task` calls `asyncio.run(...)`, which mints a fresh event loop per Celery task. The pooled asyncpg connection from the previous task carried a now-closed loop reference; SQLAlchemy threw on the next query. Symptom: the second scan errored, all subsequent scans errored, the worker auto-retried in 30s. **Fix**: new env var `CELERY_WORKER=1` (set in `infra/docker/docker-compose.dev.yml`) routes `app.database` into the same `NullPool` path the integration tests already use.
+3. **WeasyPrint native libraries missing.** `from weasyprint import HTML` raised `OSError: cannot load library 'libgobject-2.0-0'` because the slim Python image ships none of the GTK/Pango/Cairo stack. The PDF task caught the `ImportError` and **silently fell back to HTML with a `.pdf` filename** — the user's PDF reader refused the file with no explanation. **Fix**: added `libglib2.0-0`, `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz0b`, `libcairo2`, `libffi8`, `fonts-dejavu-core` to the API/worker Dockerfile. The silent fallback also goes — PDF requests now require WeasyPrint and fail with a real error if it can't load.
+4. **`/tmp/nis2-reports/` not shared between api and worker containers.** The Celery worker wrote the file to its own `/tmp`; the API's `GET /reports/download/{task_id}` read from the api container's `/tmp` (empty). Every download 404'd. **Fix**: new Docker named volume `reports-data` mounted at `/tmp/nis2-reports` in both services. Persistent across restarts so devs don't lose reports mid-debug; for prod a real shared filesystem or object store is the right answer.
+5. **The shared volume came up root-owned.** Docker creates new named volumes as root by default, but the api/worker process runs as the unprivileged `api` user (UID 1001). First write failed `PermissionError: [Errno 13]`. **Fix**: Dockerfile pre-creates `/tmp/nis2-reports` with `chown api:api` *before* `USER api`, so the named volume on first mount inherits the directory's ownership.
+
+End-to-end test after the fix chain: 5 of 6 report formats (PDF / HTML / JSON / CSV / Markdown) generate and download in under 3 seconds; the 6th (JUnit) hit the new 5/min rate limit on the second test run, confirming the limit works.
+
+### Fixed — `MISSING_MESSAGE` runtime error in audit-log page
+
+`packages/web/src/app/dashboard/settings/audit-log/page.tsx:123` called `tc("page")` against the `common` namespace, which has no `page` key. next-intl threw `MISSING_MESSAGE` and the page broke at runtime in IT/FR/DE/ES (and any locale where the parent's `||` fallback chain doesn't trigger because next-intl raises rather than returning falsy). **Fix**: route through the `scans` namespace's existing `t("page", { n: page })` — same widget rides on /scans, /reports, audit-log, and the rest, so re-using the keys keeps translations in one place.
+
+### Reports module security audit (v2.4.14-style draconian sweep)
+
+The audit found five **🔴 BLOCKERS**, all addressed in this release:
+
+- **reports-001 / Cross-tenant report access.** The `/status/{task_id}` and `/download/{task_id}` endpoints accepted any authenticated user — a user from org A could enumerate task UUIDs and fetch org B's reports. **Fix**: `generate_report_task` stamps `org_id` into its result dict; both endpoints verify the caller's `membership.organization_id` matches before returning anything. Cross-tenant attempts get **404** (same shape as a not-found task) so an attacker can't tell if a UUID maps to a real-but-other-org task or a non-existent one.
+- **reports-002 / Path traversal via `scan.name`.** A scan named `../../../../etc/passwd` would resolve `os.path.join` outside `/tmp/nis2-reports/` — the writer could clobber arbitrary files reachable by the worker process. **Fix**: new `_safe_basename(name)` whitelists alphanumerics / `-` / `_`, replaces everything else with `_`, caps at 64 chars, falls back to `report` on empty input.
+- **reports-014 / Markdown injection in user content.** Finding messages, remediation notes, and executive summaries with `|`, `*`, `_`, `[`, `]`, `<`, `>`, `` ` `` broke the table layout or injected raw HTML in lenient Markdown viewers. **Fix**: new `_md(value)` helper backslash-escapes structural characters and collapses newlines.
+- **reports-015 / XSS in HTML reports.** `scan.name`, `scan.executive_summary`, every finding's `message` / `category` / `target` / `remediation`, and every asset's `target` / `ip` were string-concatenated into the HTML template raw. A scan named `</title><script>alert(1)</script>` executed JS in any browser that opened the report (or in WeasyPrint's print pipeline for the PDF version). **Fix**: every interpolation now goes through `html.escape()` via the `_h()` shorthand.
+- **reports-016 / CSV formula injection.** Cells beginning with `=`, `+`, `-`, `@`, tab, or `\r` are auto-evaluated by Excel, LibreOffice, and Google Sheets when the file is opened. A finding message of `=cmd|'/c calc'!A1` would launch `calc.exe` on a Windows recipient's machine. **Fix**: `_csv_safe(value)` prefixes risky cells with a single quote (which spreadsheet apps strip on display).
+- **reports-017 / XML attribute injection in JUnit format.** Finding messages with `"` or `&` could break the XML attribute structure or inject sibling attributes. **Fix**: `_xml_attr(value)` uses `xml.sax.saxutils.escape()` plus an explicit `"` → `&quot;` mapping; body text uses `_xml_text(value)`.
+
+### Reports module — additional hardening
+
+- **Rate limit on `/generate`** (audit reports-018): `5/min/IP`, sharing the same slowapi instance as the rest of the auth/org endpoints. Report generation can take 30+s of CPU on a worker for a 50k-finding scan; without a limit a single client could pin every Celery worker.
+- **Sanitised error messages** (audit reports-004): the previous version returned `str(result.result)` on `FAILURE`, leaking internal exception text (e.g. `Permission denied: /tmp/nis2-reports`) to the client. Now the worker error is logged server-side and the client sees a generic `Report generation failed` string.
+- **PDF silent fallback removed** (audit reports-003 / reports-010): `_gen_pdf` no longer catches `ImportError` and degrades to HTML with a `.pdf` extension. WeasyPrint is required; if the import fails, the task fails and the user sees the error.
+
+### Verified
+
+- **53/53 e2e green** (no test count change — backend test surface is the same).
+- 5/6 report formats round-tripped end-to-end (PDF generates a real `%PDF-1.7` 33KB file; the 6th hit the new rate limit on the second run, confirming it works).
+- `ruff check` matches CI's exact invocation, all clean.
+- All 5 i18n locales validate; **668 leaf keys** unchanged from v2.4.18.
+
+### Postponed to a later release
+
+- **Report file TTL/cleanup** (audit reports-005). A Celery beat job that sweeps `/tmp/nis2-reports/` once a day is the right move; not in scope for this hotfix.
+- **i18n of report content** (audit reports-006/008). PDF/HTML/Markdown report bodies are still English-only. Needs a Jinja2 template per locale + a way to pass the user's locale through the Celery task. Larger refactor.
+- **Duplicate-generation UX warning** (audit reports-009). Currently two clicks fire two tasks; second overwrites first in UI state. Nit.
+
 ## [2.4.18] - 2026-04-29
 
 Closes the **last open audit item** from the v2.4.14 draconian UX review: a user can now self-serve a new organization from the org-switcher dropdown without needing an admin elsewhere to invite them. With this release the entire B-DRA / S-DRA / N-DRA / O-DRA backlog is closed.

@@ -31,3 +31,25 @@ celery_app.conf.beat_schedule = {
         "schedule": 60.0,
     },
 }
+
+# v2.4.19 hotfix: explicitly import the task modules so their
+# @celery_app.task decorators run and register the tasks against
+# this Celery app at worker startup.
+#
+# Without these imports the worker logs `[tasks]` empty and beat's
+# `check-scheduled-scans` job — plus every scan-create / report-
+# generate task — gets `KeyError: ... unregistered task` and is
+# silently discarded. The visible symptom: a scan submitted from
+# the UI sits in `pending` forever because the worker never picks
+# it up.
+#
+# The `noqa` markers below silence flake8/ruff's "imported but
+# unused" — these imports exist purely for the side-effect of
+# running the @task decorators against celery_app.
+# Imports live AT THE BOTTOM of this file (not the top) so that
+# scan_tasks / report_tasks can `from app.tasks.celery_app import
+# celery_app` without hitting a circular import — celery_app must
+# be fully constructed before the task modules try to decorate
+# against it.
+from app.tasks import scan_tasks  # noqa: E402,F401
+from app.tasks import report_tasks  # noqa: E402,F401
