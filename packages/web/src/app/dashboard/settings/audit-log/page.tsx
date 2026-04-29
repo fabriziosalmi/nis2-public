@@ -6,7 +6,7 @@
 import { useState } from "react"
 import { ScrollText, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { format as formatDate } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,7 @@ const actionColors: Record<string, string> = {
 export default function AuditLogPage() {
   const t = useTranslations("auditLogPage")
   const tc = useTranslations("common")
+  const formatDate = useFormatDate()
   const [page, setPage] = useState(1)
   const { data, isLoading } = useAuditLogs({ page, page_size: 50 })
 
@@ -103,7 +104,7 @@ export default function AuditLogPage() {
                         {row.ip_address || "—"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatDate(new Date(row.created_at), "yyyy-MM-dd HH:mm:ss")}
+                        {formatDate(row.created_at, "Pp")}
                       </TableCell>
                     </TableRow>
                   )

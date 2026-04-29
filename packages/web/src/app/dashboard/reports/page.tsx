@@ -6,7 +6,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Download, FileText, Loader2, Radar } from "lucide-react"
-import { format as formatDate } from "date-fns"
+import { useFormatDate } from "@/lib/dates"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 
@@ -51,6 +51,11 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes — beyond this, surface an 
 
 export default function ReportsPage() {
   const t = useTranslations("reports")
+  // Re-use the `scans` namespace's pagination strings (previous /
+  // page / next) — same widget renders on both pages, no need to
+  // mint separate keys.
+  const ts = useTranslations("scans")
+  const formatDate = useFormatDate()
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page)
   const [rowState, setRowState] = useState<Record<string, RowState>>({})
@@ -193,11 +198,7 @@ export default function ReportsPage() {
                         ) : <span className="text-muted-foreground">0</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {scan.completed_at
-                          ? formatDate(new Date(scan.completed_at), "MMM d, yyyy HH:mm")
-                          : scan.created_at
-                            ? formatDate(new Date(scan.created_at), "MMM d, yyyy HH:mm")
-                            : "--"}
+                        {formatDate(scan.completed_at || scan.created_at, "Pp")}
                       </TableCell>
                       <TableCell>
                         <Select
@@ -264,20 +265,24 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Mirror the pagination control from /dashboard/scans for consistency. */}
+      {/* Mirror the pagination control from /dashboard/scans for consistency.
+          v2.4.17 audit S-DRA-04: previously the labels were hardcoded
+          English ("Previous" / "Page N" / "Next"). Re-uses the same
+          three keys the scans table already has in the `scans`
+          namespace so we don't duplicate translations. */}
       {data && data.total > 20 && (
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Previous
+            {ts("previous")}
           </Button>
-          <span className="text-sm text-muted-foreground">Page {page}</span>
+          <span className="text-sm text-muted-foreground">{ts("page", { n: page })}</span>
           <Button
             variant="outline"
             size="sm"
             disabled={scans.length < 20}
             onClick={() => setPage(page + 1)}
           >
-            Next
+            {ts("next")}
           </Button>
         </div>
       )}

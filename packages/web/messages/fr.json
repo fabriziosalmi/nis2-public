@@ -40,7 +40,8 @@
     "team": "Équipe",
     "apiKeys": "Clés API",
     "notifications": "Notifications",
-    "auditLog": "Journal d'audit"
+    "auditLog": "Journal d'audit",
+    "criticalBadgeAria": "découvertes critiques"
   },
   "dashboard": {
     "title": "Tableau de bord",
@@ -189,7 +190,11 @@
     "deleted": "Planification supprimée",
     "deleteFailed": "Échec de suppression",
     "triggered": "Analyse lancée ! Vérifiez la page Analyses pour la progression.",
-    "triggerFailed": "Échec du lancement"
+    "triggerFailed": "Échec du lancement",
+    "nameRequired": "Le nom de la planification est obligatoire",
+    "cronRequired": "L'expression cron est obligatoire",
+    "cronInvalid": "L'expression cron doit avoir 5 champs (minute heure jour mois jour-semaine). Essayez un préréglage ci-dessous.",
+    "cronHelp": "Format : minute heure jour mois jour-semaine — ex. 0 9 * * 1 = chaque lundi à 9h."
   },
   "teamPage": {
     "title": "Gestion de l'Équipe",
@@ -297,7 +302,9 @@
     "remediation": "Remédiation",
     "viewPlaybook": "Voir le Playbook",
     "updatedCount": "{count} résultats mis à jour",
-    "updateFailed": "Échec de la mise à jour des résultats"
+    "updateFailed": "Échec de la mise à jour des résultats",
+    "exportCsv": "Exporter en CSV",
+    "exportedCount": "{count} résultats exportés"
   },
   "certificates": {
     "title": "Intelligence Certificats",
@@ -661,6 +668,20 @@
     "findingsDescription": "Problèmes de sécurité détectés pendant l'analyse",
     "noFindings": "Aucune découverte — excellent résultat !",
     "findingsPending": "Les découvertes apparaîtront à la fin de l'analyse."
+  },
+  "commandPalette": {
+    "label": "Palette de commandes",
+    "placeholder": "Saisissez une commande ou une page…",
+    "empty": "Aucun résultat.",
+    "actionsGroup": "Actions",
+    "navigateGroup": "Aller à",
+    "hintNavigate": "naviguer",
+    "hintSelect": "sélectionner",
+    "hintClose": "fermer",
+    "actions": {
+      "newScan": "Nouvelle analyse",
+      "schedules": "Gérer les planifications"
+    }
   },
   "orgSwitcher": {
     "currentOrg": "Organisation active",

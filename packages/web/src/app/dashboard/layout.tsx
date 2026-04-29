@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
+import { CommandPalette } from "@/components/layout/command-palette"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -43,6 +44,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Header />
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
       </div>
+      {/* v2.4.17 audit O-DRA-01: Cmd+K palette. Mounted at the
+          dashboard layout level so the keyboard shortcut listener
+          attaches once and the dialog is reachable from every
+          authenticated screen. */}
+      <CommandPalette />
     </div>
   )
 }

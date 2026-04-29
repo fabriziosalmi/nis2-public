@@ -4,7 +4,7 @@
 "use client"
 
 import { useState, Fragment } from "react"
-import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react"
+import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle, Download } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useFindings, useUpdateFinding } from "@/hooks/use-findings"
+import { useDebounce } from "@/hooks/use-debounce"
 import { cn } from "@/lib/utils"
 
 // v2.4.5 killed the /dashboard mock data; the equivalent `sampleFindings`
@@ -48,10 +49,20 @@ export default function FindingsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkStatus, setBulkStatus] = useState("")
 
+  // v2.4.17 audit S-DRA-02: debounce filter changes before they hit
+  // useFindings. Without this, a user clicking through three Select
+  // dropdowns in quick succession fires three concurrent
+  // /api/v1/findings requests with no arrival-order guarantee — the
+  // table can end up displaying the second click's filters rather
+  // than the third.
+  const debouncedSeverity = useDebounce(severityFilter)
+  const debouncedStatus = useDebounce(statusFilter)
+  const debouncedCategory = useDebounce(categoryFilter)
+
   const params: Record<string, string> = {}
-  if (severityFilter !== "all") params.severity = severityFilter
-  if (statusFilter !== "all") params.status = statusFilter
-  if (categoryFilter !== "all") params.category = categoryFilter
+  if (debouncedSeverity !== "all") params.severity = debouncedSeverity
+  if (debouncedStatus !== "all") params.status = debouncedStatus
+  if (debouncedCategory !== "all") params.category = debouncedCategory
 
   const { data, isLoading } = useFindings(params)
   const updateFinding = useUpdateFinding()
@@ -84,6 +95,67 @@ export default function FindingsPage() {
     } catch (err: any) {
       toast.error(t("updateFailed"), { description: err.message })
     }
+  }
+
+  /**
+   * v2.4.17 audit O-DRA-04: bulk-export selected findings as CSV.
+   *
+   * Generated client-side rather than via a new API endpoint so we
+   * stay within the patch's scope and don't add a backend route
+   * needing its own auth, RLS, audit-log entry. The data is already
+   * loaded into TanStack Query — emitting it as CSV is just text
+   * shuffling.
+   *
+   * Edge cases:
+   *   - Empty selection: button is disabled (selectedIds.length > 0
+   *     gates the bulk-action bar entirely).
+   *   - Cell escaping: every value is wrapped in double quotes and
+   *     internal quotes are doubled per RFC 4180. This is safe even
+   *     for values containing commas, newlines, or quotes.
+   *   - BOM prefix: Excel chokes on UTF-8 without a BOM and shows
+   *     mojibake for accented characters; we prepend U+FEFF so
+   *     "à"/"è"/"ñ" import cleanly into Excel without an extra step.
+   */
+  const handleBulkExport = () => {
+    const rows = findings.filter((f: any) => selectedIds.includes(f.id))
+    if (rows.length === 0) return
+
+    const escape = (v: unknown): string => {
+      if (v === null || v === undefined) return ""
+      const s = String(v)
+      // Always quote — simpler than detecting which fields need it
+      // and the file size hit is irrelevant for typical exports.
+      return `"${s.replace(/"/g, '""')}"`
+    }
+
+    const headers = [
+      "id", "severity", "category", "status", "message",
+      "target", "scan_name", "assigned_to", "created_at",
+    ]
+    const csv = [
+      headers.join(","),
+      ...rows.map((r: any) => headers.map((h) => escape(r[h])).join(",")),
+    ].join("\n")
+
+    // BOM so Excel reads UTF-8 correctly. `﻿` is the BOM
+    // codepoint; prepending it inside the Blob constructor is the
+    // only way to make Excel display non-ASCII characters cleanly.
+    const blob = new Blob(["﻿" + csv], {
+      type: "text/csv;charset=utf-8;",
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    // Filename pattern matches the reports module convention:
+    // `nis2-<resource>-<yyyy-MM-dd>.csv`. Locale-agnostic ISO date
+    // so re-imports sort lexicographically by run.
+    const today = new Date().toISOString().slice(0, 10)
+    a.download = `nis2-findings-${today}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast.success(t("exportedCount", { count: rows.length }))
   }
 
   // Severity / status enum keys map directly to translation keys in the
@@ -179,6 +251,12 @@ export default function FindingsPage() {
             {updateFinding.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
             {t("apply")}
           </Button>
+          {/* v2.4.17 audit O-DRA-04: bulk-export selected findings
+              as CSV for sharing with teams / external tooling. */}
+          <Button variant="outline" size="sm" onClick={handleBulkExport}>
+            <Download className="mr-2 h-3 w-3" />
+            {t("exportCsv")}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
             {t("clearSelection")}
           </Button>
@@ -249,7 +327,12 @@ export default function FindingsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={severityVariant[finding.severity] || "info"}>
-                          {finding.severity}
+                          {/* v2.4.17 audit S-DRA-05: severity values
+                              come back lowercase from the API
+                              ("critical" / "high" / "medium" / "low"
+                              / "info"); the `findings` namespace has
+                              translated labels for each. */}
+                          {t((finding.severity || "info").toLowerCase() as any)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -269,7 +352,21 @@ export default function FindingsPage() {
                             finding.status === "false_positive" && "bg-gray-100 text-gray-800"
                           )}
                         >
-                          {finding.status.replace("_", " ")}
+                          {/* v2.4.17 audit N-DRA-03: was rendering
+                              `finding.status.replace("_", " ")` →
+                              "false positive" lowercase. Map the
+                              snake_case status onto the existing
+                              camelCase i18n keys (open, acknowledged,
+                              inProgress, resolved, falsePositive). */}
+                          {t(
+                            ({
+                              open: "open",
+                              acknowledged: "acknowledged",
+                              in_progress: "inProgress",
+                              resolved: "resolved",
+                              false_positive: "falsePositive",
+                            } as Record<string, string>)[finding.status] || finding.status
+                          )}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
