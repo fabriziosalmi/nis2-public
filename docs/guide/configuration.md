@@ -43,6 +43,14 @@ The forgot/reset flow needs a public URL to put in the email link and an SMTP re
 | `SMTP_STARTTLS` | `true` | Issue `STARTTLS` after `EHLO` (the common case for ports 25 / 587) |
 | `SMTP_SSL` | `false` | Wrap the entire connection in TLS (port 465 style). Mutually exclusive with `SMTP_STARTTLS` |
 
+## Reports
+
+Generated reports (PDF / HTML / Markdown / JSON / CSV / JUnit XML) live under `/tmp/nis2-reports/` on the Celery worker, shared with the API container via the `reports-data` Docker named volume. A daily Celery beat task (`cleanup-old-reports`) sweeps this directory of files older than the TTL — without it, the disk grows unbounded as users generate reports.
+
+| Variable | Default | Description |
+|---|---|---|
+| `REPORT_TTL_DAYS` | `30` | Days to keep generated report files before the daily cleanup task deletes them. Long enough for a compliance team to download last week's report after a holiday; short enough that a deploy generating 100s of scans/day doesn't fill the disk in weeks. The cleanup task always runs at the schedule's wall-clock cadence regardless of this value (it just changes the cutoff age). |
+
 ## Celery
 
 | Variable | Default | Description |

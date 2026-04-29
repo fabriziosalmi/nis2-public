@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.4.20] - 2026-04-29
+
+Closes one of the four items postponed from the v2.4.19 reports-module audit: **report file lifecycle / TTL cleanup** (audit reports-005). Without this release, the `/tmp/nis2-reports/` directory shared between the api and worker containers grew unbounded — a deploy with 100s of scans/day would fill the disk in weeks.
+
+### Added — `cleanup_old_reports` Celery beat task
+
+- **New beat schedule entry** `cleanup-old-reports` runs once per day (86400s interval). Sweeps `/tmp/nis2-reports/` for files whose `mtime` is older than `report_ttl_days` (default **30**) and deletes them.
+- **Best-effort semantics**: a single `OSError` (file vanished mid-iteration, permission denied on a manually-injected file) is logged and skipped — the next day's run will pick it up. The task always succeeds; the return dict surfaces `removed`, `skipped`, `bytes_freed` to whoever's reading the worker logs.
+- **Defensive against a missing reports dir** (someone wiped `/tmp` between runs): logs and exits cleanly with `{removed: 0, skipped: 0, bytes_freed: 0}` rather than crashing.
+- **Subdirectory-safe**: only files at the top level of `/tmp/nis2-reports/` are eligible. A subdirectory accidentally created in there (e.g. by manual debugging) is skipped.
+
+### Added — `REPORT_TTL_DAYS` setting
+
+- New `report_ttl_days: int = 30` field in `app.config.Settings`. Set via env var `REPORT_TTL_DAYS` for ops who want a longer / shorter retention. Read at task-execution time (not at process startup), so a config bump propagates without restarting beat.
+
+### Verified
+
+- 75 unit + **53** e2e (no count change — backend route surface is identical) = **128 green**.
+- New `tests/test_report_cleanup.py` (8 tests) pinning the cleanup behaviour:
+  - `test_removes_files_older_than_ttl` — 3-day-old file with 1-day TTL → removed
+  - `test_keeps_files_younger_than_ttl` — 0.5-day-old file with 1-day TTL → kept
+  - `test_mixed_directory` — 2 stale + 1 fresh → only the stale removed
+  - `test_ignores_directories` — accidentally-created subdir is left alone
+  - `test_missing_directory_is_no_op` — wiped /tmp doesn't crash the task
+  - `test_empty_directory_is_no_op` — first-deploy state returns 0/0/0
+  - `test_default_ttl_is_30_days` — pins the class default; a future code change that drops it accidentally to 0 (which would wipe every report immediately) gets caught here
+  - `TestBeatSchedule::test_cleanup_is_in_beat_schedule` — guards against a refactor that drops the schedule entry and silently regresses to the v2.4.18 "/tmp grows forever" state. Pins the schedule key, task path, and 86400s interval.
+- Manual smoke against the running stack: `cleanup_old_reports.delay()` runs in 5ms with `removed=0 skipped=0 freed=0 bytes` against an empty directory; cutoff timestamp is correctly 30 days back.
+
+### Postponed to follow-up patches in this audit chain
+
+- **v2.4.21**: i18n of report content (PDF/HTML/Markdown report bodies are still English-only) + locale-aware timestamps. Both share the same plumbing (passing the user's locale through the Celery task) so they bundle naturally.
+- **v2.4.22+**: duplicate-generation UX guard. The current `busy` flag in the FE plus the v2.4.19 5/min/IP rate limit on `/generate` cover the practical attack surface; this is more about polishing the experience for power users than a real bug.
+
 ## [2.4.19] - 2026-04-29
 
 **Reports module hotfix release.** Closes a chain of blockers in the reports pipeline that surfaced the moment a user actually tried to generate one — five separate causes, all hidden behind each other. Plus a draconian audit pass on the security surface of the report endpoints.
