@@ -83,8 +83,19 @@ async def generate_report(
     if scan.status != "completed":
         raise HTTPException(status_code=400, detail="Scan must be completed to generate reports")
 
+    # v2.4.21 audit reports-006/007: pass the requesting user's
+    # locale to the worker so the rendered report (PDF/HTML/MD/CSV
+    # headers, JUnit testsuite names, footer copy) localises to
+    # whatever language the user picked in their profile. Falls
+    # back inside `report_i18n.normalize_locale` to "en" if the
+    # user's locale is null / unknown.
     from app.tasks.report_tasks import generate_report_task
-    task = generate_report_task.delay(str(scan_id), str(membership.organization_id), format)
+    task = generate_report_task.delay(
+        str(scan_id),
+        str(membership.organization_id),
+        format,
+        getattr(user, "locale", None) or "en",
+    )
 
     return {"task_id": task.id, "status": "queued", "format": format, "scan_id": str(scan_id)}
 
