@@ -74,7 +74,7 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| POST | `/api/v1/reports/generate` | Queue report generation for a completed scan. Params: `scan_id`, `format` (pdf, json, csv). Returns a `task_id` | Yes |
+| POST | `/api/v1/reports/generate` | Queue report generation for a completed scan. Params: `scan_id`, `format` (pdf, html, markdown, json, csv, junit). Returns a `task_id`. The report is rendered in the calling user's locale (`user.locale`, e.g. `it` / `fr` / `de` / `es`) — document chrome (titles, table headers, footer) is translated; user-provided fields (scan name, finding messages) pass through unchanged. `5/min/IP` rate-limited. The HTML report carries the `lang` attribute matching the user's locale. | Yes |
 | GET | `/api/v1/reports/status/{task_id}` | Check report generation status by Celery task ID | Yes |
 | GET | `/api/v1/reports/download/{task_id}` | Download a generated report file by Celery task ID | Yes |
 

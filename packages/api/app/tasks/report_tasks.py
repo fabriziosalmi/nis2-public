@@ -49,6 +49,7 @@ from datetime import datetime, timedelta, timezone
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 
 from app.tasks.celery_app import celery_app
+from app.utils.report_i18n import t as _t, normalize_locale
 
 logger = logging.getLogger(__name__)
 
@@ -119,12 +120,23 @@ def cleanup_old_reports() -> dict:
 
 
 @celery_app.task(bind=True, max_retries=1, time_limit=120)
-def generate_report_task(self, scan_id: str, org_id: str, format: str):
-    """Generate a compliance report in the requested format."""
-    return asyncio.run(_generate_report(scan_id, org_id, format))
+def generate_report_task(
+    self, scan_id: str, org_id: str, format: str, locale: str | None = None,
+):
+    """Generate a compliance report in the requested format.
+
+    v2.4.21: `locale` (default: caller's `user.locale`, normalised
+    via `report_i18n.normalize_locale`) selects the language for
+    document chrome (titles, table headers, footer). The default
+    `None` keeps backwards compatibility with any in-flight task
+    queued from a v2.4.20 client — falls through to English.
+    """
+    return asyncio.run(_generate_report(scan_id, org_id, format, locale))
 
 
-async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
+async def _generate_report(
+    scan_id: str, org_id: str, format: str, locale: str | None = None,
+) -> dict:
     from app.database import async_session_factory
     from app.models.scan import Scan
     from app.models.scan_result import ScanResult
@@ -154,6 +166,12 @@ async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
     # of REPORTS_DIR and the writer could clobber arbitrary files.
     base = f"nis2_report_{_safe_basename(scan.name)}_{ts}"
 
+    # Normalise the locale once, here, so every renderer downstream
+    # gets the same canonical 2-letter code. Unknown / null falls
+    # back to "en" — see `report_i18n.normalize_locale` for the
+    # full fallback semantics.
+    loc = normalize_locale(locale)
+
     generators = {
         "json": _gen_json,
         "csv": _gen_csv,
@@ -167,10 +185,14 @@ async def _generate_report(scan_id: str, org_id: str, format: str) -> dict:
     gen = generators.get(format)
     if not gen:
         raise ValueError(f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}")
-    result = gen(scan, results, findings, base)
+    result = gen(scan, results, findings, base, loc)
     # Stash the org_id on the result so the API's /status and
     # /download endpoints can validate the requester's org matches.
     result["org_id"] = str(org_id)
+    # And the locale, useful for diagnostics ("did the user request
+    # this in IT or did the worker default-fallback to EN?") without
+    # parsing the file.
+    result["locale"] = loc
     return result
 
 
@@ -248,13 +270,19 @@ def _xml_text(value: object) -> str:
 # JSON (no escaping needed — json.dumps handles everything)
 # ---------------------------------------------------------------------------
 
-def _gen_json(scan, results, findings, base) -> dict:
+def _gen_json(scan, results, findings, base, locale: str = "en") -> dict:
+    # JSON is machine-readable; we don't translate field names (those
+    # are part of the API contract — a downstream parser keys on
+    # them). The locale tag is included as metadata so a consumer
+    # who renders a localised UI on top of the JSON knows what
+    # language any free-text fields it preserves came from.
     data = {
         "version": "2.2",
         "metadata": {
             "scan_id": str(scan.id), "scan_name": scan.name,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "generator": "NIS2 Compliance Platform",
+            "locale": locale,
         },
         "summary": {
             "total_score": scan.total_score,
@@ -277,12 +305,21 @@ def _gen_json(scan, results, findings, base) -> dict:
 # CSV (formula-injection neutered)
 # ---------------------------------------------------------------------------
 
-def _gen_csv(scan, results, findings, base) -> dict:
+def _gen_csv(scan, results, findings, base, locale: str = "en") -> dict:
     path = os.path.join(REPORTS_DIR, f"{base}.csv")
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["Severity", "Category", "Message", "Target", "Remediation",
-                     "CVSS Score", "CVSS Vector", "Compliance Article", "Status"])
+        w.writerow([
+            _t(locale, "h_severity"),
+            _t(locale, "h_category"),
+            _t(locale, "h_finding"),
+            _t(locale, "h_target"),
+            _t(locale, "h_remediation"),
+            _t(locale, "h_cvss_score"),
+            _t(locale, "h_cvss_vector"),
+            _t(locale, "h_compliance_article"),
+            _t(locale, "h_status"),
+        ])
         for fi in findings:
             w.writerow([
                 _csv_safe(fi.severity),
@@ -302,56 +339,66 @@ def _gen_csv(scan, results, findings, base) -> dict:
 # Markdown (structural chars escaped)
 # ---------------------------------------------------------------------------
 
-def _gen_markdown(scan, results, findings, base) -> dict:
+def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
     lines = []
-    lines.append("# NIS2 Compliance Scan Report\n")
-    lines.append(f"**Scan:** {_md(scan.name)}  ")
-    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else "N/A"
-    lines.append(f"**Date:** {date_str}  ")
-    lines.append(f"**Score:** {scan.total_score or 0}/100  ")
-    lines.append(f"**Duration:** {scan.duration_seconds or 0}s\n")
+    lines.append(f"# {_t(locale, 'report_title')}\n")
+    lines.append(f"**{_t(locale, 'field_scan')}:** {_md(scan.name)}  ")
+    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else _t(locale, "not_available")
+    lines.append(f"**{_t(locale, 'field_date')}:** {date_str}  ")
+    lines.append(f"**{_t(locale, 'field_score')}:** {scan.total_score or 0}/100  ")
+    lines.append(f"**{_t(locale, 'field_duration')}:** {scan.duration_seconds or 0}s\n")
 
     # Stats
-    lines.append("## Summary\n")
-    lines.append("| Metric | Value |")
+    lines.append(f"## {_t(locale, 'summary')}\n")
+    lines.append(f"| {_t(locale, 'metric')} | {_t(locale, 'value')} |")
     lines.append("|--------|-------|")
-    lines.append(f"| Hosts Scanned | {scan.hosts_scanned or 0} |")
-    lines.append(f"| Hosts Active | {scan.hosts_alive or 0} |")
-    lines.append(f"| Critical | {scan.findings_critical or 0} |")
-    lines.append(f"| High | {scan.findings_high or 0} |")
-    lines.append(f"| Medium | {scan.findings_medium or 0} |")
-    lines.append(f"| Low | {scan.findings_low or 0} |")
+    lines.append(f"| {_t(locale, 'hosts_scanned')} | {scan.hosts_scanned or 0} |")
+    lines.append(f"| {_t(locale, 'hosts_active')} | {scan.hosts_alive or 0} |")
+    lines.append(f"| {_t(locale, 'critical')} | {scan.findings_critical or 0} |")
+    lines.append(f"| {_t(locale, 'high')} | {scan.findings_high or 0} |")
+    lines.append(f"| {_t(locale, 'medium')} | {scan.findings_medium or 0} |")
+    lines.append(f"| {_t(locale, 'low')} | {scan.findings_low or 0} |")
     lines.append("")
 
     if scan.executive_summary:
-        lines.append("## Executive Summary\n")
+        lines.append(f"## {_t(locale, 'executive_summary')}\n")
         # Blockquote — escape pipes/asterisks/etc inside the body
         # so a `*emphasis*` from the user doesn't reflow the doc.
         lines.append(f"> {_md(scan.executive_summary)}\n")
 
     # Findings table
-    lines.append("## Findings\n")
-    lines.append("| Severity | Category | Finding | Target | Remediation |")
+    lines.append(f"## {_t(locale, 'findings')}\n")
+    lines.append(
+        f"| {_t(locale, 'h_severity')} | {_t(locale, 'h_category')} | "
+        f"{_t(locale, 'h_finding')} | {_t(locale, 'h_target')} | "
+        f"{_t(locale, 'h_remediation')} |"
+    )
     lines.append("|----------|----------|---------|--------|-------------|")
     for f in findings:
         sev_icon = {"CRITICAL": "[!]", "HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[.]"}.get(f.severity, "[ ]")
         lines.append(
             f"| {sev_icon} {_md(f.severity)} | {_md(f.category)} | {_md(f.message)} | "
-            f"`{_md(f.target)}` | {_md(f.remediation) if f.remediation else '-'} |"
+            f"`{_md(f.target)}` | {_md(f.remediation) if f.remediation else _t(locale, 'not_applicable')} |"
         )
     lines.append("")
 
     # Assets
-    lines.append("## Assets\n")
-    lines.append("| Target | IP | Status | Open Ports |")
+    lines.append(f"## {_t(locale, 'assets')}\n")
+    lines.append(
+        f"| {_t(locale, 'h_target')} | {_t(locale, 'h_ip')} | "
+        f"{_t(locale, 'h_host_state')} | {_t(locale, 'h_open_ports')} |"
+    )
     lines.append("|--------|-----|--------|-----------|")
     for r in results:
-        st = "Active" if r.is_alive else "Inactive"
-        ports = ", ".join(str(p) for p in (r.open_ports or [])) or "None"
+        st = _t(locale, "host_active") if r.is_alive else _t(locale, "host_inactive")
+        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(locale, "no_open_ports")
         lines.append(f"| {_md(r.target)} | `{_md(r.ip)}` | {st} | {_md(ports)} |")
     lines.append("")
 
-    lines.append(f"\n---\n*Generated by NIS2 Compliance Platform — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n")
+    lines.append(
+        f"\n---\n*{_t(locale, 'generated_by_md')} — "
+        f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n"
+    )
 
     path = os.path.join(REPORTS_DIR, f"{base}.md")
     with open(path, "w") as f:
@@ -364,15 +411,22 @@ def _gen_markdown(scan, results, findings, base) -> dict:
 # xml.sax.saxutils plus the wrappers above.
 # ---------------------------------------------------------------------------
 
-def _gen_junit(scan, results, findings, base) -> dict:
+def _gen_junit(scan, results, findings, base, locale: str = "en") -> dict:
     # ElementTree's SubElement(name, attr=value) handles attribute
     # escaping for `&`, `<`, `>` automatically — but to be safe
     # against `"` we also pre-escape via _xml_attr() on the
     # user-supplied attribute values. Body text passes through
     # _xml_text() before assignment to .text.
+    #
+    # JUnit XML is consumed by CI pipelines (Jenkins, GitLab,
+    # GitHub Actions test reporters) which expect English-ish field
+    # names. We localise only the `failure type` attribute
+    # (visible to engineers reading the test output) and the
+    # body-text labels — the structural attribute names stay in
+    # English so the XML stays parseable by the standard tooling.
     testsuites = Element(
         "testsuites",
-        name=_xml_attr(scan.name or "NIS2 Scan"),
+        name=_xml_attr(scan.name or _t(locale, "report_title")),
         tests=str(len(findings)),
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
@@ -403,9 +457,9 @@ def _gen_junit(scan, results, findings, base) -> dict:
                     type=_xml_attr(f.severity),
                 )
                 fail.text = _xml_text(
-                    f"Remediation: {f.remediation or 'N/A'}\n"
-                    f"CVSS: {f.cvss_base_score or 'N/A'}\n"
-                    f"Article: {f.compliance_article or 'N/A'}"
+                    f"{_t(locale, 'h_remediation')}: {f.remediation or _t(locale, 'not_available')}\n"
+                    f"{_t(locale, 'h_cvss_score')}: {f.cvss_base_score or _t(locale, 'not_available')}\n"
+                    f"{_t(locale, 'h_compliance_article')}: {f.compliance_article or _t(locale, 'not_available')}"
                 )
             elif f.severity == "MEDIUM":
                 fail = SubElement(
@@ -413,7 +467,10 @@ def _gen_junit(scan, results, findings, base) -> dict:
                     message=_xml_attr(f.message),
                     type="WARNING",
                 )
-                fail.text = _xml_text(f"Remediation: {f.remediation or 'N/A'}")
+                fail.text = _xml_text(
+                    f"{_t(locale, 'h_remediation')}: "
+                    f"{f.remediation or _t(locale, 'not_available')}"
+                )
             else:
                 so = SubElement(tc, "system-out")
                 so.text = _xml_text(f"INFO: {f.message} — {f.remediation or ''}")
@@ -436,11 +493,11 @@ def _h(value: object) -> str:
     return html.escape(str(value))
 
 
-def _gen_html(scan, results, findings, base) -> dict:
+def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     score = scan.total_score or 0
     sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
     sev_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04", "LOW": "#2563eb"}
-    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else "N/A"
+    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else _t(locale, "not_available")
 
     f_rows = ""
     for f in findings:
@@ -456,12 +513,12 @@ def _gen_html(scan, results, findings, base) -> dict:
 
     a_rows = ""
     for r in results:
-        st = "Active" if r.is_alive else "Inactive"
-        ports = ", ".join(str(p) for p in (r.open_ports or [])) or "None"
+        st = _t(locale, "host_active") if r.is_alive else _t(locale, "host_inactive")
+        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(locale, "no_open_ports")
         a_rows += (
             f'<tr><td>{_h(r.target)}</td>'
             f'<td><code>{_h(r.ip)}</code></td>'
-            f'<td>{st}</td>'
+            f'<td>{_h(st)}</td>'
             f'<td>{_h(ports)}</td></tr>\n'
         )
 
@@ -473,15 +530,19 @@ def _gen_html(scan, results, findings, base) -> dict:
     exec_block = ""
     if scan.executive_summary:
         exec_block = (
-            f'<h2>Executive Summary</h2>'
+            f'<h2>{_h(_t(locale, "executive_summary"))}</h2>'
             f'<div class="executive">{_h(scan.executive_summary)}</div>'
         )
 
+    # The lang attribute matches the user's requested locale (audit
+    # reports-007). Browsers, screen-readers, and accessibility
+    # tooling all key off this — pre-v2.4.21 it was hardcoded
+    # `lang="en"` regardless of the report's actual content language.
     html_doc = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="{locale}">
 <head>
 <meta charset="utf-8">
-<title>NIS2 Report — {_h(scan.name)}</title>
+<title>{_h(_t(locale, "html_title_prefix"))} — {_h(scan.name)}</title>
 <style>
 @page{{size:A4;margin:2cm}}body{{font-family:'Helvetica Neue',Arial,sans-serif;color:#1e293b;line-height:1.6;font-size:11px;max-width:1100px;margin:0 auto;padding:20px}}
 h1{{color:#0f172a;font-size:24px;border-bottom:3px solid #0f172a;padding-bottom:10px}}h2{{color:#334155;font-size:16px;margin-top:30px;border-bottom:1px solid #e2e8f0;padding-bottom:6px}}
@@ -493,23 +554,23 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 </style>
 </head>
 <body>
-<h1>NIS2 Compliance Report</h1>
-<p><strong>Scan:</strong> {_h(scan.name)} &nbsp;|&nbsp; <strong>Date:</strong> {date_str} &nbsp;|&nbsp; <strong>Duration:</strong> {scan.duration_seconds or 0}s</p>
-<div class="score-box"><div class="score">{score}</div><div class="score-label">Compliance Score</div></div>
+<h1>{_h(_t(locale, "report_title_h1"))}</h1>
+<p><strong>{_h(_t(locale, "field_scan"))}:</strong> {_h(scan.name)} &nbsp;|&nbsp; <strong>{_h(_t(locale, "field_date"))}:</strong> {_h(date_str)} &nbsp;|&nbsp; <strong>{_h(_t(locale, "field_duration"))}:</strong> {scan.duration_seconds or 0}s</p>
+<div class="score-box"><div class="score">{score}</div><div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
 <div class="stats">
-<div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">Hosts Scanned</div></div>
-<div class="stat"><div class="stat-value">{scan.hosts_alive or 0}</div><div class="stat-label">Hosts Active</div></div>
-<div class="stat"><div class="stat-value" style="color:#dc2626">{scan.findings_critical or 0}</div><div class="stat-label">Critical</div></div>
-<div class="stat"><div class="stat-value" style="color:#ea580c">{scan.findings_high or 0}</div><div class="stat-label">High</div></div>
-<div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">Medium</div></div>
-<div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">Low</div></div>
+<div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_scanned"))}</div></div>
+<div class="stat"><div class="stat-value">{scan.hosts_alive or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_active"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#dc2626">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#ea580c">{scan.findings_high or 0}</div><div class="stat-label">{_h(_t(locale, "high"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
 </div>
 {exec_block}
-<h2>Findings ({len(findings)})</h2>
-<table><tr><th>Severity</th><th>Category</th><th>Finding</th><th>Target</th><th>Remediation</th></tr>{f_rows}</table>
-<h2>Assets ({len(results)})</h2>
-<table><tr><th>Target</th><th>IP</th><th>Status</th><th>Open Ports</th></tr>{a_rows}</table>
-<div class="footer">Generated by NIS2 Compliance Platform &bull; {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} &bull; Ref: NIS2 Directive (EU) 2022/2555, D.Lgs 138/2024</div>
+<h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
+<table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
+<h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
+<table><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr>{a_rows}</table>
+<div class="footer">{_h(_t(locale, "footer_generated_by"))} &bull; {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} &bull; {_h(_t(locale, "footer_ref"))}</div>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
@@ -524,8 +585,8 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 # libcairo system stack alongside the pip package.
 # ---------------------------------------------------------------------------
 
-def _gen_pdf(scan, results, findings, base) -> dict:
-    html_result = _gen_html(scan, results, findings, base)
+def _gen_pdf(scan, results, findings, base, locale: str = "en") -> dict:
+    html_result = _gen_html(scan, results, findings, base, locale)
     html_path = html_result["file_path"]
     pdf_path = os.path.join(REPORTS_DIR, f"{base}.pdf")
 
