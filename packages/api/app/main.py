@@ -21,7 +21,7 @@ from app.routers.auth import limiter
 
 logger = logging.getLogger(__name__)
 
-API_VERSION = "2.4.14"
+API_VERSION = "2.4.15"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.
