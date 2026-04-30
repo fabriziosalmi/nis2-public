@@ -553,7 +553,9 @@
     "notVerifiedYet": "Non ancora verificato",
     "basedOnScan": "Basato sulla scansione: {name} — Score: {score}/100",
     "infoTitle": "Informazioni sulla matrice",
-    "infoBody": "Questa matrice mappa i requisiti dell'Art. 21(2) della Direttiva NIS2 (EU 2022/2555), recepita in Italia con D.Lgs 138/2024. I check automatizzati verificano TLS, DNS, header di sicurezza HTTP, crittografia, e gestione incidenti. Le voci \"Verifica Manuale\" richiedono attestazione dal team compliance."
+    "infoBody": "Questa matrice mappa i requisiti dell'Art. 21(2) della Direttiva NIS2 (EU 2022/2555), recepita in Italia con D.Lgs 138/2024 (Art. 24, comma 2). I check automatizzati verificano TLS, DNS, header di sicurezza HTTP, crittografia, e gestione incidenti. Le voci \"Verifica Manuale\" richiedono attestazione dal team compliance.",
+    "disclaimerTitle": "Euristica didattica, non il framework ACN",
+    "disclaimerBody": "La checklist a 30 voci e questa matrice a 10 righe sono un'euristica didattica curata dalla community, mappata ad alto livello sui dieci sub-paragrafi dell'Art. 21(2). Non sono una riproduzione integrale del framework ACN ufficiale (NIST-derivato, dettagliato nelle Determinazioni 127434/2026 e successive). Per qualsiasi posizionamento di compliance in produzione fai riferimento direttamente alle linee guida ACN e ingaggia un consulente qualificato."
   },
   "auditLogPage": {
     "title": "Registro Audit",
@@ -905,10 +907,13 @@
       "getStarted": "Inizia ora",
       "forgot": "Password dimenticata",
       "contact": "Contatti",
-      "copyright": "© 2024–2026 Fabrizio Salmi · Questo non è un parere legale.",
+      "copyright": "© 2026 Salmi Fabrizio — P.IVA IT 03072120995 — Via Sapri 9, 16134 Genova · Questo non è un parere legale.",
       "selfHosted": "Self-hosted",
       "fiveLanguages": "5 lingue UE",
-      "license2": "AGPL-3.0"
+      "license2": "AGPL-3.0",
+      "privacy": "Privacy",
+      "terms": "Termini",
+      "legal": "Note legali"
     }
   }
 }

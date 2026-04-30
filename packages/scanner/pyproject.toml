@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nis2scan"
-version = "2.4.30"
+version = "2.5.0"
 description = "NIS2 Directive compliance scanner engine"
 requires-python = ">=3.10"
 dependencies = [

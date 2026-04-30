@@ -553,7 +553,9 @@
     "notVerifiedYet": "Not yet verified",
     "basedOnScan": "Based on scan: {name} — Score: {score}/100",
     "infoTitle": "About this matrix",
-    "infoBody": "This matrix maps Art. 21(2) requirements of the NIS2 Directive (EU 2022/2555), transposed into Italian law as D.Lgs 138/2024. Automated checks verify TLS, DNS, HTTP security headers, encryption, and incident handling. \"Manual Review\" entries require attestation from the compliance team."
+    "infoBody": "This matrix maps Art. 21(2) requirements of the NIS2 Directive (EU 2022/2555), transposed into Italian law as D.Lgs 138/2024 (Art. 24, comma 2). Automated checks verify TLS, DNS, HTTP security headers, encryption, and incident handling. \"Manual Review\" entries require attestation from the compliance team.",
+    "disclaimerTitle": "Educational heuristic, not the ACN framework",
+    "disclaimerBody": "The 30-item governance checklist and this 10-row matrix are a community-curated educational heuristic mapped to the ten Art. 21(2) sub-paragraphs at a high level. They are not a verbatim reproduction of the official ACN framework (NIST-derived, detailed across Determinazioni 127434/2026 and follow-ups). For any production compliance posture, refer directly to ACN guidance and engage a qualified advisor."
   },
   "auditLogPage": {
     "title": "Audit Log",
@@ -905,10 +907,13 @@
       "getStarted": "Get started",
       "forgot": "Forgot password",
       "contact": "Contact",
-      "copyright": "© 2024–2026 Fabrizio Salmi · This is not legal advice.",
+      "copyright": "© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova · This is not legal advice.",
       "selfHosted": "Self-hosted",
       "fiveLanguages": "5 EU languages",
-      "license2": "AGPL-3.0"
+      "license2": "AGPL-3.0",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "legal": "Legal"
     }
   }
 }

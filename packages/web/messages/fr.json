@@ -553,7 +553,9 @@
     "notVerifiedYet": "Pas encore vérifié",
     "basedOnScan": "Basé sur l'analyse : {name} — Score : {score}/100",
     "infoTitle": "À propos de cette matrice",
-    "infoBody": "Cette matrice mappe les exigences de l'Art. 21(2) de la Directive NIS2 (EU 2022/2555), transposée en droit italien sous D.Lgs 138/2024. Les contrôles automatisés vérifient TLS, DNS, en-têtes HTTP, chiffrement, gestion des incidents. Les entrées \"Vérification Manuelle\" nécessitent une attestation de l'équipe conformité."
+    "infoBody": "Cette matrice mappe les exigences de l'Art. 21(2) de la Directive NIS2 (EU 2022/2555), transposée en droit italien sous D.Lgs 138/2024 (Art. 24, comma 2). Les contrôles automatisés vérifient TLS, DNS, en-têtes HTTP, chiffrement, gestion des incidents. Les entrées \"Vérification Manuelle\" nécessitent une attestation de l'équipe conformité.",
+    "disclaimerTitle": "Heuristique pédagogique, pas le cadre ACN",
+    "disclaimerBody": "La checklist de 30 items et cette matrice de 10 lignes sont une heuristique pédagogique maintenue par la communauté, mappée à haut niveau sur les dix sous-paragraphes de l'Art. 21(2). Elles ne sont pas une reproduction intégrale du cadre officiel de l'ACN italienne (dérivé du NIST, détaillé dans les Determinazioni 127434/2026 et suivantes). Pour toute posture de conformité en production, référez-vous directement aux directives ACN et engagez un conseil qualifié."
   },
   "auditLogPage": {
     "title": "Journal d'Audit",
@@ -905,10 +907,13 @@
       "getStarted": "Commencer",
       "forgot": "Mot de passe oublié",
       "contact": "Contact",
-      "copyright": "© 2024–2026 Fabrizio Salmi · Ceci n'est pas un avis juridique.",
+      "copyright": "© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Gênes · Ceci n'est pas un avis juridique.",
       "selfHosted": "Auto-hébergé",
       "fiveLanguages": "5 langues UE",
-      "license2": "AGPL-3.0"
+      "license2": "AGPL-3.0",
+      "privacy": "Confidentialité",
+      "terms": "Conditions",
+      "legal": "Mentions légales"
     }
   }
 }

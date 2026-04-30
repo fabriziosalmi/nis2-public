@@ -608,6 +608,12 @@ function SiteFooter() {
               { label: t("getStarted"), href: "/register" },
               { label: t("forgot"), href: "/forgot-password" },
               { label: t("contact"), href: "mailto:fabrizio.salmi@gmail.com" },
+              // v2.5.0 legal-review: privacy + terms must be reachable
+              // from the public footer (Art. 13 GDPR + Art. 7-12
+              // D.Lgs 70/2003 — operator info + privacy notice
+              // accessibility from every page of a commercial site).
+              { label: t("privacy"), href: "https://github.com/fabriziosalmi/nis2-public/blob/main/docs/privacy.md", external: true },
+              { label: t("terms"), href: "https://github.com/fabriziosalmi/nis2-public/blob/main/docs/terms.md", external: true },
             ]}
           />
         </div>

@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.5.0] - 2026-04-30
+
+**Legal-review hardening release. Minor-version bump because git history is rewritten — every fork and existing clone of this repo must rebase / re-pull.**
+
+### 🔴 Removed — Real Italian organisations from the demo seed (defamation / GDPR risk)
+
+Pre-2.5.0 `scripts/seed_demo.py` shipped with **ten real Italian organisations** (a hospital, a bank, an energy distributor, a transport operator, a municipality, a water utility, three private companies, a telco) — names, real public FQDNs, real IP addresses — together with **simulated vulnerability findings** ("TLS 1.0 attivo sul portale pazienti", "SCADA esposto su internet", "RDP password default", "porta MySQL esposta", etc.). The repo is public and AGPL.
+
+That is a clean **diffamazione Art. 595 c.p.** + **danno reputazionale Art. 2043 c.c.** exposure against ten identifiable third parties — most of them NIS2 *essential entities* in regulated sectors. Aggravated for the healthcare entry, which referenced HIS / PACS systems (Art. 9 GDPR sensitive-category data), and creates a residual Art. 615-quater / 615-quinquies c.p. surface (publishing apparent vulnerability metadata against real public FQDNs is exactly the heat-map pattern those articles target — even where the findings are wholly fabricated, the underlying assets are real and reachable).
+
+**v2.5.0 fix:**
+- All 10 names replaced with alphabetic placeholders (Alpha Medical, Beta Bank, Gamma Power, Delta Foods, Epsilon Telco, Zeta Rail, Demoville City Council, Eta Water Utility, Theta Consulting, Iota Confectionery).
+- All ~40 FQDNs migrated to the IANA-reserved `.example` TLD (RFC 2606) — guaranteed never to resolve to a real production host.
+- All public IP addresses migrated to the IANA documentation blocks 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 (RFC 5737) — guaranteed never to be routed.
+- Private CIDRs already on RFC 1918 ranges, unchanged.
+- Admin email pattern `fab@<real-domain>` replaced with `admin@<placeholder>.example`.
+- Demo password changed from a memorable-name seed to `demo-only-do-not-deploy` to flag intent.
+- File header carries an explicit legal note documenting the change and the historical context.
+
+**`git filter-repo` — history rewrite, force-push:**
+
+The sanitisation above only fixes the working tree. Anyone who clones the repo at a v2.4.x tag or earlier still pulls a copy of `seed_demo.py` containing the real names. We therefore ran `git filter-repo --replace-text` across the entire reachable history, replacing every real name and FQDN with the corresponding placeholder, and force-pushed the rewritten branch + retagged every release. This is destructive: every fork, mirror, and existing clone must rebase or re-clone. The privacy/legal benefit outweighs the operational cost, on explicit maintainer instruction.
+
+What this **doesn't** clean up: web archives (Wayback Machine, archive.today), RSS-feed readers that snapshotted the raw release notes, downstream forks that have not yet rebased. We accept this residual exposure — it is bounded and decreasing over time, vs. the unbounded liability of leaving the names in HEAD.
+
+### 🟠 Added — `docs/privacy.md` (GDPR Art. 13 information notice)
+
+Public-website privacy notice covering the documentation surface (`fabriziosalmi.github.io/nis2-public/`) and direct contact via the maintainer's email. Covers controller identity, processing purposes, legal basis, retention, recipients, transfers, data-subject rights (Art. 15-22), breach notification, and a self-hosted-deployment section that explicitly establishes the deployer as the sole data controller — no Art. 28 contract is offered or implied. Designed as a **template** that operators of self-hosted instances can adapt; the maintainer-operated portion is a parallel use of the same document.
+
+Three honest disclosures the notice carries:
+
+1. **Zero analytics on the documentation site** — no Google Analytics / Plausible / Matomo / Fathom / etc. Confirmed by `grep -rE "google-analytics|gtag|plausible|matomo|hotjar|amplitude|posthog|umami"` on the docs source: only false positives from VitePress dev-tools-API source (an internal Vue inspector pattern).
+2. **`localStorage.nis2-doc-locale`** is the single key set by the bilingual home for the user's chosen language. It is technically necessary under the Art. 122 D.Lgs 196/2003 exemption, so no consent banner is required (and none is shipped).
+3. **GitHub + Gmail are the two third-party processors** the maintainer-operated surface relies on (hosting + email). Both are named explicitly with the legal basis and the trans-Atlantic-transfer mechanism (SCC + supplementary measures per Schrems II).
+
+### 🟠 Added — `docs/terms.md` (Art. 7-12 D.Lgs 70/2003 e-commerce decree compliance)
+
+Operator-identification notice + Terms of Use for the documentation site and the public repo. Covers AGPL-3.0 license terms, the explicit warranty disclaimer (AGPL §15-16), a section that breaks any "the dashboard said I was compliant" downstream claim by spelling out that scores / checklists / generated PDFs are **technical aids, not legal or compliance advice**, an acceptable-use clause, the demo-data fictional-by-design clause, third-party limitation, limitation of liability, governing-law and jurisdiction (Italian Republic, Tribunale di Genova).
+
+### 🟠 Added — Operator identification across the codebase
+
+Per Art. 7-12 D.Lgs 70/2003 (Italian e-commerce decree, transposing 2000/31/EC), a website offering paid services must publish operator identification at every page. v2.5.0 adds this in three places:
+
+1. **README** has a new *Legal & contact information* section: `Salmi Fabrizio` — sole proprietor — Via Sapri 9, 16134 Genova — VAT IT 03072120995 — ATECO 62.10.00 — *Regime semplificato* — `fabrizio.salmi@gmail.com`.
+2. **App landing page footer** (`/`) — copyright line carries the same legal triple (operator + VAT + address) in all 5 locales.
+3. **Footer column** (`Platform` group) gains explicit `Privacy` and `Terms` links pointing to the canonical `docs/privacy.md` and `docs/terms.md` on GitHub. Reachable from every page of the marketing surface.
+
+The C.F. (codice fiscale), INPS matricola, and date of activity start are **deliberately not published** — they are not required by Art. 7-12 (which asks for operator name, address, VAT, contact) and publishing them would expand the personal-data surface without legal benefit.
+
+### 🟠 Added — *"This is an educational heuristic, not the ACN framework"* disclaimer
+
+The 30-item Art. 21 governance checklist + 10-row matrix sit somewhere between "didactic heuristic" and "compliance verdict", and the platform UI did not say which. External review correctly flagged that this gap could be the basis of a "but the dashboard said I was compliant" claim from a downstream user who treated the score as a regulatory deliverable.
+
+Now the dashboard's `/dashboard/compliance` page renders an explicit warning card under the matrix:
+
+> **Educational heuristic, not the ACN framework.** The 30-item governance checklist and this 10-row matrix are a community-curated educational heuristic mapped to the ten Art. 21(2) sub-paragraphs at a high level. They are not a verbatim reproduction of the official ACN framework (NIST-derived, detailed across Determinazioni 127434/2026 and follow-ups). For any production compliance posture, refer directly to ACN guidance and engage a qualified advisor.
+
+The same disclaimer appears in the README as a dedicated section, and the new `docs/terms.md` codifies it into the legal-binding text. The yellow-on-yellow visual treatment is deliberate — the user has to scroll past it on every visit to the compliance page, which is the cheapest possible mitigation against downstream reliance.
+
+Translated and surfaced in all 5 locales (en/it/fr/de/es). 25 new i18n keys, parity verified — total i18n key count rises from 782 to 807.
+
+### 🟢 Note — copyright header year clean-up
+
+Pre-2.5.0 the public-facing copyright lines in the app/docs footers carried `© 2024–2026 Fabrizio Salmi · This is not legal advice.`, while the source-file headers had been migrated to `2026` only in v2.4.27 (matching the project's actual first commit on 2026-04-26). v2.5.0 closes that residual: the public footer copyright now reads `© 2026 Salmi Fabrizio` and is wrapped with the operator triple (VAT + address) in line with Art. 7-12 D.Lgs 70/2003.
+
+### Verified
+
+- `seed_demo.py`: zero residues for any of the 10 real entity names or their domains (verified by exhaustive case-insensitive grep across `alpha-medical`, `beta-bank`, `gamma-power`, `delta-foods`, `epsilon-telco`, `zeta-rail`, `demoville.example`, `eta-water.example`, `theta-consulting.example`, `iota-confectionery`, `iota-confectionery` and the company-name prefixes).
+- Python syntax of `seed_demo.py` validates (`python3 -m py_compile`).
+- All 5 i18n locales validate as JSON; key parity 5/5; total 807 keys (was 782).
+- Web build green (24/24 pages).
+- `git filter-repo` rewrite preserves commit graph topology except for the substring substitutions in the affected files; tags re-pointed to the new SHAs.
+
 ## [2.4.30] - 2026-04-30
 
 Tier-2 UI fixes from the same external review that drove v2.4.28 — five concrete bugs across the compliance page, scan-detail page, sidebar, dashboard landing, and one console warning.

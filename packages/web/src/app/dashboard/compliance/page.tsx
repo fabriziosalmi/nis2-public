@@ -226,6 +226,28 @@ export default function CompliancePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/*
+        v2.5.0 legal-review disclaimer. The reviewer rightly observed
+        that the 30-item governance checklist + the 10-row Art. 21(2)
+        matrix sit somewhere between "didactic heuristic" and
+        "compliance verdict", and that the platform UI did not say
+        which. Now it does — explicitly, in a yellow alert that the
+        user has to scroll past on every visit. Surfacing this here
+        (and not just in the README) is the cheapest mitigation
+        against any "but the dashboard said I was compliant" claim
+        from a downstream user who trusted the score without further
+        diligence.
+      */}
+      <Card className="border-yellow-300 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/40">
+        <CardContent className="flex items-start gap-3 pt-6">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-yellow-900 dark:text-yellow-100">
+            <p className="font-medium">{t("disclaimerTitle")}</p>
+            <p className="mt-1 text-yellow-800 dark:text-yellow-200">{t("disclaimerBody")}</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
