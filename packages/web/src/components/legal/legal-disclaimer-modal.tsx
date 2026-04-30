@@ -58,8 +58,25 @@ export function LegalDisclaimerModal() {
   const hydrated = useAuthHydrated()
   const user = useAuthStore((s) => s.user)
   const [show, setShow] = useState(false)
+  // v2.5.3: gate the entire render behind a post-mount flag so the
+  // server-rendered HTML for this component is *always* an empty
+  // tree. Reported by an external reviewer as a Next 15 hydration
+  // error ("server rendered text didn't match the client") on a
+  // fresh clone — even though the previous logic only flipped `show`
+  // inside a useEffect, the modal's children include `useTranslations`
+  // calls and lucide icons that strict modes can flag as differing
+  // between SSR and client. The cheapest robust fix is to render
+  // nothing at all on the server — the visitor sees the dialog ~50ms
+  // after first paint, which is the same UX trade-off documented in
+  // v2.5.2 anyway.
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
     // Wait for auth-store rehydration before deciding — otherwise a
     // returning logged-in visitor would see a flash of the modal on
     // every page load while Zustand still thinks they're anonymous.
@@ -77,7 +94,7 @@ export function LegalDisclaimerModal() {
       // per session as the safer default.
       setShow(true)
     }
-  }, [hydrated, user])
+  }, [mounted, hydrated, user])
 
   // While the modal is open, prevent body scroll so the user's
   // attention stays on the consent dialog. Restored on close.
@@ -90,6 +107,9 @@ export function LegalDisclaimerModal() {
     }
   }, [show])
 
+  // SSR + first-mount renders nothing — see comment on the `mounted`
+  // state above for the reasoning.
+  if (!mounted) return null
   if (!show) return null
 
   const accept = () => {

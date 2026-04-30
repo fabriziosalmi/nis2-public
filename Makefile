@@ -117,47 +117,102 @@ prod: prod-up
 # that silent failure into a loud, actionable error before any
 # container is created. Reported by Davide
 prod-preflight:
-	@test -f .env || ( echo ""; \
-	  echo "ERROR: .env file is missing."; \
-	  echo "  $$ cp .env.example .env"; \
-	  echo "  Then edit .env and set:"; \
-	  echo "    - POSTGRES_PASSWORD  (any non-empty string; rotate before sharing infra)"; \
-	  echo "    - JWT_SECRET         (run: openssl rand -base64 32)"; \
-	  echo "    - NEXTAUTH_SECRET    (run: openssl rand -base64 32)"; \
-	  echo "    - REDIS_PASSWORD     (any non-empty string)"; \
-	  echo "    - CORS_ORIGINS       (comma-separated allow-list, no wildcards)"; \
-	  echo "    - DOMAIN             (your public hostname for Caddy auto-HTTPS)"; \
-	  echo ""; exit 1 )
-	@grep -qE '^POSTGRES_PASSWORD=.+' .env || ( echo ""; \
-	  echo "ERROR: POSTGRES_PASSWORD is missing or empty in .env."; \
-	  echo "Postgres will refuse to initialise without a non-empty password."; \
-	  echo ""; exit 1 )
-	@if grep -qE '^JWT_SECRET=GENERATE_ME' .env; then echo ""; \
-	  echo "ERROR: JWT_SECRET in .env is still the placeholder 'GENERATE_ME...'."; \
-	  echo "Generate a real one:"; \
-	  echo "  $$ openssl rand -base64 32"; \
-	  echo "and replace the JWT_SECRET= line in .env."; \
-	  echo ""; exit 1; fi
-	@grep -qE '^JWT_SECRET=.{32,}' .env || ( echo ""; \
-	  echo "ERROR: JWT_SECRET in .env is shorter than 32 characters."; \
-	  echo "The API refuses to start in production with a short secret."; \
-	  echo "Generate one with: openssl rand -base64 32"; \
-	  echo ""; exit 1 )
-	@grep -qE '^CORS_ORIGINS=.+' .env || ( echo ""; \
-	  echo "ERROR: CORS_ORIGINS is missing or empty in .env."; \
-	  echo "The API refuses to start in production without an explicit allow-list."; \
-	  echo "Example: CORS_ORIGINS=https://nis2.example.com"; \
-	  echo ""; exit 1 )
-	@if grep -qE '^RLS_SUPERUSER_OK=1' .env; then echo ""; \
-	  echo "WARNING: RLS_SUPERUSER_OK=1 is set in .env."; \
-	  echo "This opts out of the v2.5.1 production safety check that refuses"; \
-	  echo "to start when the app's DB role is SUPERUSER / BYPASSRLS — i.e."; \
-	  echo "when Postgres RLS is decorative. Tenant isolation will rely on"; \
-	  echo "application-layer filters ONLY. Remove this line and provision a"; \
-	  echo "non-superuser app role before going live:"; \
-	  echo "    ALTER ROLE <app_role> NOSUPERUSER NOBYPASSRLS;"; \
+	@test -f .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- .env is missing"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Step 1) Copy the example file:"; \
+	  echo ""; \
+	  echo "      cp .env.example .env"; \
+	  echo ""; \
+	  echo "  Step 2) Open .env in an editor and set these variables:"; \
+	  echo ""; \
+	  echo "      POSTGRES_PASSWORD   (any non-empty string)"; \
+	  echo "      REDIS_PASSWORD      (any non-empty string)"; \
+	  echo "      JWT_SECRET          (run:  openssl rand -base64 32 )"; \
+	  echo "      NEXTAUTH_SECRET     (run:  openssl rand -base64 32 )"; \
+	  echo "      CORS_ORIGINS        (comma-separated, no wildcards)"; \
+	  echo "                          example:  https://nis2.example.com"; \
+	  echo "      DOMAIN              (your public host for Caddy HTTPS)"; \
+	  echo ""; \
+	  echo "  Step 3) Re-run:  make prod"; \
+	  echo ""; \
+	  exit 1 )
+	@grep -qE '^POSTGRES_PASSWORD=.+' .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- POSTGRES_PASSWORD is missing or empty in .env"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Postgres refuses to initialise without a password."; \
+	  echo ""; \
+	  echo "  Set any non-empty string in .env, for example:"; \
+	  echo ""; \
+	  echo "      POSTGRES_PASSWORD=$$(openssl rand -base64 24)"; \
+	  echo ""; \
+	  exit 1 )
+	@if grep -qE '^JWT_SECRET=GENERATE_ME' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- JWT_SECRET is still the placeholder GENERATE_ME..."; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Step 1) Generate a real secret:"; \
+	  echo ""; \
+	  echo "      openssl rand -base64 32"; \
+	  echo ""; \
+	  echo "  Step 2) Replace the JWT_SECRET= line in .env with the output."; \
+	  echo ""; \
+	  exit 1; fi
+	@grep -qE '^JWT_SECRET=.{32,}' .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- JWT_SECRET in .env is shorter than 32 characters"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  The API refuses to start in production with a short secret."; \
+	  echo ""; \
+	  echo "  Generate one and paste it into .env:"; \
+	  echo ""; \
+	  echo "      openssl rand -base64 32"; \
+	  echo ""; \
+	  exit 1 )
+	@grep -qE '^CORS_ORIGINS=.+' .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- CORS_ORIGINS is missing or empty in .env"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  The API refuses to start without an explicit allow-list."; \
+	  echo ""; \
+	  echo "  Example for a single front-end domain:"; \
+	  echo ""; \
+	  echo "      CORS_ORIGINS=https://nis2.example.com"; \
+	  echo ""; \
+	  echo "  Multiple domains: comma-separated, NO wildcards."; \
+	  echo ""; \
+	  exit 1 )
+	@if grep -qE '^RLS_SUPERUSER_OK=1' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  WARNING -- RLS_SUPERUSER_OK=1 is set in .env"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  This opts out of the v2.5.1 production safety check that refuses"; \
+	  echo "  to start when the DB role is SUPERUSER / BYPASSRLS -- i.e. when"; \
+	  echo "  Postgres RLS is decorative. Tenant isolation will rely on"; \
+	  echo "  application-layer filters ONLY."; \
+	  echo ""; \
+	  echo "  Remove the line and provision a non-superuser app role before"; \
+	  echo "  going live, for example:"; \
+	  echo ""; \
+	  echo "      ALTER ROLE <app_role> NOSUPERUSER NOBYPASSRLS;"; \
 	  echo ""; fi
+	@echo ""
 	@echo "  .env preflight: OK"
+	@echo ""
 
 prod-up: prod-preflight
 	docker compose -f infra/docker/docker-compose.prod.yml up -d --build --wait --wait-timeout 120

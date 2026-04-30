@@ -117,6 +117,19 @@ The governance checklist maps to NIS2 Art. 21 at the EU level. National-specific
 
 > A CISO of an essential entity will not upload their vulnerability data to a third-party cloud. This platform is designed to run inside your perimeter.
 
+### Prerequisites
+
+| Tool | Why | Notes |
+|---|---|---|
+| **Docker** + **Docker Compose v2.20+** | Runs the API, web, scanner, postgres, redis, celery containers | `compose v2.20` is required for `--wait` on healthchecks (`make dev` / `make prod` rely on it) |
+| **GNU Make** | Drives the standardised targets (`dev`, `prod`, `clean`, `test`, etc.) | Pre-installed on macOS / Linux. On Windows: install via Git Bash, WSL2, or Chocolatey |
+| **Python 3.10+** on the host | Used by `make clean`, `make clean-all`, and `make test-*` (pytest) | Linux/macOS package manager works; on Windows install from python.org (the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` is **not** a real Python — disable that alias in Settings → Apps → Apps & Features → App execution aliases). The Makefile detects `python3` / `py` / `python` in that order. |
+| **`openssl`** (or any random-bytes generator) | Generates `JWT_SECRET` and `NEXTAUTH_SECRET` for production deploys | `openssl rand -base64 32` is the canonical recipe |
+
+> The platform itself runs inside containers and pulls all its runtime deps from the images — Node, Postgres, Redis, the Python interpreter for the API, etc. The host-side prerequisites above only drive build / clean / test from the Makefile.
+
+### Quick start
+
 ```bash
 git clone https://github.com/fabriziosalmi/nis2-public.git
 cd nis2-public
@@ -128,6 +141,31 @@ make dev                # http://localhost:8077 (UI) + http://localhost:8000/doc
 ```
 
 All data stays in your PostgreSQL instance. No telemetry, no external calls, no cloud dependencies.
+
+### Production secrets
+
+`make prod` runs a pre-flight check (`prod-preflight`) before bringing up the stack. If `.env` is missing or carries placeholder values for `POSTGRES_PASSWORD` / `JWT_SECRET` / `CORS_ORIGINS`, the target exits early with a self-contained error message describing the exact command to fix it. The minimum recipe to put `.env` into a runnable shape:
+
+```bash
+# Postgres password — any non-empty string; rotate before sharing infra
+sed -i.bak 's|^POSTGRES_PASSWORD=.*$|POSTGRES_PASSWORD='$(openssl rand -base64 24)'|' .env
+
+# JWT secret — must be ≥32 chars; the API refuses to start otherwise
+sed -i.bak 's|^JWT_SECRET=.*$|JWT_SECRET='$(openssl rand -base64 32)'|' .env
+
+# NextAuth secret
+sed -i.bak 's|^NEXTAUTH_SECRET=.*$|NEXTAUTH_SECRET='$(openssl rand -base64 32)'|' .env
+
+# Redis password
+sed -i.bak 's|^REDIS_PASSWORD=.*$|REDIS_PASSWORD='$(openssl rand -base64 24)'|' .env
+
+# CORS allow-list — comma-separated, no wildcards. Example:
+sed -i.bak 's|^CORS_ORIGINS=.*$|CORS_ORIGINS=https://nis2.example.com|' .env
+
+rm -f .env.bak
+```
+
+(macOS users: that's GNU `sed` syntax. For BSD `sed` drop the `.bak` argument or use a different editor — the goal is "replace the placeholder line with a real secret".)
 
 For air-gapped environments: Ollama AI copilot runs entirely local.
 

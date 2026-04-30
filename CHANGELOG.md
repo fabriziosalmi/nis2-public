@@ -1,5 +1,92 @@
 # Changelog
 
+## [2.5.3] - 2026-04-30
+
+External-reviewer feedback round (Davide, fresh-clone walkthrough). Four concrete fixes — one runtime blocker, one onboarding trap, one operability paper-cut, one orientation gap.
+
+### 🟠 Fixed — Hydration error blocking the public landing on first load
+
+**Symptom (reported by Davide)** — fresh `git clone`, `make dev`, navigate to `http://localhost:8077/`: the page rendered briefly then the React DevTools panel surfaced a "Recoverable Error — Hydration failed because the server rendered text didn't match the client" overlay, and the legal-disclaimer modal (added in v2.5.2) intermittently appeared then disappeared.
+
+**Root cause** — `LegalDisclaimerModal` rendered the full `<div role="dialog">…</div>` tree on the server with `show=false`, then on the client a `useEffect` flipped `show=true` on first paint when localStorage said the visitor had not accepted. Even though the *outer* gate was a state flag, the rendered children (`useTranslations`, lucide icons, `<Button>`) introduced enough microscopic SSR↔CSR variation under React 19 + Next 15 strict hydration to register as a mismatch.
+
+**Fix** — `packages/web/src/components/legal/legal-disclaimer-modal.tsx`: added a `mounted` state set by a `useEffect`, and gate the *entire* render behind it. The component now returns `null` on the server and during the very first client render; the dialog appears ~1 frame after hydration. Same pattern is documented inline in the file with the trade-off (~50ms blank-state) which is the same UX accepted by the v2.5.2 design.
+
+### 🟠 Added — Python 3.10+ documented in README "Prerequisites"
+
+**Symptom (reported by Davide)** — `make clean-all` exited with `Python non trovato — eseguire senza argomenti per installare dal Microsoft Store` on his Windows host. Same kind of failure was patched defensively in v2.4.28 with a Python interpreter probe in the Makefile, but the README still didn't *tell* a fresh installer that Python is required at all.
+
+**Fix** — `README.md` now opens the install section with an explicit table:
+
+| Tool | Required for |
+|---|---|
+| Docker + Docker Compose v2 | Running the dev/prod stack |
+| GNU Make | `make dev`, `make prod`, `make clean*` targets |
+| Python 3.10+ | `make clean*` (cross-platform clean script), `make test*` |
+| openssl | Generating `JWT_SECRET` / `NEXTAUTH_SECRET` for production |
+
+Plus a Windows-specific callout: the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` is **not** a real Python — disable the App Execution Aliases for `python.exe` / `python3.exe` and install from python.org.
+
+### 🟠 Improved — `make prod` pre-flight error formatting
+
+**Symptom (reported by Davide)** — when `.env` is missing or `JWT_SECRET` is the placeholder, the previous one-line error sentences ran together with the shell prompt and were trivial to scroll past. The mitigation steps were buried at the end of the message, so the operator's eye landed on the *symptom* and missed the *fix*.
+
+**Fix** — `Makefile` `prod-preflight`: rewrote each error block as a banner-separated stanza with explicit numbered steps and the exact commands to run. Example for missing `.env`:
+
+```
+===================================================================
+  ERROR -- .env is missing
+===================================================================
+
+  Step 1) Copy the example file:
+
+      cp .env.example .env
+
+  Step 2) Open .env in an editor and set these variables:
+
+      POSTGRES_PASSWORD   (any non-empty string)
+      JWT_SECRET          (run:  openssl rand -base64 32 )
+      ...
+
+  Step 3) Re-run:  make prod
+```
+
+Same structural rewrite applied to the `POSTGRES_PASSWORD` / `JWT_SECRET=GENERATE_ME` / short-`JWT_SECRET` / missing-`CORS_ORIGINS` / `RLS_SUPERUSER_OK=1` warning paths.
+
+### 🟠 Added — Dashboard orientation card explaining the Art. 21 / Art. 18 mapping
+
+**Symptom (reported by Davide)** — after `make dev`, signup, and landing on `/dashboard`, the user could not figure out what the platform was actually *for*. The empty stat cards and the "New Scan" CTA gave no hint of the link between a TLS/DNS/header scan result and the NIS2 sub-paragraphs the result eventually weakens. The sidebar showed "Compliance", "Governance", "Vendors" as separate routes with no narrative explaining why all three exist.
+
+**Fix** — `packages/web/src/app/dashboard/page.tsx`: new dismissible `OrientationCard` rendered between the page header and the stat-cards row. The card summarises in 30 seconds:
+
+> **Cosa fa la piattaforma — in 30 secondi**
+>
+> La Direttiva NIS2 (UE 2022/2555) all'Art. 21(2) elenca dieci misure di gestione del rischio. L'Italia le ha recepite all'Art. 24(2) del D.Lgs 138/2024. La piattaforma copre quel terreno con tre superfici complementari:
+>
+> - **Scansioni** — controlli automatici su TLS, DNS, header HTTP, porte, certificati e secret. Ogni finding è mappato al sub-paragrafo dell'Art. 21(2) (a–j) che indebolisce. Copre circa il 30 % dell'Art. 21 — la parte tecnicamente osservabile.
+> - **Checklist di Governance** — 30 voci che coprono gli obblighi umani / organizzativi che la sonda non può validare. Euristica didattica mappata sull'Art. 21(2), **non** riproduzione integrale del framework ACN.
+> - **Fornitori / Supply chain** — obblighi Art. 18: inventario, scoring, contratti, campi specifici ACN. Tracciato separatamente dall'Art. 21.
+>
+> [ Apri la matrice ] [ Ho capito ]
+
+Implementation notes:
+- Dismissible — `localStorage` versioned key `nis2-dashboard-orientation-v1`. Once the user has internalised the mapping it stays out of the way; bumping the version forces re-display when a future surface (or a renamed Article reference) lands.
+- Same SSR-empty-tree pattern as `LegalDisclaimerModal` — `mounted` flag avoids hydration mismatches.
+- Bold spans rendered via `next-intl` `t.rich()` with a `<b>` placeholder — markup stays out of the JSON, ICU placeholders are validated at compile time.
+- Translation parity: 7 keys × 5 locales (`dashboard.orientation{Title,Intro,Scans,Governance,Vendors,Cta,Dismiss}`) = 35 new i18n entries. en/it/fr/de/es all aligned.
+- "Apri la matrice" CTA links to `/dashboard/compliance` — the visual matrix where each Art. 21(2) sub-paragraph (a–j) is shown alongside the scanner-observable findings that map to it.
+
+### Misc
+
+- `API_VERSION` literal bumped 2.5.2 → 2.5.3 in lockstep with `pyproject.toml`.
+- `.gitleaks.toml`: added `nis2-dashboard-orientation-v\d+` to the localStorage-key allowlist family.
+
+### Verified
+
+- Web build: green (24/24 pages, /dashboard at 8.19 kB / 157 kB First Load JS).
+- 5/5 i18n locales validate; `dashboard.orientation*` namespace present and aligned (7 keys × 5 locales = 35 entries).
+- `make prod-preflight` against an empty `.env`, a `.env` with placeholder `JWT_SECRET`, and a `.env` with `RLS_SUPERUSER_OK=1` all surface the new banner-formatted messages.
+
 ## [2.5.2] - 2026-04-30
 
 Legal-disclaimer interstitial — first-visit consent dialog for the public landing surfaces.

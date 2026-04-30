@@ -64,6 +64,13 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "NIS2 compliance overview and recent activity",
+    "orientationTitle": "What this platform does — in 30 seconds",
+    "orientationIntro": "The NIS2 Directive (EU 2022/2555) sets ten risk-management measures at Art. 21(2). Italy transposed them at Art. 24(2) D.Lgs 138/2024. This platform helps you cover that ground with three complementary surfaces:",
+    "orientationScans": "<b>Scans</b> — automated checks on TLS, DNS, HTTP headers, ports, certificates and secrets across your domains and IPs. Each finding is mapped to an Art. 21(2) sub-paragraph (a–j) it weakens. Covers ~30 % of Art. 21 — the technically-observable part.",
+    "orientationGovernance": "<b>Governance checklist</b> — 30 items covering the human / organisational obligations the scanner cannot validate (risk policies, incident procedures, training, business continuity, HR processes). Educational heuristic mapped to Art. 21(2), <b>not</b> a verbatim ACN framework.",
+    "orientationVendors": "<b>Vendors / Supply chain</b> — Art. 18 obligations: vendor inventory with criticality, security scoring, contracts, ACN-specific fields. Tracked separately from Art. 21.",
+    "orientationCta": "Open the matrix",
+    "orientationDismiss": "Got it",
     "newScan": "New Scan",
     "totalScans": "Total Scans",
     "averageScore": "Average Score",

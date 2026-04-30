@@ -64,6 +64,13 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Panoramica conformità NIS2 e attività recenti",
+    "orientationTitle": "Cosa fa la piattaforma — in 30 secondi",
+    "orientationIntro": "La Direttiva NIS2 (UE 2022/2555) all'Art. 21(2) elenca dieci misure di gestione del rischio. L'Italia le ha recepite all'Art. 24(2) del D.Lgs 138/2024. La piattaforma copre quel terreno con tre superfici complementari:",
+    "orientationScans": "<b>Scansioni</b> — controlli automatici su TLS, DNS, header HTTP, porte, certificati e secret sui domini e IP che inserisci. Ogni finding è mappato al sub-paragrafo dell'Art. 21(2) (a–j) che indebolisce. Copre circa il 30% dell'Art. 21 — la parte tecnicamente osservabile.",
+    "orientationGovernance": "<b>Checklist di Governance</b> — 30 voci che coprono gli obblighi umani / organizzativi che la sonda non può validare (politiche di rischio, procedure di incident response, formazione, business continuity, processi HR). Euristica didattica mappata sull'Art. 21(2), <b>non</b> riproduzione integrale del framework ACN.",
+    "orientationVendors": "<b>Fornitori / Supply chain</b> — obblighi Art. 18: inventario fornitori con criticità, scoring di sicurezza, contratti, campi specifici ACN. Tracciato separatamente dall'Art. 21.",
+    "orientationCta": "Apri la matrice",
+    "orientationDismiss": "Ho capito",
     "newScan": "Nuova Scansione",
     "totalScans": "Scansioni Totali",
     "averageScore": "Punteggio Medio",

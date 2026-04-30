@@ -3,9 +3,10 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight, CheckCircle2, XCircle } from "lucide-react"
+import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight, CheckCircle2, XCircle, Info, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -69,6 +70,101 @@ function ScoreDisplay({ score }: { score: number | null | undefined }) {
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       <span>{score}</span>
     </span>
+  )
+}
+
+// v2.5.3 (DAVIDE-4): orientation card. Davide opened a fresh clone, ran
+// `make dev`, signed up, landed on /dashboard, and could not figure out
+// what the platform was actually *for* — the empty stat cards and the
+// "New Scan" CTA gave no hint of the link between a TLS/DNS/header
+// scan and the Art. 21(2) sub-paragraphs the result eventually weakens.
+//
+// This card is the missing 30-second orientation: what the three
+// surfaces (Scans, Governance, Vendors) cover, which Article maps to
+// which surface, and that the scanner is ~30 % of Art. 21 and Art. 18
+// is tracked separately. Dismissible — once the user has internalised
+// the mapping, the card stays out of the way. Versioned key so a
+// future rewrite (e.g. a new surface added) re-shows it.
+const ORIENTATION_KEY = "nis2-dashboard-orientation-v1"
+
+function OrientationCard() {
+  const t = useTranslations("dashboard")
+  const [mounted, setMounted] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    try {
+      if (localStorage.getItem(ORIENTATION_KEY) === "dismissed") {
+        setDismissed(true)
+      }
+    } catch {
+      // localStorage unavailable — show the card; user can dismiss it
+      // for the session even if the choice can't be persisted.
+    }
+  }, [])
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(ORIENTATION_KEY, "dismissed")
+    } catch {
+      /* no persistence — re-shows next visit, acceptable */
+    }
+    setDismissed(true)
+  }
+
+  // Same SSR-empty-tree pattern as LegalDisclaimerModal — render
+  // nothing on the server so a stale localStorage state can't produce
+  // a hydration mismatch.
+  if (!mounted) return null
+  if (dismissed) return null
+
+  // Mark `<b>` from the translation strings as bold spans. Using
+  // t.rich() keeps the markup in code (not in the JSON) and lets
+  // next-intl validate the placeholders at compile time.
+  const bold = (chunks: React.ReactNode) => <strong className="font-semibold text-foreground">{chunks}</strong>
+
+  return (
+    <Card className="border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-blue-500/10 p-2">
+            <Info className="h-4 w-4 text-blue-600" aria-hidden="true" />
+          </div>
+          <CardTitle className="text-base font-semibold leading-tight pt-1">
+            {t("orientationTitle")}
+          </CardTitle>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleDismiss}
+          aria-label={t("orientationDismiss")}
+          className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+        <p>{t("orientationIntro")}</p>
+        <ul className="space-y-2 list-disc pl-5">
+          <li>{t.rich("orientationScans", { b: bold })}</li>
+          <li>{t.rich("orientationGovernance", { b: bold })}</li>
+          <li>{t.rich("orientationVendors", { b: bold })}</li>
+        </ul>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/compliance">
+              {t("orientationCta")}
+              <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleDismiss}>
+            {t("orientationDismiss")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -187,6 +283,8 @@ export default function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      <OrientationCard />
 
       {/* Stat cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
