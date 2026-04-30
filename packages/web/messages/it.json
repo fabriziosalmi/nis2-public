@@ -529,6 +529,18 @@
   "compliancePage": {
     "title": "Matrice di Conformità NIS2",
     "subtitle": "Art. 24(2) D.Lgs 138/2024 (recepimento Art. 21 NIS2) — Misure di gestione dei rischi di cybersicurezza",
+    "art21Sections": {
+      "a": { "title": "Politiche di analisi dei rischi e sicurezza dei sistemi informativi", "description": "Politiche su analisi dei rischi e sicurezza dei sistemi informativi" },
+      "b": { "title": "Gestione degli incidenti", "description": "Procedure di rilevazione, classificazione, risposta e segnalazione" },
+      "c": { "title": "Continuità operativa e gestione delle crisi", "description": "BCP, gestione backup, disaster recovery e risposta alle crisi" },
+      "d": { "title": "Sicurezza della catena di approvvigionamento", "description": "Fornitori diretti e fornitori di servizi, criticità e clausole contrattuali" },
+      "e": { "title": "Sicurezza nell'acquisizione, sviluppo e manutenzione di reti e sistemi informativi", "description": "Inclusa gestione e divulgazione delle vulnerabilità" },
+      "f": { "title": "Valutazione dell'efficacia delle misure di gestione dei rischi", "description": "Politiche e procedure per valutare l'efficacia delle misure" },
+      "g": { "title": "Igiene informatica e formazione in cybersicurezza", "description": "Pratiche di igiene di base e formazione continua di awareness" },
+      "h": { "title": "Crittografia e, ove opportuno, cifratura", "description": "Uso di crittografia e cifratura dove appropriato" },
+      "i": { "title": "Sicurezza delle risorse umane, controllo accessi e gestione degli asset", "description": "Sicurezza HR, politiche di controllo accessi, gestione asset" },
+      "j": { "title": "MFA, comunicazioni protette e comunicazioni di emergenza", "description": "Autenticazione multifattore o continua, comunicazioni voce/video/testo protette e di emergenza" }
+    },
     "noData": "Nessun dato di compliance disponibile",
     "noDataDescription": "Esegui una scansione di conformità per popolare automaticamente la matrice Art. 21. I check automatizzati verificano sicurezza TLS, DNS, header HTTP, e altro.",
     "runFirstScan": "Esegui Prima Scansione",

@@ -391,13 +391,15 @@ export function Sidebar() {
         role="dialog"
         aria-modal="true"
         aria-label={t("nav.primary")}
-        // React 19 supports `inert` natively as a boolean prop. We
-        // pass `true` when closed so the browser refuses to focus
-        // anything inside; `undefined` when open so links work.
-        // The {...} spread keeps TypeScript happy across the
-        // version straddle (React 18 typings don't have it; React
-        // 19 typings do).
-        {...(!mobileOpen ? { inert: "" as unknown as boolean } : {})}
+        // React 19 supports `inert` natively as a boolean prop —
+        // pre-2.4.30 we passed an empty string via spread to bridge
+        // React-18 typings, but that triggered a "Received an empty
+        // string for a boolean attribute" console warning on every
+        // dashboard load (caught in the v2.4.30 console audit).
+        // Now that we're committed to React 19, the empty-string
+        // workaround is unnecessary and the boolean prop reads
+        // cleanly.
+        inert={!mobileOpen}
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 transform border-r bg-sidebar transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
@@ -406,11 +408,25 @@ export function Sidebar() {
         {navContent}
       </aside>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — `relative` on the aside is load-bearing.
+          The collapse-state expand button below is `position: absolute
+          -right-3 top-20`. Pre-2.4.30 the aside was static-positioned,
+          so the absolute button hunted up the ancestor tree for the
+          first positioned element — which was nothing inside the
+          dashboard layout, so it landed on `<html>`. Combined with
+          the dashboard layout's outer `overflow-hidden`, the button
+          ended up clipped past the right edge of the viewport and
+          sat there permanently invisible AND unclickable, with the
+          only recovery being a page reload (which reset `collapsed`
+          to false). External-review repro: "se si comprime la colonna
+          di sx poi non si riesce più a riallargarla". `relative`
+          anchors the button to the aside's right border so the -3
+          (–12px) offset puts it visibly half-on, half-off the sidebar
+          edge as intended. */}
       <aside
         aria-label={t("nav.primary")}
         className={cn(
-          "hidden lg:flex lg:flex-col lg:border-r lg:bg-sidebar transition-all duration-200",
+          "relative hidden lg:flex lg:flex-col lg:border-r lg:bg-sidebar transition-all duration-200",
           collapsed ? "lg:w-16" : "lg:w-64"
         )}
       >

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
-// NIS2 Compliance Platform — https://github.com/fabriziosalmi/messages
+// NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
 import { use } from "react"
@@ -20,6 +20,50 @@ import { cn } from "@/lib/utils"
 const severityVariant: Record<string, "critical" | "high" | "medium" | "low" | "info"> = {
   CRITICAL: "critical", HIGH: "high", MEDIUM: "medium", LOW: "low",
   critical: "critical", high: "high", medium: "medium", low: "low", info: "info",
+}
+
+/**
+ * Renders the compliance matrix Object as a list of NIS2 Art. 21
+ * sub-paragraph rows. Pre-2.4.30 this was inlined in the parent and
+ * had two issues:
+ *   1. The letter badge used `<span class="flex …">` — a span with
+ *      `display: flex` is semantically off (span is inline by default;
+ *      the flex utility forces it to behave as a block-level flex
+ *      container). The "extra span" the external review flagged. Now
+ *      a `<div>`.
+ *   2. The row label rendered `item.description || item.title || key`
+ *      from the backend, which is always English (the scanner engine
+ *      writes English strings into compliance_matrix). On an Italian
+ *      session the heading was IT but every row was EN. Now the title
+ *      and description come from the i18n namespace
+ *      (compliancePage.art21Sections.<letter>) so locale switches
+ *      cascade through the whole matrix view.
+ */
+function ComplianceMatrixList({ matrix }: { matrix: Record<string, any> }) {
+  const tSec = useTranslations("compliancePage.art21Sections")
+  return (
+    <div className="grid gap-3">
+      {Object.entries(matrix).map(([key, item]: [string, any]) => {
+        const letter = key.replace("art21_", "")
+        // Fall back to whatever the backend wrote if the key isn't one
+        // of the canonical letters (a–j) — keeps forward compat if we
+        // ever add a non-Art-21 entry to the matrix.
+        const isCanonical = /^[a-j]$/.test(letter)
+        const title = isCanonical ? tSec(`${letter}.title`) : (item.title || item.description || key)
+        return (
+          <div key={key} className="flex items-center justify-between rounded-lg border p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold">
+                {letter}
+              </div>
+              <p className="text-sm font-medium">{title}</p>
+            </div>
+            <ComplianceStatus status={item.status} />
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function ComplianceStatus({ status }: { status: string }) {
@@ -168,19 +212,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                 <CardDescription>{t("complianceMatrixDescription")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3">
-                  {Object.entries(scan.compliance_matrix).map(([key, item]: [string, any]) => (
-                    <div key={key} className="flex items-center justify-between rounded-lg border p-3">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-bold">
-                          {key.replace("art21_", "")}
-                        </span>
-                        <p className="text-sm font-medium">{item.description || item.title || key}</p>
-                      </div>
-                      <ComplianceStatus status={item.status} />
-                    </div>
-                  ))}
-                </div>
+                <ComplianceMatrixList matrix={scan.compliance_matrix} />
               </CardContent>
             </Card>
           )}

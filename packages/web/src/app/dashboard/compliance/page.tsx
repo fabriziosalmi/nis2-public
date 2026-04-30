@@ -13,23 +13,16 @@ import { cn } from "@/lib/utils"
 import { useScans } from "@/hooks/use-scans"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 
-// NIS2 Art. 21(2) subsections — Italian text is the canonical legal
-// reference under D.Lgs 138/2024 and stays as-is regardless of locale.
-// English here is the EU directive's wording, also locale-stable. The
-// surrounding UX (status labels, summary cards, info copy) IS i18n —
-// see the `compliancePage` namespace.
-const ART21_SECTIONS: Record<string, { title: string; description: string }> = {
-  art21_a: { title: "Politiche di analisi dei rischi e sicurezza dei sistemi informativi", description: "Risk analysis and information system security policies" },
-  art21_b: { title: "Gestione degli incidenti", description: "Incident handling procedures including detection, reporting, and response" },
-  art21_c: { title: "Continuita operativa e gestione delle crisi", description: "Business continuity, backup management, and disaster recovery" },
-  art21_d: { title: "Sicurezza della catena di approvvigionamento", description: "Supply chain security with direct suppliers and service providers" },
-  art21_e: { title: "Sicurezza delle reti e dei sistemi informativi", description: "Security in network and information systems acquisition, development, maintenance" },
-  art21_f: { title: "Gestione e divulgazione delle vulnerabilita", description: "Vulnerability handling and disclosure policies" },
-  art21_g: { title: "Valutazione dell'efficacia delle misure di cybersicurezza", description: "Assessing effectiveness of cybersecurity risk-management measures" },
-  art21_h: { title: "Igiene informatica e formazione", description: "Basic cyber hygiene practices and cybersecurity awareness training" },
-  art21_i: { title: "Crittografia e cifratura", description: "Use of cryptography and encryption where appropriate" },
-  art21_j: { title: "Sicurezza risorse umane, controllo accessi, gestione asset", description: "HR security, access control policies, and asset management" },
-}
+// NIS2 Art. 21(2) sub-paragraphs (a)–(j) — both the title and the
+// description for each are now resolved via i18n at render time
+// (`compliancePage.art21Sections.<letter>.{title,description}`). The
+// previous version hardcoded Italian for `title` and English for
+// `description` "by design" but the result was the worst of both
+// worlds: an English user saw an Italian title, an Italian user saw
+// an English description. The 10 letters here are the source-of-
+// truth ordering — translation files in messages/*.json mirror the
+// same set, parity is enforced by the i18n smoke test.
+const ART21_LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"] as const
 
 function mapStatus(matrixStatus: string): "pass" | "partial" | "fail" | "manual" {
   const s = (matrixStatus || "").toLowerCase()
@@ -41,16 +34,40 @@ function mapStatus(matrixStatus: string): "pass" | "partial" | "fail" | "manual"
 
 export default function CompliancePage() {
   const t = useTranslations("compliancePage")
+  const tSec = useTranslations("compliancePage.art21Sections")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   const { data: scansData, isLoading } = useScans()
-  // Status labels are translated; icons + colours stay constant. The
-  // tuple shape mirrors the previous `statusConfig` object.
+  // Status labels are translated; icons + colours track theme. Each
+  // entry now carries dark-mode variants because the v2.4.30
+  // external review caught the four `bg-X-50` classes giving
+  // unreadable contrast on dark theme (the cards read as washed-out
+  // grey instead of green/yellow/red/grey).
   const statusConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
-    pass: { icon: CheckCircle, color: "text-green-600", bg: "bg-green-50 border-green-200", label: t("compliant") },
-    partial: { icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50 border-yellow-200", label: t("partial") },
-    fail: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: t("nonCompliant") },
-    manual: { icon: Clock, color: "text-gray-500", bg: "bg-gray-50 border-gray-200", label: t("manualReview") },
+    pass: {
+      icon: CheckCircle,
+      color: "text-green-600 dark:text-green-400",
+      bg: "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-900",
+      label: t("compliant"),
+    },
+    partial: {
+      icon: AlertTriangle,
+      color: "text-yellow-600 dark:text-yellow-400",
+      bg: "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-900",
+      label: t("partial"),
+    },
+    fail: {
+      icon: XCircle,
+      color: "text-red-600 dark:text-red-400",
+      bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-900",
+      label: t("nonCompliant"),
+    },
+    manual: {
+      icon: Clock,
+      color: "text-gray-500 dark:text-gray-400",
+      bg: "bg-gray-50 border-gray-200 dark:bg-neutral-900 dark:border-neutral-800",
+      label: t("manualReview"),
+    },
   }
 
   // Find the most recent completed scan with a compliance matrix
@@ -61,12 +78,23 @@ export default function CompliancePage() {
   const matrix = latestScan?.compliance_matrix || {}
   const hasData = Object.keys(matrix).length > 0
 
-  // Build compliance areas from real data
-  const complianceAreas = Object.entries(ART21_SECTIONS).map(([key, section]) => {
+  // Build compliance areas from real data. Title + description come
+  // from the i18n namespace; only the per-scan `detail` (status
+  // string the engine wrote into the matrix) stays scan-specific.
+  const complianceAreas = ART21_LETTERS.map((letter) => {
+    const key = `art21_${letter}`
     const matrixEntry = matrix[key]
     const status = matrixEntry ? mapStatus(matrixEntry.status) : "manual"
     const detail = matrixEntry?.description || matrixEntry?.status || t("notVerifiedYet")
-    return { key, ...section, status, detail, automated: status === "pass" || status === "partial" }
+    return {
+      key,
+      letter,
+      title: tSec(`${letter}.title`),
+      description: tSec(`${letter}.description`),
+      status,
+      detail,
+      automated: status === "pass" || status === "partial",
+    }
   })
 
   const passCount = complianceAreas.filter((a) => a.status === "pass").length
@@ -155,7 +183,7 @@ export default function CompliancePage() {
         {complianceAreas.map((area) => {
           const config = statusConfig[area.status]
           const StatusIcon = config.icon
-          const letter = area.key.replace("art21_", "")
+          const letter = area.letter
 
           return (
             <Card key={area.key} className={cn("border", config.bg)}>

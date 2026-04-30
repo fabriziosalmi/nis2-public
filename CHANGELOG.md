@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.4.30] - 2026-04-30
+
+Tier-2 UI fixes from the same external review that drove v2.4.28 — five concrete bugs across the compliance page, scan-detail page, sidebar, dashboard landing, and one console warning.
+
+### Fixed — Compliance page rendered Italian titles + English descriptions regardless of locale (Bug #1)
+
+`/dashboard/compliance` had a hardcoded `ART21_SECTIONS` map with Italian `title` and English `description`. The comment claimed it was "by design" — keep the Italian text as the canonical legal reference. In practice it produced the worst of both worlds: an English user saw an Italian title (legible but jarring), an Italian user saw an English description (illegible to most). Same anti-pattern in the scan-detail page (`item.description` from the backend, always English).
+
+Fix: 50 new translation strings in `compliancePage.art21Sections.{a..j}.{title,description}` across all 5 locales (en/it/fr/de/es). Both the compliance matrix page and the scan-detail compliance list now resolve `title` + `description` via `useTranslations("compliancePage.art21Sections")`. Italian sub-paragraph titles match D.Lgs 138/2024 wording; English titles match the EU Directive 2022/2555 phrasing; the other three locales follow standard EU translations.
+
+### Fixed — Compliance page in dark mode rendered washed-out grey cards instead of red/yellow/green (Bug #2)
+
+The `statusConfig` map used `bg-green-50 / bg-yellow-50 / bg-red-50 / bg-gray-50` with no `dark:` variants. On dark theme the `-50` shades collapsed to near-white text-on-near-black surfaces, with poor contrast and no clear status differentiation. Now each status carries a `dark:bg-X-950/40 dark:border-X-900` pair (and `dark:text-X-400` for the icon colour). Visual diff against the dashboard light/dark themes confirms the four states are immediately distinguishable on dark.
+
+### Fixed — Scan-detail compliance row used `<span class="flex …>` (Bug #3)
+
+The letter badge in the scan-detail compliance matrix was rendered as `<span>` with `display: flex` Tailwind utilities. `<span>` is inline-by-default; forcing flex on it works but is semantically wrong (the element is acting as a block-level container with row layout). Reviewer flagged it. Now `<div>`. Same patch refactored the inline matrix into a dedicated `ComplianceMatrixList` component that also wires the row title to the new `art21Sections` i18n namespace — so a switch from EN to IT now updates the matrix titles in both `/dashboard/compliance` and `/dashboard/scans/[id]` consistently.
+
+### Fixed — Collapsed desktop sidebar could not be re-expanded without a page reload (Bug #4)
+
+`/dashboard` sidebar has a chevron-left button to collapse and a chevron-right button to expand. The expand button is `<Button class="absolute -right-3 top-20 z-10 …">`. Pre-2.4.30 the parent `<aside>` had no `position: relative`, so the absolute button hunted up the DOM tree for the first positioned ancestor — which was nothing inside the dashboard layout — and ended up positioned relative to `<html>`. Combined with the dashboard layout's `flex h-screen overflow-hidden`, the button rendered ~12px past the viewport's right edge, invisible AND unreachable. Only recovery was a page refresh, which reset `collapsed` state.
+
+Fix: added `relative` to the desktop `<aside>` so the button anchors to the sidebar's right border with the intended -12px overhang. Verified via Playwright: `getBoundingClientRect()` reports `{x:51, y:80, w:24, h:24}` post-collapse, and a programmatic click successfully re-expands the sidebar.
+
+### Fixed — Dashboard landing 404'd on `/screenshot.png` (Bug #5)
+
+The new public landing page at `/` (added in v2.4.27) references `/screenshot.png` for the product preview. The file shipped in `docs/public/` (used by VitePress) but not in `packages/web/public/` (Next.js). First console error on every visit to `/` was a 404 on the asset. Copied `screenshot.png` into the Next.js public directory.
+
+### Fixed — `Received an empty string for a boolean attribute` console warning on dashboard pages
+
+The mobile sidebar drawer used `{...(!mobileOpen ? { inert: "" as unknown as boolean } : {})}` to bridge the React 18 / React 19 typings on the `inert` attribute. React 19 supports `inert` as a native boolean prop, and an empty string is no longer a valid stand-in. Now `inert={!mobileOpen}` directly. Console audit confirms the warning is gone.
+
+### Misc
+
+- Made the postgres host port configurable in `docker-compose.dev.yml`: `${POSTGRES_HOST_PORT:-5433}:5432`. Prevents collisions with other local Postgres instances on the same dev machine without forcing a compose-file edit. Default unchanged (5433).
+- Fixed a stray `https://github.com/fabriziosalmi/messages` typo in the copyright header of `packages/web/src/app/dashboard/scans/[id]/page.tsx` (correct: `nis2-public`).
+
+### Verified
+
+- 5/5 i18n locales validate; 50 new `art21Sections` keys present and consistent across en/it/fr/de/es.
+- Web build green (24/24 pages); compliance page renders correctly in 4 combinations (light/dark × en/it).
+- Sidebar collapse + re-expand round-trip works without page reload (Playwright-verified).
+- Dashboard public-pages console audit: zero errors after the screenshot.png + `inert` fixes.
+
 ## [2.4.29] - 2026-04-30
 
 Privacy hygiene patch — soft mitigation, no history rewrite.

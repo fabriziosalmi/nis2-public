@@ -529,6 +529,18 @@
   "compliancePage": {
     "title": "Matrice de Conformité NIS2",
     "subtitle": "Art. 24(2) D.Lgs 138/2024 (transposition de l'art. 21 NIS2) — Mesures de gestion des risques de cybersécurité",
+    "art21Sections": {
+      "a": { "title": "Politiques d'analyse des risques et de sécurité des SI", "description": "Politiques sur l'analyse des risques et la sécurité des systèmes d'information" },
+      "b": { "title": "Gestion des incidents", "description": "Procédures de détection, classification, réponse et notification" },
+      "c": { "title": "Continuité d'activité et gestion de crise", "description": "PCA, gestion des sauvegardes, plan de reprise et réponse aux crises" },
+      "d": { "title": "Sécurité de la chaîne d'approvisionnement", "description": "Fournisseurs directs et prestataires de services, criticité et clauses contractuelles" },
+      "e": { "title": "Sécurité dans l'acquisition, le développement et la maintenance des SI", "description": "Y compris la gestion et la divulgation des vulnérabilités" },
+      "f": { "title": "Évaluation de l'efficacité des mesures de gestion des risques", "description": "Politiques et procédures d'évaluation de l'efficacité" },
+      "g": { "title": "Hygiène informatique et formation à la cybersécurité", "description": "Pratiques d'hygiène de base et formation continue à la sensibilisation" },
+      "h": { "title": "Cryptographie et, le cas échéant, chiffrement", "description": "Utilisation de la cryptographie et du chiffrement lorsque c'est approprié" },
+      "i": { "title": "Sécurité des ressources humaines, contrôle d'accès et gestion des actifs", "description": "Sécurité RH, politiques de contrôle d'accès, gestion des actifs" },
+      "j": { "title": "MFA, communications sécurisées et communications d'urgence", "description": "Authentification multifacteur ou continue, communications voix/vidéo/texte sécurisées et d'urgence" }
+    },
     "noData": "Aucune donnée de conformité disponible",
     "noDataDescription": "Lancez une analyse de conformité pour remplir automatiquement la matrice Art. 21. Les contrôles automatisés vérifient TLS, DNS, en-têtes de sécurité HTTP, chiffrement, etc.",
     "runFirstScan": "Lancer la Première Analyse",
