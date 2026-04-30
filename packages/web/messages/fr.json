@@ -528,7 +528,7 @@
   },
   "compliancePage": {
     "title": "Matrice de Conformité NIS2",
-    "subtitle": "Art. 21 D.Lgs 138/2024 — Mesures de gestion des risques de cybersécurité",
+    "subtitle": "Art. 24(2) D.Lgs 138/2024 (transposition de l'art. 21 NIS2) — Mesures de gestion des risques de cybersécurité",
     "noData": "Aucune donnée de conformité disponible",
     "noDataDescription": "Lancez une analyse de conformité pour remplir automatiquement la matrice Art. 21. Les contrôles automatisés vérifient TLS, DNS, en-têtes de sécurité HTTP, chiffrement, etc.",
     "runFirstScan": "Lancer la Première Analyse",

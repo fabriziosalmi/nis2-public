@@ -418,7 +418,14 @@ async def seed():
                     remediation=remediation,
                     fingerprint=fingerprint,
                     status=status,
-                    compliance_article="Art. 21 D.Lgs 138/2024",
+                    # The 10 risk-management measures live at Art. 24(2)
+                    # of D.Lgs 138/2024 — Italy's NIS2 transposition. The
+                    # demo seed stamps Art. 24(2) with an explicit pointer
+                    # to its EU-level origin (Art. 21 NIS2) so a reviewer
+                    # auditing the demo data sees the legal mapping at a
+                    # glance. Pre-2.4.28 this said "Art. 21 D.Lgs 138/2024",
+                    # which conflated the two: Davide F. flagged it.
+                    compliance_article="Art. 24(2) D.Lgs 138/2024 (Art. 21 NIS2)",
                     first_seen_at=scan_date,
                     last_seen_at=scan_date,
                 )

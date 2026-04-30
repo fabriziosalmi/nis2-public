@@ -1,5 +1,53 @@
 # Changelog
 
+## [2.4.28] - 2026-04-30
+
+External-review triage release. Three issues flagged by Davide F. on the v2.4.27 build, all real, all fixed in this patch.
+
+### Fixed — Compliance matrix subtitle pointed at the wrong article of D.Lgs 138/2024
+
+The subtitle of the Compliance Matrix page (and the demo seed's `compliance_article` field) read `"Art. 21 D.Lgs 138/2024 — Cybersecurity risk management measures"` in all 5 locales. **This is wrong**: in Italy's NIS2 transposition (D.Lgs 138/2024) the ten risk-management measures sit at **Art. 24, comma 2**, lettere a–j; "Art. 21" is the corresponding article of the EU Directive 2022/2555 that the decree transposes. Conflating the two is the kind of mistake that immediately tells an Italian compliance reviewer the platform doesn't actually know the local legal landscape.
+
+Now: `Art. 24(2) D.Lgs 138/2024 (recepimento Art. 21 NIS2) — …` (and the locale-appropriate verb: *transposes* / *recepimento* / *transposition* / *Umsetzung* / *transposición*). The subtitle now disambiguates: tells you the Italian-law citation AND the EU-directive origin in one breath. Also updated `scripts/seed_demo.py` so demo data carries the correct citation.
+
+The other "Art. 21" mentions across the codebase (e.g. `compliancePage.complianceMatrixTitle = "NIS2 Compliance Matrix Art. 21"`, `landingPage` references) are correct as-is — they refer to Art. 21 of the *Directive*, not of the decree.
+
+### Fixed — `make clean-all` failed silently on Windows hosts without a real Python install
+
+`make clean-all` and `make clean` invoke `python scripts/clean.py`. On a Windows host that doesn't have a real Python install, the bare `python` resolves to the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` — which exits 9009 with a localised "Python non trovato" message and the make target fails before `clean.py` can run. Reported by Davide F.
+
+The Makefile now does cross-platform Python detection:
+
+```makefile
+ifeq ($(OS),Windows_NT)
+  PYTHON := $(firstword $(shell where py 2>nul) $(shell where python3 2>nul) $(shell where python 2>nul))
+else
+  PYTHON := $(firstword $(shell command -v python3 ...) $(shell command -v python ...))
+endif
+```
+
+Detection priority is `python3` → `py` (Windows launcher, only present with a real install — finding it is itself a positive signal Python is genuinely available) → `python` (last-resort, may still be the Store stub on Windows but on Unix it's typically real). The `clean`, `clean-all`, `test-api`, and `test-scanner` targets now gate on `$(strip $(PYTHON))` and emit a multi-line error pointing at python.org and at Settings → Apps → Apps & Features → App execution aliases (where the Store stub is toggled off) when nothing is found.
+
+### Fixed — `make prod` exited with generic "container is unhealthy" when `.env` was incomplete
+
+A common first-run failure: operator copies `.env.example` to `.env` but forgets to fill `POSTGRES_PASSWORD` / `JWT_SECRET` / `CORS_ORIGINS`. Postgres refuses to initialise without a password, exits, Caddy's `depends_on: api: service_healthy` chain breaks, and Docker Compose surfaces a generic `dependency failed to start: container docker-postgres-1 is unhealthy`. The actual root cause is buried in `docker logs docker-postgres-1` ("Database is uninitialized and superuser password is not specified") — operators rarely look there first. Reported by Davide F.
+
+Added a `prod-preflight` target that runs before `prod-up`. It validates:
+
+1. `.env` file exists (otherwise: prints the exact `cp .env.example .env` command and the list of variables to set).
+2. `POSTGRES_PASSWORD` is non-empty.
+3. `JWT_SECRET` is not the placeholder `GENERATE_ME...` from `.env.example`.
+4. `JWT_SECRET` is at least 32 characters (the same minimum the API enforces in `app/config.py`).
+5. `CORS_ORIGINS` is non-empty.
+
+Each failure prints a self-contained, actionable error (the exact command to fix, e.g. `openssl rand -base64 32`) and exits 1 before any container is created. Operator now sees the real problem in 5 seconds instead of 5 minutes of `docker logs` archaeology.
+
+### Verified
+
+- 5/5 i18n locales validate as JSON, all 782 keys aligned, Art. 24(2) citation is consistent across en/it/fr/de/es with locale-appropriate verbs (`transposes` / `recepimento` / `transposition` / `Umsetzung` / `transposición`).
+- `make prod-preflight` smoke-tested against three scenarios: missing `.env` (fails with cp instruction), empty `POSTGRES_PASSWORD` (fails with postgres-specific message), `JWT_SECRET=GENERATE_ME` placeholder (fails with `openssl rand` instruction), valid `.env` (passes with `.env preflight: OK`).
+- `make -n clean / clean-all / test-api / test-scanner` correctly resolve `$(PYTHON)` on macOS (`python3`) — Windows-side detection unchanged in shape, exercises the same `where py` / `where python` chain that worked on Davide's repro path before the Store-stub trap.
+
 ## [2.4.27] - 2026-04-30
 
 Public landing page + multi-locale wiring, three audit fixes (frontend silent-catch, prod web healthcheck, RLS hardening), and assorted cleanup. Triggered by a request to "find blocker problems and fix all" before turning attention to UX.

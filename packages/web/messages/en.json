@@ -528,7 +528,7 @@
   },
   "compliancePage": {
     "title": "NIS2 Compliance Matrix",
-    "subtitle": "Art. 21 D.Lgs 138/2024 — Cybersecurity risk management measures",
+    "subtitle": "Art. 24(2) D.Lgs 138/2024 (transposes Art. 21 NIS2) — Cybersecurity risk management measures",
     "noData": "No compliance data available",
     "noDataDescription": "Run a compliance scan to populate the Art. 21 matrix automatically. Automated checks cover TLS, DNS, HTTP security headers, encryption, and more.",
     "runFirstScan": "Run First Scan",
