@@ -104,7 +104,7 @@ services:
     # write and exit-loops. `/tmp` lives on tmpfs *inside* the container
     # — fast, locking-correct, and isolated from the host filesystem.
     # On Linux hosts this is just a slightly faster path; on WSL2 it
-    # is what makes celery-beat boot at all. (Reported by Davide F.)
+    # is what makes celery-beat boot at all. (Reported by Davide)
     command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - ../../packages/api:/app/packages/api

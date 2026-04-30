@@ -25,7 +25,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 // silently drops unknown fields, so a typo here = silent default-override at
 // the API and a confusing user experience (the user thinks they disabled
 // port_scan; the API enables it; the scan task crashes downstream looking
-// for `dns_checks` that aren't there). Reported by Davide F.
+// for `dns_checks` that aren't there). Reported by Davide
 //
 // The validation messages below are i18n KEYS, not literal strings — they
 // resolve to the `scansNewPage` namespace via t(error.message) at render

@@ -424,7 +424,7 @@ async def seed():
                     # to its EU-level origin (Art. 21 NIS2) so a reviewer
                     # auditing the demo data sees the legal mapping at a
                     # glance. Pre-2.4.28 this said "Art. 21 D.Lgs 138/2024",
-                    # which conflated the two: Davide F. flagged it.
+                    # which conflated the two: Davide flagged it.
                     compliance_article="Art. 24(2) D.Lgs 138/2024 (Art. 21 NIS2)",
                     first_seen_at=scan_date,
                     last_seen_at=scan_date,

@@ -7,7 +7,7 @@
 # exist on the host, Docker Desktop on Windows silently creates an empty
 # *directory* there, and the mount then fails with "not a directory: Are
 # you trying to mount a directory onto a file (or vice-versa)?" — which
-# is exactly the trap Davide F. fell into on his first `make prod`.
+# is exactly the trap Davide fell into on his first `make prod`.
 # Keeping the file tracked in git makes the directory-creation race
 # impossible.
 #

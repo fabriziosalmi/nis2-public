@@ -1,8 +1,29 @@
 # Changelog
 
+## [2.4.29] - 2026-04-30
+
+Privacy hygiene patch — soft mitigation, no history rewrite.
+
+### Changed — third-party reviewer attribution: full-name+initial → first-name only
+
+The codebase carried ~18 mentions of an external reviewer attributed by first name + last-initial (the form `Davide F.`) across source comments, the Makefile, both compose files, the i18n module, the scan-create page, the providers shell, an API router, and several CHANGELOG entries from older releases. The reviewer contributed via private email/messaging (not via a public GitHub Issue or PR), and the pattern `<common-first-name> + last-initial + project-specific context` is enough to make the person reasonably identifiable under GDPR Art. 4(1) — and we never sought explicit consent to attribute publicly.
+
+Fix: `sed`-replace `Davide F.` → `Davide` across every tracked file (also tidied one historical `Davide Foresti (Essedieffe)` mention to `Davide` for consistency). A common Italian first name on its own (no surname, no initial) is not, in isolation, reasonably identifying — it functions like a generic credit ("flagged by Davide") without uniquely picking out a real person from the project context. The reviewer is aware they were credited, so this is a soft mitigation rather than full anonymisation.
+
+What is **not** done in this patch (deliberate):
+
+- **No `git filter-repo` / history rewrite.** Older commit messages and the v2.4.27 / v2.4.28 release notes on GitHub still contain `Davide F.` (those are pushed and clones are in the wild). Rewriting tagged history on a public repo would force every fork and clone to rebase, would break the cosign / SHA references in any downstream pipeline, and the data is in any case already mirrored to the Wayback Machine and any RSS reader that subscribed to the releases feed. The marginal privacy gain doesn't justify the operational cost.
+- **No anonymisation of the reviewer's actual professional context** (the `Reported by …` lines retain their technical context — Windows host, WSL2, `make prod`, etc — because that context is what makes the bug-report comment useful for a future maintainer trying to reproduce or understand the fix).
+
+The two GitHub release notes (v2.4.27, v2.4.28) are edited in-place via `gh release edit` to drop the `Davide F.` mentions there as well — those *are* mutable on GitHub's side without rewriting git history.
+
+### Documentation note for future contributions
+
+For private-channel feedback (email / Slack / etc) we will from now on either ask the reporter explicitly if they want to be credited by name or default to first-name-only. Public GitHub Issues and PRs are different — a public submission is itself an act of public contribution, and crediting the GitHub handle is the de-facto OSS norm.
+
 ## [2.4.28] - 2026-04-30
 
-External-review triage release. Three issues flagged by Davide F. on the v2.4.27 build, all real, all fixed in this patch.
+External-review triage release. Three issues flagged by Davide on the v2.4.27 build, all real, all fixed in this patch.
 
 ### Fixed — Compliance matrix subtitle pointed at the wrong article of D.Lgs 138/2024
 
@@ -14,7 +35,7 @@ The other "Art. 21" mentions across the codebase (e.g. `compliancePage.complianc
 
 ### Fixed — `make clean-all` failed silently on Windows hosts without a real Python install
 
-`make clean-all` and `make clean` invoke `python scripts/clean.py`. On a Windows host that doesn't have a real Python install, the bare `python` resolves to the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` — which exits 9009 with a localised "Python non trovato" message and the make target fails before `clean.py` can run. Reported by Davide F.
+`make clean-all` and `make clean` invoke `python scripts/clean.py`. On a Windows host that doesn't have a real Python install, the bare `python` resolves to the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` — which exits 9009 with a localised "Python non trovato" message and the make target fails before `clean.py` can run. Reported by Davide
 
 The Makefile now does cross-platform Python detection:
 
@@ -30,7 +51,7 @@ Detection priority is `python3` → `py` (Windows launcher, only present with a 
 
 ### Fixed — `make prod` exited with generic "container is unhealthy" when `.env` was incomplete
 
-A common first-run failure: operator copies `.env.example` to `.env` but forgets to fill `POSTGRES_PASSWORD` / `JWT_SECRET` / `CORS_ORIGINS`. Postgres refuses to initialise without a password, exits, Caddy's `depends_on: api: service_healthy` chain breaks, and Docker Compose surfaces a generic `dependency failed to start: container docker-postgres-1 is unhealthy`. The actual root cause is buried in `docker logs docker-postgres-1` ("Database is uninitialized and superuser password is not specified") — operators rarely look there first. Reported by Davide F.
+A common first-run failure: operator copies `.env.example` to `.env` but forgets to fill `POSTGRES_PASSWORD` / `JWT_SECRET` / `CORS_ORIGINS`. Postgres refuses to initialise without a password, exits, Caddy's `depends_on: api: service_healthy` chain breaks, and Docker Compose surfaces a generic `dependency failed to start: container docker-postgres-1 is unhealthy`. The actual root cause is buried in `docker logs docker-postgres-1` ("Database is uninitialized and superuser password is not specified") — operators rarely look there first. Reported by Davide
 
 Added a `prod-preflight` target that runs before `prod-up`. It validates:
 
@@ -822,7 +843,7 @@ This release closes 8 blocker issues from the user-management audit run during v
 
 ## [2.4.11] - 2026-04-28
 
-### Fixed (Davide F. — round 3)
+### Fixed (Davide — round 3)
 - **`make clean-all` failed on Windows cmd.** `find -exec`, `2>/dev/null`, `|| true`, `xargs` are all Unix-only. Replaced the shell pipeline with a cross-platform `scripts/clean.py` (stdlib `pathlib` + `subprocess`); the Makefile targets now just call `python scripts/clean.py [--all]`. Linux / macOS / WSL / Windows cmd all produce the same output.
 - **`make prod` redis container marked unhealthy on WSL/Windows.** Two stacked issues: (1) `${REDIS_PASSWORD}` had no default, so a missing `.env` left `redis-server --requirepass ""` which exits with "wrong number of arguments"; (2) the healthcheck used compose-time variable expansion which races with container env on some setups. Added `${REDIS_PASSWORD:-changeme}` default + healthcheck moved to `CMD-SHELL` so the password is read from the container's env (`$$REDIS_PASSWORD`). `start_period: 5s` for the cold start.
 - **Token-expired UX**: page stayed navigable but every mutation silently 401'd. The api-client now intercepts 401 on protected paths, attempts ONE silent `/auth/refresh`, and on failure dispatches a `nis2:session-expired` window event. A new `SessionExpiredHandler` in `Providers` clears the auth-store, fires a toast, and redirects to `/login?session=expired` with an inline banner. Single-flight refresh promise prevents the cascading-logout race when many hooks 401 in parallel.
@@ -890,7 +911,7 @@ Editing `messages/*.json` and just `docker restart docker-web-1` is not enough �
 
 ## [2.4.8] - 2026-04-28
 
-### Fixed (reported by Davide F. — round 2)
+### Fixed (reported by Davide — round 2)
 - **`make prod` web container restart-loop** with `sh: next: not found`. The prod compose was overriding the Dockerfile CMD (`node server.js`) with `command: npm start` → `next start`, but the Next.js production stage builds a *standalone* bundle: only `.next/standalone/server.js`, `.next/static/` and `public/` are copied — no `node_modules`, no `next` binary. Removed the override; Dockerfile CMD runs unchanged.
 - **`make prod` prometheus mount fails** with `not a directory: Are you trying to mount a directory onto a file (or vice-versa)?` on Docker Desktop / Windows. The `prometheus.yml` referenced by the compose did not exist in the repo, so Docker Desktop silently created an empty *directory* at the bind-mount source, and the mount then collided with the file path inside the container. Tracked `prometheus.yml` in the repo with a self+api+web scrape config.
 - **`celery-beat` crash on WSL2** (`Errno 13` writing the schedule) — celery-beat's default scheduler is a SQLite-shelve file written to the working directory, which under `make dev` is bind-mounted from a Windows host through the `/mnt/c` proxy. SQLite POSIX locking semantics don't survive the round trip and beat exits on first write. `--schedule=/tmp/celerybeat-schedule` (dev) and a named `celerybeat_data` volume (prod) put the file on a docker-managed path. Linux hosts get a tiny perf bonus; WSL2 users get a working scheduler.
@@ -978,7 +999,7 @@ Editing `messages/*.json` and just `docker restart docker-web-1` is not enough �
   - `next.config.ts` rewrites used `NEXT_PUBLIC_API_URL` as the proxy target. That env var is the *browser-facing* URL (`http://localhost:8000`); from inside the web container, `localhost` resolves to the container itself, so server-side rewrites silently failed. Added `INTERNAL_API_URL` (e.g. `http://api:8000`) which the rewrites prefer when set; falls back to `NEXT_PUBLIC_API_URL` for non-docker setups.
   - On Windows + Docker Desktop + WSL2, native filesystem events do not propagate from the host-mounted volume into the container, so Next.js' incremental dev compiler never completes the first build. Added `WATCHPACK_POLLING=true` and `CHOKIDAR_USEPOLLING=true` to the dev compose web service to force polling-based watching.
 
-Reported by Davide Foresti (Essedieffe). Thanks Davide.
+Reported by Davide. Thanks Davide.
 
 ## [2.4.2] - 2026-04-27
 

@@ -23,7 +23,7 @@ export const defaultLocale: Locale = 'en'
  * Why this matters: previously the app always rendered English on first
  * visit unless the user manually flipped the language switcher (which
  * sets the cookie). An Italian user landing on /login from an Italian-
- * configured browser saw an English form. Reported by Davide F.
+ * configured browser saw an English form. Reported by Davide
  */
 function negotiateAcceptLanguage(header: string | null): Locale | null {
   if (!header) return null

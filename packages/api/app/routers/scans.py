@@ -150,7 +150,7 @@ async def create_scan(
     # lazy-load on `updated_at` that fails with `MissingGreenlet:
     # greenlet_spawn has not been called` because the async session is not
     # in an attribute-load context here. Reported as "Failed to create
-    # scan" / 500 by Davide F. and another user during round 3.
+    # scan" / 500 by Davide and another user during round 3.
     await db.refresh(scan)
     return ScanResponse.model_validate(scan)
 

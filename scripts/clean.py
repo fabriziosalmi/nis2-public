@@ -5,7 +5,7 @@
 
 Replaces Unix-only shell idioms (`find -exec`, `2>/dev/null`, `|| true`,
 `xargs -r`) with stdlib pathlib so the Makefile works identically on
-Linux, macOS, WSL, and Windows cmd.exe. Reported by Davide F. on
+Linux, macOS, WSL, and Windows cmd.exe. Reported by Davide on
 Windows: the `find` and `|| true` calls in the previous Makefile broke
 on `cmd.exe` because neither builtin exists there.
 

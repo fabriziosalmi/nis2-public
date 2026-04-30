@@ -49,7 +49,7 @@ services:
     # to fill it). Without the default, an empty string is passed to
     # redis-server which then refuses to start with "ERR wrong number of
     # arguments for 'requirepass'", and the healthcheck never goes green.
-    # Reported by Davide F. on `make prod` from Windows / WSL2.
+    # Reported by Davide on `make prod` from Windows / WSL2.
     command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
     environment:
       # Re-expose the password inside the container so the healthcheck
@@ -136,7 +136,7 @@ services:
     # no `next` binary. The Dockerfile CMD is already `node server.js`.
     # The previous `command: npm start` invoked `next start`, which then
     # crashed with `sh: next: not found` and the container restart-looped
-    # forever (reported by Davide F. on Docker Desktop / WSL2). Letting
+    # forever (reported by Davide on Docker Desktop / WSL2). Letting
     # the Dockerfile CMD run is the only correct option.
     env_file: ../../.env
     environment:

@@ -11,7 +11,7 @@
 # That stub exits 9009 with a localised "Python non trovato — eseguire
 # senza argomenti per installare dal Microsoft Store" message and the
 # whole `make clean-all` fails before scripts/clean.py even runs.
-# Reported by Davide F.
+# Reported by Davide
 #
 # Detection priority:
 #   - python3:  Linux / macOS / WSL canonical name
@@ -115,7 +115,7 @@ prod: prod-up
 # initialise — the actual root cause was buried in `docker logs
 # postgres-1` which 99% of operators never look at. This target turns
 # that silent failure into a loud, actionable error before any
-# container is created. Reported by Davide F.
+# container is created. Reported by Davide
 prod-preflight:
 	@test -f .env || ( echo ""; \
 	  echo "ERROR: .env file is missing."; \
@@ -164,7 +164,7 @@ prod-down:
 # The work is delegated to scripts/clean.py because the previous shell
 # pipeline (`find -exec ... 2>/dev/null || true`) doesn't run on Windows
 # cmd.exe — `find`, `xargs`, the redirect, and `|| true` all expand to
-# nothing or to errors. Reported by Davide F. on Windows native.
+# nothing or to errors. Reported by Davide on Windows native.
 clean:
 ifeq ($(strip $(PYTHON)),)
 	$(error $(PYTHON_NOT_FOUND_MSG))

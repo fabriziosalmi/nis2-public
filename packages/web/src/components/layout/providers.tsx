@@ -20,7 +20,7 @@ import { useAuthStore } from "@/stores/auth-store"
  * with a flag so the login page can show a "session expired, please
  * sign in again" notice instead of just blanking the form. Without
  * this, the dashboard stayed navigable but every mutation silently
- * failed — Davide F. observed this on a stale tab after ~30 min.
+ * failed — Davide observed this on a stale tab after ~30 min.
  */
 function SessionExpiredHandler() {
   const router = useRouter()
