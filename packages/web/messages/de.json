@@ -31,6 +31,13 @@
   "header": { "searchPlaceholder": "Suchen...", "lightMode": "Hell", "darkMode": "Dunkel", "systemMode": "System" },
   "language": { "en": "English", "it": "Italiano", "fr": "Français", "de": "Deutsch", "es": "Español", "pt": "Português" },
   "landingPage": {
+    "legalDisclaimer": {
+      "title": "Rechtlicher Hinweis",
+      "body": "Dieses Werkzeug liefert automatisierte Klassifikationen basierend auf einem Teilbereich der NIS2-Richtlinie (EU 2022/2555). Es stellt keine Rechtsberatung dar. Konsultieren Sie einen qualifizierten Anwalt zur Bestimmung der für Sie geltenden Pflichten.",
+      "terms": "Nutzungsbedingungen",
+      "privacy": "Datenschutzerklärung",
+      "accept": "Ich habe verstanden — Fortfahren"
+    },
     "header": {
       "tagline": "Kontinuierliches Posture Management",
       "docs": "Dokumentation",

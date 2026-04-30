@@ -772,6 +772,13 @@
     "pt": "Português"
   },
   "landingPage": {
+    "legalDisclaimer": {
+      "title": "Avviso Legale",
+      "body": "Questo strumento fornisce classificazioni automatizzate basate su un sottoinsieme della Direttiva NIS2 (UE 2022/2555). Non costituisce consulenza legale. Consultare un avvocato qualificato per determinare gli obblighi applicabili.",
+      "terms": "Termini di utilizzo",
+      "privacy": "Privacy Policy",
+      "accept": "Ho compreso — Procedi"
+    },
     "header": {
       "tagline": "Posture management continuo",
       "docs": "Documentazione",

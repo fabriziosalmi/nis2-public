@@ -772,6 +772,13 @@
     "pt": "Português"
   },
   "landingPage": {
+    "legalDisclaimer": {
+      "title": "Avis légal",
+      "body": "Cet outil fournit des classifications automatisées basées sur un sous-ensemble de la Directive NIS2 (UE 2022/2555). Il ne constitue pas un avis juridique. Consultez un avocat qualifié pour déterminer les obligations applicables.",
+      "terms": "Conditions d'utilisation",
+      "privacy": "Politique de confidentialité",
+      "accept": "J'ai compris — Continuer"
+    },
     "header": {
       "tagline": "Gestion continue de la posture",
       "docs": "Documentation",

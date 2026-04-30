@@ -51,6 +51,7 @@ import {
 } from "lucide-react"
 import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
+import { LegalDisclaimerModal } from "@/components/legal/legal-disclaimer-modal"
 import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
 
 // Tech-stack pills for the trust strip — kept hardcoded because every
@@ -96,6 +97,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Legal-disclaimer interstitial. Renders nothing when the
+          visitor has already acknowledged (localStorage) or is
+          authenticated. Mounted at the top so the dialog backdrop
+          covers the entire landing during first visit. */}
+      <LegalDisclaimerModal />
       <SiteHeader />
       <main>
         <Hero />

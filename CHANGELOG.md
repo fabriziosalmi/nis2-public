@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.5.2] - 2026-04-30
+
+Legal-disclaimer interstitial — first-visit consent dialog for the public landing surfaces.
+
+### 🟠 Added — Blocking legal-notice modal on the public landing pages
+
+The public app landing (`/`) and the docs landing (`fabriziosalmi.github.io/nis2-public/`) now show a first-visit blocking dialog before any of the marketing surface is reachable:
+
+> **Avviso Legale** — Questo strumento fornisce classificazioni automatizzate basate su un sottoinsieme della Direttiva NIS2 (UE 2022/2555). Non costituisce consulenza legale. Consultare un avvocato qualificato per determinare gli obblighi applicabili.
+>
+> Termini di utilizzo · Privacy Policy
+>
+> [ Ho compreso — Procedi ]
+
+**Why** — three concrete legal benefits:
+
+1. **GDPR Art. 13** — the regulation requires the data subject be informed *at the moment* personal data is obtained. A blocking dialog with the privacy notice linked guarantees the visitor cannot deny having seen it. This becomes load-bearing if a deployer is ever asked to demonstrate the chain-of-disclosure.
+2. **Defence against reliance claims** — a downstream user who later argues "the platform told me I was compliant" runs into a click-through consent log saying "I understand, this is not legal advice". Pairs with the dashboard's compliance-page yellow alert (added in v2.5.0) and the scope clause in `docs/terms.md`.
+3. **Coherence with sister NIS2 projects** — same UX pattern used across the maintainer's NIS2 portfolio. Consolidates user expectation rather than introducing a new consent flow.
+
+**Implementation:**
+
+- `packages/web/src/components/legal/legal-disclaimer-modal.tsx` — React component, mounted at the top of the unauthenticated landing. Suppressed for authenticated users (they accepted at register time and re-acknowledging on every dashboard visit would be noise). Body scroll locked while the dialog is open. Backdrop is `bg-slate-950/95 backdrop-blur-sm` so the marketing surface behind is dimmed but not jarring.
+- Acceptance persisted in `localStorage` under a **versioned** key (`nis2-legal-disclaimer-v1`). Bumping the version on a future material revision of Terms or Privacy will force every prior visitor to re-acknowledge — acceptance against a stale text has no legal value.
+- Translation in **all 5 locales** (en/it/fr/de/es) under `landingPage.legalDisclaimer.{title,body,terms,privacy,accept}`. 25 new i18n keys, parity 5/5.
+- Mirror Vue component for the docs site lives inline in `docs/.vitepress/theme/components/Home.vue`. Distinct localStorage key (`nis2-doc-legal-disclaimer-v1`) — different origin, distinct consent. Same UX, dual-locale EN+IT consistent with the rest of the docs home.
+- Terms + Privacy links in the dialog point to the canonical `docs/terms.md` and `docs/privacy.md` on GitHub (open in new tab) so the visitor can read them before clicking through.
+
+**What it doesn't do** (deliberate):
+- Does not gate the **dashboard** routes. Authenticated session = prior acceptance via the register flow.
+- Does not rewrite the rendered HTML pre-paint via inline `<head>` script. The dialog appears within ~50–100ms of first paint via React/Vue hydration. This is a UX trade-off accepted for now; if the brief flash of un-disclaimed landing turns out to be a real issue we can move to a CSS-class-on-`<html>` pattern with an inline detection script (same approach as the bilingual-locale gating already in the docs home).
+
+### Misc
+
+- `API_VERSION` literal bumped 2.5.1 → 2.5.2 in lockstep with `pyproject.toml`.
+
+### Verified
+
+- Web build: green (24/24 pages).
+- VitePress docs build: green.
+- 5/5 i18n locales validate; `landingPage.legalDisclaimer` namespace present and aligned (5 keys × 5 locales = 25 entries).
+
 ## [2.5.1] - 2026-04-30
 
 Round-2 audit closure — six concrete fixes across security, GDPR data-subject rights, retention, and one cosmetic. Drives the platform from "the privacy notice promised these things" to "the platform actually does them".

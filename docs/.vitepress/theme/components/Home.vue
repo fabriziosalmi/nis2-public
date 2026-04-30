@@ -89,6 +89,36 @@ function setLocale(next: 'en' | 'it') {
   root.classList.toggle('locale-en', next === 'en')
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Legal-disclaimer interstitial (v2.5.2)
+// ─────────────────────────────────────────────────────────────────
+// Mirror of packages/web/src/components/legal/legal-disclaimer-modal.tsx
+// for the docs surface. Different origin → distinct localStorage; same
+// pattern: blocking dialog on first visit, persisted acknowledgement,
+// versionable key. Bumping `LEGAL_STORAGE_KEY` forces every prior
+// acceptance to expire when the disclaimer text changes materially.
+const LEGAL_STORAGE_KEY = 'nis2-doc-legal-disclaimer-v1'
+const showLegal = ref(false)
+
+onMounted(() => {
+  try {
+    if (localStorage.getItem(LEGAL_STORAGE_KEY) !== 'accepted') {
+      showLegal.value = true
+    }
+  } catch {
+    showLegal.value = true
+  }
+})
+
+function acceptLegal() {
+  try {
+    localStorage.setItem(LEGAL_STORAGE_KEY, 'accepted')
+  } catch {
+    /* fail silently — user will see the dialog again next visit */
+  }
+  showLegal.value = false
+}
+
 // Tech-stack pills — language-neutral product names.
 const STACK = [
   'Next.js 15',
@@ -277,6 +307,64 @@ const AUDIENCES = [
        Tailwind tokens that resolve to neutral-50 / neutral-950 to track
        VitePress dark/light themes without hardcoding hex. -->
   <div class="docs-home min-h-screen bg-white text-slate-900 dark:bg-neutral-950 dark:text-slate-100">
+    <!-- Legal-disclaimer interstitial (v2.5.2). Blocking dialog on
+         first visit; persisted via versioned localStorage key. The
+         dual-locale dual-DOM pattern (EN+IT both rendered, gated by
+         CSS via html.locale-X) keeps zero-flash behaviour consistent
+         with the rest of the bilingual home. -->
+    <div
+      v-if="showLegal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legal-disclaimer-title"
+      aria-describedby="legal-disclaimer-body"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+    >
+      <div class="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-2xl sm:p-10">
+        <svg
+          class="mx-auto mb-6 h-10 w-10 text-slate-400"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <path d="m9 12 2 2 4-4"></path>
+        </svg>
+        <h2 id="legal-disclaimer-title" class="text-center text-2xl font-bold tracking-tight text-slate-100">
+          <span class="locale-en">Legal Notice</span>
+          <span class="locale-it">Avviso Legale</span>
+        </h2>
+        <p id="legal-disclaimer-body" class="mt-6 text-center text-base leading-relaxed text-slate-300">
+          <span class="locale-en">This tool provides automated classifications based on a subset of the NIS2 Directive (EU 2022/2555). It does not constitute legal advice. Consult a qualified lawyer to determine the obligations applicable to you.</span>
+          <span class="locale-it">Questo strumento fornisce classificazioni automatizzate basate su un sottoinsieme della Direttiva NIS2 (UE 2022/2555). Non costituisce consulenza legale. Consultare un avvocato qualificato per determinare gli obblighi applicabili.</span>
+        </p>
+        <div class="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
+          <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/terms.md" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-400 underline-offset-4 hover:underline">
+            <span class="locale-en">Terms of Use</span>
+            <span class="locale-it">Termini di utilizzo</span>
+          </a>
+          <span aria-hidden="true" class="text-slate-600">·</span>
+          <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/privacy.md" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-400 underline-offset-4 hover:underline">
+            <span class="locale-en">Privacy Policy</span>
+            <span class="locale-it">Privacy Policy</span>
+          </a>
+        </div>
+        <button
+          type="button"
+          @click="acceptLegal"
+          class="mt-8 w-full rounded-md bg-blue-600 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+        >
+          <span class="locale-en">I understand — Proceed</span>
+          <span class="locale-it">Ho compreso — Procedi</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Locale toggle: top-right, sticks above hero. Tiny, unobtrusive,
          keyboard-focusable. Persists in localStorage. -->
     <div class="pointer-events-none fixed top-20 right-4 z-40 flex justify-end sm:top-24 sm:right-8">

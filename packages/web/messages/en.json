@@ -772,6 +772,13 @@
     "pt": "Português"
   },
   "landingPage": {
+    "legalDisclaimer": {
+      "title": "Legal Notice",
+      "body": "This tool provides automated classifications based on a subset of the NIS2 Directive (EU 2022/2555). It does not constitute legal advice. Consult a qualified lawyer to determine the obligations applicable to you.",
+      "terms": "Terms of Use",
+      "privacy": "Privacy Policy",
+      "accept": "I understand — Proceed"
+    },
     "header": {
       "tagline": "Continuous Posture Management",
       "docs": "Docs",

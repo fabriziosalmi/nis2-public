@@ -31,6 +31,13 @@
   "header": { "searchPlaceholder": "Buscar...", "lightMode": "Claro", "darkMode": "Oscuro", "systemMode": "Sistema" },
   "language": { "en": "English", "it": "Italiano", "fr": "Français", "de": "Deutsch", "es": "Español", "pt": "Português" },
   "landingPage": {
+    "legalDisclaimer": {
+      "title": "Aviso Legal",
+      "body": "Esta herramienta proporciona clasificaciones automatizadas basadas en un subconjunto de la Directiva NIS2 (UE 2022/2555). No constituye asesoramiento legal. Consulte a un abogado cualificado para determinar las obligaciones aplicables.",
+      "terms": "Términos de uso",
+      "privacy": "Política de privacidad",
+      "accept": "He comprendido — Continuar"
+    },
     "header": {
       "tagline": "Gestión continua de la postura",
       "docs": "Documentación",
