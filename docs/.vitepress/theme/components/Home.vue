@@ -780,13 +780,31 @@ const AUDIENCES = [
                     <span class="locale-it">Contatti</span>
                   </a>
                 </li>
+                <!--
+                  v2.5.1 legal-review: privacy + terms must be reachable
+                  from every page of a commercial site (Art. 13 GDPR +
+                  Art. 7-12 D.Lgs 70/2003). The maintainer-operated
+                  docs site is one of those pages.
+                -->
+                <li>
+                  <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/privacy.md" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+                    <span class="locale-en">Privacy</span>
+                    <span class="locale-it">Privacy</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/terms.md" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+                    <span class="locale-en">Terms</span>
+                    <span class="locale-it">Termini</span>
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
           <div class="mt-12 flex flex-col items-start gap-4 border-t border-slate-200 pt-8 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800">
             <p class="text-xs text-slate-500 dark:text-slate-500">
-              <span class="locale-en">© 2024–2026 Fabrizio Salmi · This is not legal advice.</span>
-              <span class="locale-it">© 2024–2026 Fabrizio Salmi · Questo non è un parere legale.</span>
+              <span class="locale-en">© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova · This is not legal advice.</span>
+              <span class="locale-it">© 2026 Salmi Fabrizio — P.IVA IT 03072120995 — Via Sapri 9, 16134 Genova · Questo non è un parere legale.</span>
             </p>
             <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-500">
               <span class="inline-flex items-center gap-1.5">

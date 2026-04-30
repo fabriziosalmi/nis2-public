@@ -148,6 +148,15 @@ prod-preflight:
 	  echo "The API refuses to start in production without an explicit allow-list."; \
 	  echo "Example: CORS_ORIGINS=https://nis2.example.com"; \
 	  echo ""; exit 1 )
+	@if grep -qE '^RLS_SUPERUSER_OK=1' .env; then echo ""; \
+	  echo "WARNING: RLS_SUPERUSER_OK=1 is set in .env."; \
+	  echo "This opts out of the v2.5.1 production safety check that refuses"; \
+	  echo "to start when the app's DB role is SUPERUSER / BYPASSRLS — i.e."; \
+	  echo "when Postgres RLS is decorative. Tenant isolation will rely on"; \
+	  echo "application-layer filters ONLY. Remove this line and provision a"; \
+	  echo "non-superuser app role before going live:"; \
+	  echo "    ALTER ROLE <app_role> NOSUPERUSER NOBYPASSRLS;"; \
+	  echo ""; fi
 	@echo "  .env preflight: OK"
 
 prod-up: prod-preflight

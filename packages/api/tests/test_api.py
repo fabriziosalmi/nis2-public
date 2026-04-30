@@ -264,7 +264,15 @@ class TestOpenAPI:
         assert resp.status_code == 200
         schema = resp.json()
         assert schema["info"]["title"] == "NIS2 Compliance Platform API"
-        assert schema["info"]["version"] == "2.4.26"
+        # Pre-2.5.1 this was hardcoded to whatever the literal in main.py
+        # said, which made every release-bump leave a failing test
+        # behind for a turn. Pull from main.API_VERSION so the assertion
+        # tracks the actual constant — semver-shape sanity check is
+        # enough to catch a malformed value.
+        from app.main import API_VERSION
+        assert schema["info"]["version"] == API_VERSION
+        assert API_VERSION.count(".") == 2  # major.minor.patch
+        assert all(part.isdigit() for part in API_VERSION.split("."))
 
     def test_all_router_tags_present(self, client):
         resp = client.get("/openapi.json")

@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.5.1] - 2026-04-30
+
+Round-2 audit closure — six concrete fixes across security, GDPR data-subject rights, retention, and one cosmetic. Drives the platform from "the privacy notice promised these things" to "the platform actually does them".
+
+### 🟠 Added — `DELETE /api/v1/auth/me` (GDPR Art. 17 — right to erasure)
+
+Pre-2.5.1 `docs/privacy.md` advertised the right to erasure but the platform offered no technical mechanism: a self-hosted deployer who received an Art. 17 request could only run raw SQL. The new endpoint:
+
+- Re-authenticates via `current_password` (a stolen access token alone is not enough).
+- Hard-deletes `users`, `memberships`, `api_keys`, `password_reset_tokens` for that user.
+- **Pseudonymises** `audit_logs` rows authored by the user (null `user_id`, `ip_address` → `127.0.0.1`, `user_agent` → `[erased]`). Audit-trail integrity is the controller's legitimate interest under Art. 6(1)(f); Art. 89(1) explicitly allows pseudonymisation here.
+- **Single-admin protection**: HTTP 409 if the user is the only admin of an org with other members — promote another admin first.
+- **Lone-tenant cascade**: if the user is the only member of an org, the entire org and tenant data (`scans`, `findings`, `assets`, `incidents`, `vendors`, `business_processes`, `scan_schedules`, `scan_results`, `api_keys`, `memberships`, `audit_logs`) are deleted.
+- **Session revocation**: current refresh token added to `revoked_tokens` with reason `"erasure"`.
+
+### 🟠 Added — `GET /api/v1/auth/me/export` (GDPR Art. 20 — data portability)
+
+Returns a structured JSON document with the data subject's personal data: `profile`, `memberships` (joined to `organizations`), `api_keys` (metadata only — raw secrets are shown once at creation), `audit_logs` authored by the user, plus a `_meta` section with schema version + scope explanation.
+
+**Scope is deliberately personal data only.** Tenant data (scans, findings, assets, incidents, vendors, BIA processes) belongs to each organisation's controller, not to the user — excluded to stop Art. 20 from becoming a covert tenant-data-exfil channel.
+
+### 🟠 Added — `cleanup_expired_auth_records` Celery beat task (GDPR Art. 5(1)(e))
+
+Pre-2.5.1 `revoked_tokens` and `password_reset_tokens` model files documented "a periodic Celery task can prune", but no such task existed. Both tables grew indefinitely. The new task `app.tasks.cleanup_tasks.cleanup_expired_auth_records` runs hourly and prunes both tables `WHERE expires_at < now()`. Idempotent.
+
+### 🟠 Hardened — `setup_row_level_security` refuses to start in production with a SUPERUSER app role
+
+Pre-2.5.1 the app logged a WARNING and continued when the Postgres role had `rolsuper=true` or `rolbypassrls=true`. The default `postgres:16-alpine` image creates `POSTGRES_USER` as SUPERUSER → a vanilla `make prod` deploy ran with decorative RLS, and a future bug dropping `WHERE organization_id` would silently exfiltrate everyone.
+
+Now the warning becomes a hard error if `settings.environment == "production"` AND `RLS_SUPERUSER_OK=1` is not set. The escape hatch is intentionally explicit; the Makefile's `prod-preflight` prints a red banner when the flag is set so operators can't set-and-forget. In `dev` / `test` the WARNING-only behaviour is preserved.
+
+### Fixed — `API_VERSION` literal lagged behind the package version
+
+`packages/api/app/main.py:24` was hardcoded `"2.4.26"` — every release-bump for three patch versions left it stale, polluting `/openapi.json` and the startup audit log. Now `"2.5.1"` with a comment about the lockstep with `pyproject.toml`. The matching test now asserts equality with `app.main.API_VERSION` so future bumps don't break it.
+
+### Fixed — Footer copyright on the docs landing
+
+`docs/.vitepress/theme/components/Home.vue` still rendered `© 2024–2026 Fabrizio Salmi · This is not legal advice` in EN+IT. v2.5.0 fixed the **app** landing footer but missed the **docs** landing footer. Both now render `© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova` per Art. 7-12 D.Lgs 70/2003. Privacy and Terms links added to the docs footer for parity with the app footer.
+
+### Verified
+
+- API tests in Docker: **187 passed, 62 skipped, 0 failed**.
+- Web build: green (24/24 pages).
+- Python `ast.parse` clean on every edited module.
+
 ## [2.5.0] - 2026-04-30
 
 **Legal-review hardening release. Minor-version bump because git history is rewritten — every fork and existing clone of this repo must rebase / re-pull.**

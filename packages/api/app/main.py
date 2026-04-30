@@ -21,7 +21,11 @@ from app.routers.auth import limiter
 
 logger = logging.getLogger(__name__)
 
-API_VERSION = "2.4.26"
+# Keep in lockstep with packages/api/pyproject.toml `version`. The
+# Round-2 audit caught this hardcoded literal lagging behind the
+# pyproject by three patch releases (2.4.26 vs 2.5.0), which made the
+# audit log claim a wrong release was running.
+API_VERSION = "2.5.1"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.

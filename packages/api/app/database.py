@@ -234,11 +234,25 @@ async def setup_row_level_security() -> None:
     # SUPERUSER (or has BYPASSRLS), the FORCE ROW LEVEL SECURITY above
     # is decorative — the role bypasses every RLS policy regardless.
     # The default `postgres:16-alpine` image creates POSTGRES_USER with
-    # SUPERUSER, which is the typical state of a `make prod` deploy.
-    # We don't hard-fail (it would break first-run UX), but we shout
-    # at WARNING so the operator notices and knows to run:
+    # SUPERUSER, which is the typical state of a vanilla `make prod`
+    # deploy.
+    #
+    # Pre-2.5.1 we logged at WARNING and continued. v2.5.1 raises the
+    # response in production: in dev the warning is enough (tenant
+    # isolation matters less when there's one developer and one
+    # tenant); in production, refusing to start is correct — silent
+    # decorative-RLS in a multi-tenant deploy is the kind of failure
+    # mode that only shows up the day a bug elsewhere drops the
+    # `WHERE organization_id` filter and exfiltrates everyone.
+    #
+    # The escape hatch for first-run UX is `RLS_SUPERUSER_OK=1` in the
+    # environment, intended for the brief window between docker-compose
+    # creating the volume and the operator running
     #   ALTER ROLE nis2 NOSUPERUSER NOBYPASSRLS;
-    # (or provision a non-superuser app role) before going live.
+    # If the operator wants the warning to stay loud but boot to
+    # proceed, that flag is the documented exit. The Makefile's
+    # `prod-preflight` target greps for it and, if present, prints a
+    # red banner so it can't be set-and-forgotten.
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text(
@@ -246,14 +260,23 @@ async def setup_row_level_security() -> None:
             ))
             row = result.first()
             if row and (row[0] or row[1]):
-                logger.warning(
-                    "DB role '%s' has rolsuper=%s rolbypassrls=%s — RLS policies are "
-                    "BYPASSED for this role. Tenant isolation currently relies on "
-                    "application-layer org_id filters only. Provision a non-superuser "
-                    "app role with BYPASSRLS revoked before any production deployment.",
-                    "current_user",
-                    row[0],
-                    row[1],
+                msg = (
+                    f"DB role has rolsuper={row[0]} rolbypassrls={row[1]} — RLS policies "
+                    "are BYPASSED for this role. Tenant isolation currently relies on "
+                    "application-layer org_id filters ONLY. Provision a non-superuser "
+                    "app role with BYPASSRLS revoked before going live, e.g.:\n"
+                    "  ALTER ROLE <app_role> NOSUPERUSER NOBYPASSRLS;"
                 )
+                if settings.environment == "production" and \
+                        os.environ.get("RLS_SUPERUSER_OK") != "1":
+                    logger.error("%s", msg)
+                    raise RuntimeError(
+                        "Refusing to start: production deploy with a SUPERUSER/BYPASSRLS app role. "
+                        "Either provision a non-superuser app role, or set RLS_SUPERUSER_OK=1 "
+                        "explicitly in the environment to opt out (NOT recommended)."
+                    )
+                logger.warning("%s", msg)
+    except RuntimeError:
+        raise
     except Exception as exc:
         logger.debug("RLS role-attribute check skipped: %s", exc)

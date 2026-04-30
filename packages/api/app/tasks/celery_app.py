@@ -40,6 +40,15 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.report_tasks.cleanup_old_reports",
         "schedule": 86400.0,
     },
+    # v2.5.1 GDPR Art. 5(1)(e) storage limitation. Prune `revoked_tokens`
+    # and `password_reset_tokens` rows whose `expires_at` is already in
+    # the past. Hourly cadence is enough — JTI replay-protection is
+    # only useful until the token's own `exp` fires, after which
+    # decode_token() rejects regardless of the revocation list.
+    "cleanup-expired-auth-records": {
+        "task": "app.tasks.cleanup_tasks.cleanup_expired_auth_records",
+        "schedule": 3600.0,
+    },
 }
 
 # v2.4.19 hotfix: explicitly import the task modules so their
@@ -63,3 +72,4 @@ celery_app.conf.beat_schedule = {
 # against it.
 from app.tasks import scan_tasks  # noqa: E402,F401
 from app.tasks import report_tasks  # noqa: E402,F401
+from app.tasks import cleanup_tasks  # noqa: E402,F401

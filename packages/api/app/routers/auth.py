@@ -467,6 +467,328 @@ async def update_me(
     return UserResponse.model_validate(current_user)
 
 
+# ---------------------------------------------------------------------------
+# GDPR data-subject rights — Art. 17 (erasure) + Art. 20 (portability)
+# ---------------------------------------------------------------------------
+# v2.5.1: pre-2.5.1 the platform's privacy notice (docs/privacy.md)
+# advertised these rights but provided no technical mechanism to exercise
+# them. A self-hosted deployer who received an Art. 17 erasure request
+# could only run raw SQL — that's the gap this section closes.
+#
+# Erasure model:
+#   - Hard-delete the User row + memberships + api_keys + reset tokens.
+#   - Pseudonymise (NOT delete) audit_log entries authored by the user:
+#     audit logs are a Postgres FORCE-RLS-protected security artefact
+#     and the integrity of the trail matters more than the user's
+#     identifier on each row. We null user_id and replace ip_address
+#     with the loopback marker, which is the same approach Art. 89(1)
+#     blesses for "purposes in the public interest, scientific or
+#     historical research" (audit security qualifies as legitimate
+#     interest under Art. 6(1)(f) for the controller).
+#   - Single-admin special case: if the user is the only admin of an
+#     organisation that has other members, deletion is refused with
+#     409 — the controller would lose admin reachability on a tenant
+#     they still operate. Caller must promote another admin first or
+#     remove other members. The user can still leave the membership
+#     and self-delete with the org intact.
+#   - Lone-tenant case (only admin, no other members): the org is
+#     deleted along with the user (cascade through memberships /
+#     scans / findings / assets / incidents / vendors / bia / api_keys).
+#
+# Portability model: GET /auth/me/export returns ONLY the data subject's
+# personal data and the membership relationships. Tenant data (scans,
+# findings, assets) is org-scoped and belongs to the controller of that
+# org, not to the user — those are NOT included to avoid leaking other
+# members' contributions and to avoid the right-to-portability becoming
+# a covert tenant-data-exfil channel. The notice in docs/privacy.md is
+# explicit about this scope.
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    request: Request,
+    response: Response,
+    payload: ChangePasswordRequest,  # reuse: it's {current_password, new_password}
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """GDPR Art. 17 — right to erasure.
+
+    Hard-deletes the user account, their memberships, their API keys,
+    and any password-reset tokens. Pseudonymises (does not delete) any
+    audit log entries authored by the user — audit-trail integrity is
+    a controller's legitimate interest under Art. 6(1)(f).
+
+    Requires re-confirmation via the current password (the request
+    payload reuses ChangePasswordRequest — the `new_password` field is
+    ignored here; we only validate `current_password`).
+
+    Returns 409 if the user is the only admin of an organisation with
+    other members — caller must promote another admin first.
+    """
+    from app.models.api_key import ApiKey
+    from app.models.audit_log import AuditLog
+    from app.models.asset import Asset
+    from app.models.bia import BusinessProcess
+    from app.models.finding import Finding
+    from app.models.incident import Incident
+    from app.models.scan import Scan
+    from app.models.scan_result import ScanResult
+    from app.models.scan_schedule import ScanSchedule
+    from app.models.vendor import Vendor
+
+    # 1. Re-authenticate. We don't trust the JWT alone for a destructive
+    #    irreversible operation — an attacker with a stolen access token
+    #    could otherwise delete the user with one POST.
+    if not pwd_context.verify(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="currentPasswordIncorrect")
+
+    # 2. Audit logs need bypass-RLS to be touched (the user's audit
+    #    rows live under their org_id; we want to pseudonymise across
+    #    all orgs they were ever a member of).
+    await _bypass_rls_for_bootstrap(db)
+
+    user_id = current_user.id
+
+    # 3. Resolve memberships and decide single-admin policy.
+    res = await db.execute(
+        select(Membership).where(Membership.user_id == user_id)
+    )
+    memberships = res.scalars().all()
+
+    orgs_to_delete: list[uuid.UUID] = []
+    for m in memberships:
+        # Fetch all admins of this org other than the current user.
+        other_admins = await db.execute(
+            select(Membership).where(
+                Membership.organization_id == m.organization_id,
+                Membership.role == "admin",
+                Membership.user_id != user_id,
+            )
+        )
+        other_admin_count = len(other_admins.scalars().all())
+
+        # All members of this org other than the current user.
+        other_members = await db.execute(
+            select(Membership).where(
+                Membership.organization_id == m.organization_id,
+                Membership.user_id != user_id,
+            )
+        )
+        other_member_count = len(other_members.scalars().all())
+
+        if m.role == "admin" and other_admin_count == 0 and other_member_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "You are the only admin of an organisation with other members. "
+                    "Promote another admin or remove other members before deleting your account."
+                ),
+            )
+
+        if other_member_count == 0:
+            # Lone tenant — schedule the whole org for deletion.
+            orgs_to_delete.append(m.organization_id)
+
+    # 4. Pseudonymise audit log: null user_id, scrub ip_address. The
+    #    `action` and `resource_type` columns stay so the trail still
+    #    tells the controller "someone deleted X on this date".
+    await db.execute(
+        text(
+            "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
+            "user_agent = '[erased]' WHERE user_id = :uid"
+        ),
+        {"uid": str(user_id)},
+    )
+
+    # 5. Delete API keys, password reset tokens, memberships.
+    await db.execute(
+        text("DELETE FROM api_keys WHERE user_id = :uid"),
+        {"uid": str(user_id)},
+    )
+    await db.execute(
+        text("DELETE FROM password_reset_tokens WHERE user_id = :uid"),
+        {"uid": str(user_id)},
+    )
+    await db.execute(
+        text("DELETE FROM memberships WHERE user_id = :uid"),
+        {"uid": str(user_id)},
+    )
+
+    # 6. Delete lone-tenant orgs and all their tenant-scoped data.
+    for org_id in orgs_to_delete:
+        for table in (
+            "findings",
+            "scan_results",
+            "scans",
+            "scan_schedules",
+            "assets",
+            "incidents",
+            "vendors",
+            "business_processes",
+            "api_keys",
+            "memberships",
+            "audit_logs",
+        ):
+            await db.execute(
+                text(f"DELETE FROM {table} WHERE organization_id = :oid"),
+                {"oid": str(org_id)},
+            )
+        await db.execute(
+            text("DELETE FROM organizations WHERE id = :oid"),
+            {"oid": str(org_id)},
+        )
+
+    # 7. Revoke any active refresh token (current session) so the
+    #    deleted user can't re-authenticate with a still-valid cookie.
+    refresh_token = request.cookies.get(REFRESH_COOKIE)
+    if refresh_token:
+        try:
+            ptoken = decode_token(refresh_token)
+            jti = ptoken.get("jti")
+            exp_unix = ptoken.get("exp")
+            if jti and exp_unix:
+                await _revoke_jti(
+                    db,
+                    jti,
+                    datetime.fromtimestamp(exp_unix, tz=timezone.utc),
+                    user_id=None,  # user is being deleted — don't FK to a row about to vanish
+                    reason="erasure",
+                )
+        except JWTError:
+            pass
+
+    # 8. Finally, delete the user row itself.
+    await db.execute(
+        text("DELETE FROM users WHERE id = :uid"),
+        {"uid": str(user_id)},
+    )
+
+    await db.commit()
+
+    # 9. Clear the client cookies so the next request gets a fresh
+    #    unauthenticated state.
+    _clear_auth_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return None
+
+
+@router.get("/me/export")
+async def export_me(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """GDPR Art. 20 — right to data portability.
+
+    Returns a JSON document containing the personal data the platform
+    holds on the requesting user, in a structured machine-readable
+    format. Scope is the user's PERSONAL data only:
+
+      - profile (email, full_name, locale, avatar_url, created_at,
+        oauth provider, password_changed_at, ...)
+      - memberships (org_id, org_name, role, accepted_at)
+      - api keys metadata (NOT the raw secrets — those were shown
+        once at creation)
+      - audit log entries authored by the user (timestamped trail of
+        their own actions)
+
+    Tenant data — scans, findings, assets, incidents, vendors, BIA
+    processes — is the controller's, not the user's, so it is NOT
+    included. This is consistent with the "you are not the controller
+    of self-hosted instances" stance in docs/privacy.md.
+    """
+    from app.models.api_key import ApiKey
+    from app.models.audit_log import AuditLog
+
+    await _bypass_rls_for_bootstrap(db)
+    user_id = current_user.id
+
+    # Memberships join organization for human-readable labels.
+    mres = await db.execute(
+        select(Membership, Organization)
+        .join(Organization, Membership.organization_id == Organization.id)
+        .where(Membership.user_id == user_id)
+    )
+    memberships = [
+        {
+            "organization_id": str(m.organization_id),
+            "organization_name": o.name,
+            "organization_slug": o.slug,
+            "role": m.role,
+            "accepted_at": m.accepted_at.isoformat() if m.accepted_at else None,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m, o in mres.all()
+    ]
+
+    # API keys — metadata only.
+    kres = await db.execute(select(ApiKey).where(ApiKey.user_id == user_id))
+    api_keys = [
+        {
+            "id": str(k.id),
+            "name": k.name,
+            "scopes": list(k.scopes or []),
+            "is_active": k.is_active,
+            "created_at": k.created_at.isoformat() if k.created_at else None,
+            "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            # `key_hash` and `key_prefix` are never returned — the raw
+            # secret is only revealed once at creation by design.
+        }
+        for k in kres.scalars().all()
+    ]
+
+    # Audit log entries authored by the user.
+    ares = await db.execute(
+        select(AuditLog).where(AuditLog.user_id == user_id).order_by(AuditLog.created_at.desc())
+    )
+    audit_logs = [
+        {
+            "id": str(a.id),
+            "organization_id": str(a.organization_id) if a.organization_id else None,
+            "action": a.action,
+            "resource_type": a.resource_type,
+            "resource_id": str(a.resource_id) if a.resource_id else None,
+            "ip_address": a.ip_address,
+            "user_agent": a.user_agent,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in ares.scalars().all()
+    ]
+
+    return {
+        "_meta": {
+            "schema_version": "1.0",
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_for_user_id": str(user_id),
+            "scope": (
+                "User personal data only. Tenant data (scans, findings, assets, "
+                "incidents, vendors, BIA processes) belongs to the controller of "
+                "each organisation and is excluded from this export."
+            ),
+        },
+        "profile": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "locale": current_user.locale,
+            "avatar_url": current_user.avatar_url,
+            "is_active": current_user.is_active,
+            "email_verified": current_user.email_verified,
+            "oauth_provider": getattr(current_user, "oauth_provider", None),
+            "oauth_provider_id": getattr(current_user, "oauth_provider_id", None),
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+            "password_changed_at": (
+                current_user.password_changed_at.isoformat()
+                if getattr(current_user, "password_changed_at", None)
+                else None
+            ),
+        },
+        "memberships": memberships,
+        "api_keys": api_keys,
+        "audit_logs": audit_logs,
+    }
+
+
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("5/minute")  # protect against credential brute-force
 async def change_password(
