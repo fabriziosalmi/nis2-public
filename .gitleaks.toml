@@ -33,4 +33,14 @@ regexes = [
     # integration-tests job. Long enough to satisfy the production
     # secret-length validator without being a real production secret.
     '''integration-test-secret-must-be-at-least-32-chars-long-yes''',
+    # localStorage key prefixes used by the bilingual docs home and the
+    # legal-disclaimer modal. Versioned (-v1, -v2, …) so we can force
+    # re-acceptance on material text changes. Gitleaks 8's
+    # `generic-api-key` detector flags them on entropy alone (~3.74)
+    # despite the obvious `nis2-` prefix. Listed here so a future bump
+    # doesn't break CI and prompt yet another debug round.
+    '''nis2-legal-disclaimer-v\d+''',
+    '''nis2-doc-legal-disclaimer-v\d+''',
+    '''nis2-doc-locale''',
+    '''nis2-auth-v\d+''',
 ]

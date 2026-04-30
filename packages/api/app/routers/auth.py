@@ -525,16 +525,10 @@ async def delete_me(
     Returns 409 if the user is the only admin of an organisation with
     other members — caller must promote another admin first.
     """
-    from app.models.api_key import ApiKey
-    from app.models.audit_log import AuditLog
-    from app.models.asset import Asset
-    from app.models.bia import BusinessProcess
-    from app.models.finding import Finding
-    from app.models.incident import Incident
-    from app.models.scan import Scan
-    from app.models.scan_result import ScanResult
-    from app.models.scan_schedule import ScanSchedule
-    from app.models.vendor import Vendor
+    # All tenant-data deletions below use raw `text("DELETE FROM ...")`
+    # statements rather than ORM cascades — the tables are listed
+    # explicitly in `orgs_to_delete` loop and we don't need the model
+    # classes for type-driven query building. No imports needed.
 
     # 1. Re-authenticate. We don't trust the JWT alone for a destructive
     #    irreversible operation — an attacker with a stolen access token
