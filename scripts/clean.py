@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 """Cross-platform cleanup helper for `make clean` / `make clean-all`.
 

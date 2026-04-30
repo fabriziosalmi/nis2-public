@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import logging
@@ -189,8 +189,15 @@ async def setup_row_level_security() -> None:
         logger.warning("setup_row_level_security: no tenant tables found")
         return
 
-    policy_sql = (
-        "USING (organization_id::text = current_setting('app.current_org_id', true) "
+    # Pre-2.4.27 the policy only specified USING. Postgres treats a
+    # missing WITH CHECK as "same as USING" for INSERT/UPDATE — which
+    # *happens* to be safe here, but it is implicit and brittle. Making
+    # WITH CHECK explicit pins the contract: every INSERT and UPDATE
+    # must also match the current org, so a misconfigured Celery task
+    # cannot smuggle a row with a foreign organization_id even if the
+    # SELECT side were ever loosened.
+    rls_predicate = (
+        "(organization_id::text = current_setting('app.current_org_id', true) "
         "OR current_setting('app.bypass_rls', true) = 'on')"
     )
 
@@ -207,7 +214,9 @@ async def setup_row_level_security() -> None:
                 await conn.execute(text(f"ALTER TABLE {tname} FORCE ROW LEVEL SECURITY"))
                 await conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation ON {tname}"))
                 await conn.execute(text(
-                    f"CREATE POLICY tenant_isolation ON {tname} {policy_sql}"
+                    f"CREATE POLICY tenant_isolation ON {tname} "
+                    f"USING {rls_predicate} "
+                    f"WITH CHECK {rls_predicate}"
                 ))
             applied.append(tname)
         except Exception as exc:
@@ -220,3 +229,31 @@ async def setup_row_level_security() -> None:
         len(tenant_tables),
         ", ".join(skipped) if skipped else "none",
     )
+
+    # Defence-in-depth check: if the application's Postgres role is a
+    # SUPERUSER (or has BYPASSRLS), the FORCE ROW LEVEL SECURITY above
+    # is decorative — the role bypasses every RLS policy regardless.
+    # The default `postgres:16-alpine` image creates POSTGRES_USER with
+    # SUPERUSER, which is the typical state of a `make prod` deploy.
+    # We don't hard-fail (it would break first-run UX), but we shout
+    # at WARNING so the operator notices and knows to run:
+    #   ALTER ROLE nis2 NOSUPERUSER NOBYPASSRLS;
+    # (or provision a non-superuser app role) before going live.
+    try:
+        async with engine.connect() as conn:
+            result = await conn.execute(text(
+                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+            ))
+            row = result.first()
+            if row and (row[0] or row[1]):
+                logger.warning(
+                    "DB role '%s' has rolsuper=%s rolbypassrls=%s — RLS policies are "
+                    "BYPASSED for this role. Tenant isolation currently relies on "
+                    "application-layer org_id filters only. Provision a non-superuser "
+                    "app role with BYPASSRLS revoked before any production deployment.",
+                    "current_user",
+                    row[0],
+                    row[1],
+                )
+    except Exception as exc:
+        logger.debug("RLS role-attribute check skipped: %s", exc)

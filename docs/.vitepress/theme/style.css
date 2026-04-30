@@ -1,0 +1,174 @@
+/*
+ * Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+ *
+ * Tailwind v4 entrypoint for the docs theme. Scoped to the home page —
+ * the rest of the docs uses VitePress default styling (custom.css).
+ *
+ * The home component (Home.vue) writes both the EN and IT copy into
+ * the DOM via paired <span class="locale-en"> / <span class="locale-it">
+ * pairs. The locale-hide rules below collapse the inactive language to
+ * zero so the user sees exactly one. The `<html>` element gets
+ * `locale-en` or `locale-it` from the inline detection script in
+ * config.mts head[] (runs before body paint, so no flash).
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * Cascade-layer wiring — without this, no Tailwind utility applies
+ * ─────────────────────────────────────────────────────────────────
+ *
+ * `@import "tailwindcss"` (the one-liner you see in every Tailwind v4
+ * template) expands into four layered imports — theme, base
+ * (preflight), components, utilities — all stamped into named
+ * `@layer`s. VitePress, however, ships its global stylesheet WITHOUT
+ * layers (every rule is "unlayered").
+ *
+ * The CSS cascade rule that bites here: any rule outside `@layer`
+ * outranks any rule inside ANY `@layer`, REGARDLESS of selector
+ * specificity. So VitePress's unlayered `h1,h2,h3,h4,h5,h6 {
+ * font-size:16px; font-weight:400 }` reset beats Tailwind's
+ * `.text-4xl { font-size: 2.25rem }` (in @layer utilities) on the
+ * dashboard hero — and the heading renders at 16px instead of 36px,
+ * with weight 400 instead of 700.
+ *
+ * Symptom in v2.4.27 first preview: the entire home looked "default"
+ * — h1 looked like body text, padding utilities (`pt-20`, `py-24`)
+ * collapsed to 0, `bg-slate-900` had no effect on links. Reported
+ * by maintainer with a screenshot of the broken hero.
+ *
+ * Fix: split the import so that theme + preflight stay layered
+ * (correctly low-priority for resets), but UTILITIES land unlayered
+ * — putting them at the same cascade level as VitePress and giving
+ * specificity its normal say. Same effect as Tailwind v3's "raw"
+ * import, achieved through the explicit per-bundle imports v4
+ * exposes.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/preflight" layer(base);
+@import "tailwindcss/utilities";
+
+/*
+ * Tailwind v4 default: the `dark:` modifier compiles to
+ * `@media (prefers-color-scheme: dark)`. VitePress, however, drives
+ * dark mode via a class — `<html class="dark">` — so the OS-level
+ * media query never matches when the user toggles the in-app theme
+ * switch. Result: the topbar (VitePress) flips dark, the home body
+ * (Tailwind utilities) stays light. Bug reported on first preview.
+ *
+ * Re-route the `dark:` modifier to ALSO trigger when the .dark class
+ * is on any ancestor. `:where()` keeps the selector at 0-0-0 so it
+ * doesn't compound specificity with the utility classes Tailwind
+ * stamps onto elements.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Mirror the dashboard app's brand gradient stops so the marketing
+     home and the in-product hero share visual identity. */
+  --color-brand-from: #0071e3;
+  --color-brand-to: #6e40c9;
+}
+
+/* Locale gating — hide the inactive language entirely. `display: none`
+   (not `visibility: hidden`) so reflow is correct and accessible names
+   computed by AT skip the hidden tree. */
+html.locale-en .locale-it,
+html.locale-it .locale-en {
+  display: none !important;
+}
+
+/* Belt-and-braces: if neither class lands (e.g. JS disabled), fall
+   back to showing English so the page is still legible. */
+html:not(.locale-en):not(.locale-it) .locale-it {
+  display: none;
+}
+
+/*
+ * VitePress override neutralisation — only inside .docs-home.
+ *
+ * VitePress ships an aggressive global stylesheet that targets every
+ * <a> inside <main> with multiple competing rules:
+ *   - `a { color: var(--vp-c-brand-1) }`         (specificity 0,0,0,1)
+ *   - `a { color: inherit; text-decoration: ... } (id.)
+ *   - `a:hover { color: var(--vp-c-brand-2) }`   (id.)
+ * It also applies `border-bottom` + `text-decoration: underline` to
+ * <h1>/<h2>/<h3> headings inside the page content area.
+ *
+ * First-preview symptoms:
+ *   - Gradient-text span inside the hero <h1> rendered with a
+ *     spurious underline ("in un'unica piattaforma" with a horizontal
+ *     line underneath).
+ *   - Section <h2> headings ("Tutto ciò che chiede l'Art. 21…", "Dal
+ *     clone al primo report…") rendered with a border-bottom.
+ *   - Primary CTA `<a class="bg-slate-900 text-white">` rendered as a
+ *     black box with INVISIBLE text — `text-white` (0,1,0) lost to
+ *     VitePress's `a { color: var(--vp-c-brand-1) }` (?), which
+ *     OUGHT to be (0,0,1) but compiled output puts the rule under
+ *     a parent class selector that bumps it past (0,1,0).
+ *
+ * Strategy:
+ *   1. Reset all <a> inside .docs-home to inherit colour and drop
+ *      decoration. `.docs-home a` has specificity (0,1,1), which
+ *      beats every plain-element-targeting VitePress rule.
+ *   2. CTA buttons with explicit `text-X` / `bg-X` Tailwind utilities
+ *      use the v4 `!` prefix in Home.vue (e.g. `!text-white`) so
+ *      Tailwind compiles them with `!important`, beating the reset
+ *      above on the elements where we DO want a custom colour.
+ *      Outside CTAs, the reset wins and links inherit naturally.
+ *   3. Heading reset uses an explicit `.docs-home hX` selector
+ *      (specificity 0,1,1) for the same reason.
+ *
+ * Scope is `.docs-home` so the rest of the docs (Guide / API
+ * reference / etc — which legitimately wants brand-coloured
+ * underlined links) is untouched.
+ */
+.docs-home a {
+  color: inherit;
+  text-decoration: none;
+}
+.docs-home a:hover {
+  text-decoration: none;
+}
+.docs-home h1,
+.docs-home h2,
+.docs-home h3,
+.docs-home h4 {
+  border: 0;
+  text-decoration: none;
+}
+.docs-home h1 *,
+.docs-home h2 *,
+.docs-home h3 * {
+  text-decoration: none;
+}
+
+/*
+ * Multi-line heading line-height.
+ *
+ * Italian copy is significantly more verbose than English, so several
+ * headlines that fit on one line in EN wrap to two in IT (e.g. the
+ * hero "Governance NIS2, validazione tecnica e gestione incidenti —
+ * in un'unica piattaforma." or the features section heading). With
+ * Tailwind v4's default line-height for text-3xl/4xl/5xl/6xl (~1.1-
+ * 1.2), the wrapped lines visually collide — descenders of the first
+ * line touch the cap-height of the second.
+ *
+ * Setting line-height on the heading itself is preferred over
+ * applying `leading-snug` on every <h1>/<h2> in Home.vue: the source
+ * stays clean, and the rule will pick up any future heading without
+ * a per-element edit.
+ *
+ * Values picked by inspection on /m-light-it.png against the typeface
+ * Inter at 30-60px: 1.18-1.22 keeps the line-spacing relationship
+ * constant across the type-scale.
+ */
+:where(.docs-home h1) {
+  line-height: 1.1;
+}
+:where(.docs-home h2) {
+  line-height: 1.2;
+}
+:where(.docs-home h3) {
+  line-height: 1.3;
+}

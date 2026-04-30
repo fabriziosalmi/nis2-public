@@ -1,6 +1,6 @@
 {
   "name": "nis2-public-docs",
-  "version": "2.4.26",
+  "version": "2.4.27",
   "private": true,
   "description": "VitePress documentation build for the NIS2 Continuous Posture Management Platform.",
   "scripts": {
@@ -12,7 +12,12 @@
     "type": "git",
     "url": "git+https://github.com/fabriziosalmi/nis2-public.git"
   },
-  "keywords": ["nis2", "compliance", "cybersecurity", "documentation"],
+  "keywords": [
+    "nis2",
+    "compliance",
+    "cybersecurity",
+    "documentation"
+  ],
   "author": "Fabrizio Salmi",
   "license": "AGPL-3.0-only",
   "bugs": {
@@ -20,6 +25,9 @@
   },
   "homepage": "https://github.com/fabriziosalmi/nis2-public#readme",
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "lucide-vue-next": "^1.0.0",
+    "tailwindcss": "^4.2.4",
     "vitepress": "^1.6.4",
     "vue": "^3.5.25"
   },

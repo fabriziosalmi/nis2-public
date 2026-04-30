@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import asyncio
@@ -295,5 +295,19 @@ def _should_run(cron_expr: str, last_run, now) -> bool:
             return False
 
         return True
-    except Exception:
+    except Exception as exc:
+        # Pre-2.4.27 this swallowed the exception silently and the
+        # schedule simply never fired — the exact "looks valid, doesn't
+        # work" failure mode v2.4.26 fixed at the API/input layer. Now
+        # we log so the operator running celery-beat sees WHY a schedule
+        # didn't trigger, even for rows that pre-date the input
+        # validator (e.g. legacy "@daily" / "MON" entries that the
+        # parser still cannot handle). Stays at WARNING because beat
+        # iterates every minute over every schedule — ERROR would spam
+        # the log if a single bad row exists.
+        logger.warning(
+            "Cron parse failed for schedule (expr=%r): %s — schedule will not fire",
+            cron_expr,
+            exc,
+        )
         return False

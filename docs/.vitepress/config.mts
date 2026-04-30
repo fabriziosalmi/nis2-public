@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import tailwindcss from '@tailwindcss/vite'
 
 const SITE_URL = 'https://fabriziosalmi.github.io/nis2-public/'
 const OG_IMAGE = `${SITE_URL}og.png`
@@ -56,7 +57,31 @@ export default defineConfig({
         ['meta', { name: 'twitter:image', content: OG_IMAGE }],
         // Structured data for rich search results
         ['script', { type: 'application/ld+json' }, JSON.stringify(jsonLd)],
+        // hreflang signals to Google that the home page exists in EN and IT —
+        // even though the URL is the same (we render both versions in the DOM
+        // and CSS-hide one based on `<html class="locale-X">`). This is the
+        // canonical way to declare bilingual content without per-locale URLs.
+        ['link', { rel: 'alternate', hreflang: 'en', href: SITE_URL }],
+        ['link', { rel: 'alternate', hreflang: 'it', href: SITE_URL }],
+        ['link', { rel: 'alternate', hreflang: 'x-default', href: SITE_URL }],
+        // Pre-paint locale detection. Runs synchronously in <head> (before
+        // <body> renders) so the user never sees the "wrong" language flash.
+        // Read order: explicit user choice in localStorage > navigator.language
+        // > default 'en'. Sets `class="locale-en|it"` on <html>; the home
+        // CSS hides the inactive language. ~280 chars, no deps.
+        [
+            'script',
+            {},
+            `(function(){try{var s=localStorage.getItem('nis2-doc-locale');var l=s||((navigator.language||'en').toLowerCase().split('-')[0]);var c=l==='it'?'locale-it':'locale-en';document.documentElement.classList.add(c);}catch(e){document.documentElement.classList.add('locale-en');}})();`,
+        ],
     ],
+    // Wire Tailwind v4 into the VitePress Vite pipeline so the custom Home
+    // component (theme/components/Home.vue) can use utility classes parity-
+    // matched with the dashboard app. Scoped to the docs build only — does
+    // not leak into the dashboard's webpack pipeline.
+    vite: {
+        plugins: [tailwindcss()],
+    },
     themeConfig: {
         logo: '/logo.svg',
         siteTitle: 'NIS2 Platform',

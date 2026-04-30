@@ -1,8 +1,18 @@
 import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin'
+import path from 'node:path'
 
 const config: NextConfig = {
   output: 'standalone',
+  // The repo root has its own package-lock.json (for the VitePress docs
+  // build) AND this package has its own. Without pinning the trace root
+  // Next 15 prints "We detected multiple lockfiles..." and infers the
+  // *repo root* as the workspace, which makes `output: 'standalone'`
+  // walk the whole monorepo for required files instead of just this
+  // package — slower builds and at least one false-positive missing-
+  // file warning per build. Pinning to __dirname keeps file tracing
+  // scoped to packages/web.
+  outputFileTracingRoot: path.join(__dirname),
   typescript: {
     // Recharts dynamic imports have known type incompatibilities with Next.js 15
     ignoreBuildErrors: true,

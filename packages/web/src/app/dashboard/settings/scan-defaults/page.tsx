@@ -1,14 +1,14 @@
-// Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+// Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { Loader2, Radar, Info } from "lucide-react"
+import { Loader2, Radar, Info, AlertTriangle } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,20 +47,40 @@ export default function ScanDefaultsPage() {
   useDocumentTitle(t("title"))
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
+  // The previous version called `.catch(() => {})` here, which silently
+  // swallowed load failures. The form would then render the hardcoded
+  // `defaults` constant, and a Save click would PATCH those defaults
+  // over the org's actual saved settings — unrecoverable data loss
+  // disguised as a successful save toast. We now surface the error and
+  // disable Save until either a successful load or an explicit retry,
+  // so the user can never accidentally overwrite their real settings
+  // with the placeholder values shown in the form.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadingInitial, setLoadingInitial] = useState(true)
 
   const { register, handleSubmit, reset, formState: { errors, isDirty }, watch, setValue } = useForm<ScanDefaultsForm>({
     resolver: zodResolver(scanDefaultsSchema),
     defaultValues: defaults,
   })
 
-  useEffect(() => {
-    if (orgId) {
-      api.getOrg(orgId).then((org) => {
-        const saved = org.settings?.scan_defaults
-        if (saved) reset({ ...defaults, ...saved })
-      }).catch(() => {})
+  const loadDefaults = useCallback(async () => {
+    if (!orgId) return
+    setLoadingInitial(true)
+    setLoadError(null)
+    try {
+      const org = await api.getOrg(orgId)
+      const saved = org.settings?.scan_defaults
+      if (saved) reset({ ...defaults, ...saved })
+    } catch (err: any) {
+      setLoadError(err?.message || "load failed")
+    } finally {
+      setLoadingInitial(false)
     }
   }, [orgId, reset])
+
+  useEffect(() => {
+    loadDefaults()
+  }, [loadDefaults])
 
   const onSubmit = async (data: ScanDefaultsForm) => {
     if (!orgId) return
@@ -106,6 +126,23 @@ export default function ScanDefaultsPage() {
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+          <div className="flex-1 space-y-1">
+            <p className="text-sm font-medium text-destructive">{t("loadFailed")}</p>
+            <p className="text-xs text-muted-foreground">{loadError}</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={loadDefaults} disabled={loadingInitial}>
+            {loadingInitial && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            {t("retry")}
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
@@ -177,7 +214,7 @@ export default function ScanDefaultsPage() {
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !isDirty}>
+          <Button type="submit" disabled={loading || !isDirty || !!loadError || loadingInitial}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t("save")}
           </Button>

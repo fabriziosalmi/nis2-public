@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+# NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 services:
   caddy:
     image: caddy:2-alpine
@@ -10,10 +13,18 @@ services:
       - caddy_config:/config
     depends_on:
       # service_healthy (not service_started) so Caddy doesn't proxy to
-      # an API that's still warming up — the difference between a clean
-      # start and a few minutes of intermittent 502s on cold deploys.
+      # an API or web that's still warming up — the difference between
+      # a clean start and a few minutes of intermittent 502s on cold
+      # deploys. Pre-2.4.27 the web service was gated only on
+      # service_started, which Docker considers green the moment the
+      # container's ENTRYPOINT process is running, NOT once it's
+      # accepting connections. Next.js standalone has a measurable
+      # warm-up window where `node server.js` is alive but the listen
+      # socket is not yet open — Caddy started proxying immediately and
+      # the first user requests after a `make prod` got 502s for ~5–15
+      # seconds. Now both upstreams must report healthy.
       api: { condition: service_healthy }
-      web: { condition: service_started }
+      web: { condition: service_healthy }
     restart: unless-stopped
     networks: [nis2-net]
 
@@ -137,6 +148,18 @@ services:
       - INTERNAL_API_URL=http://api:8000
     restart: unless-stopped
     networks: [nis2-net]
+    # node:20-alpine doesn't ship curl/wget, but it always has node
+    # itself. The Next.js standalone server returns 200 (or 307 redirect
+    # to /login) on `/` once the listen socket is open — the right gate
+    # for Caddy's `service_healthy` dependency above. start_period
+    # covers the cold-build warm-up; interval/retries together give us
+    # ~50s of grace before the container is marked unhealthy.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
 
   prometheus:
     image: prom/prometheus:v2.51.0

@@ -15,8 +15,8 @@
   "governance": { "title": "Gobernanza", "complianceScore": "Puntuación de Cumplimiento", "checklist": "Lista de Control", "status": "Estado", "priority": "Prioridad", "notStarted": "No iniciado", "inProgress": "En curso", "completed": "Completado", "notApplicable": "No aplica" },
   "reports": { "title": "Informes", "subtitle": "Genere informes de cumplimiento desde escaneos completados — PDF, HTML, Markdown, JSON, CSV o JUnit XML.", "generate": "Generar", "queuing": "En cola…", "generating": "Generando…", "download": "Descargar", "reset": "Reiniciar", "format": "Formato", "scan": "Escaneo", "score": "Puntuación", "findings": "Hallazgos", "completed": "Completado", "action": "Acción", "executive": "Resumen Ejecutivo", "technical": "Informe Técnico", "compliance": "Informe de Cumplimiento", "noCompletedScans": "Sin escaneos completados", "noCompletedScansDescription": "Los informes se generan a partir de escaneos completados. Inicie primero un escaneo; al finalizar podrá exportarlo en cualquiera de los formatos soportados.", "newScan": "Nuevo Escaneo", "formatHints": { "pdf": "Informe ejecutivo", "html": "Compatible con navegador", "markdown": "Texto, versionable", "json": "Legible por máquina", "csv": "Importación a hoja de cálculo", "junit": "Integración con pipeline CI" }, "ready": "Informe listo ({format})", "readyDescription": "Haga clic en \"Descargar\" para guardar el archivo.", "queueFailed": "Fallo al encolar el informe", "generationFailed": "Fallo al generar el informe", "timeout": "Informe expirado por tiempo", "timeoutDescription": "Reintente o consulte los logs del worker." },
   "profilePage": { "title": "Perfil", "subtitle": "Gestione la configuración de su cuenta personal", "personalInfo": "Información Personal", "fullName": "Nombre Completo", "email": "Correo", "locale": "Idioma", "saveProfile": "Guardar Perfil", "changePassword": "Cambiar Contraseña", "currentPassword": "Contraseña Actual", "newPassword": "Nueva Contraseña", "confirmNewPassword": "Confirmar Nueva Contraseña", "updatePassword": "Actualizar Contraseña", "profileUpdated": "Perfil actualizado", "passwordUpdated": "Contraseña cambiada", "passwordUpdatedDescription": "Otros dispositivos y pestañas tendrán que iniciar sesión de nuevo.", "passwordChangeFailed": "Error al cambiar la contraseña", "currentPasswordRequired": "Introduzca su contraseña actual", "currentPasswordIncorrect": "La contraseña actual es incorrecta", "passwordsDontMatch": "Las nuevas contraseñas no coinciden", "newSameAsCurrent": "La nueva contraseña debe ser distinta de la actual", "updateFailed": "Fallo en la actualización" },
-  "organizationPage": { "title": "Organización", "subtitle": "Gestione la configuración de su organización", "details": "Detalles de la Organización", "general": "General", "generalDescription": "Información básica de la organización", "name": "Nombre de la Organización", "namePlaceholder": "Acme Corp", "slug": "Slug", "slugHelp": "Identificador URL, generado automáticamente desde el nombre. No modificable.", "plan": "Plan", "orgIdLabel": "ID de la Organización", "orgIdHelp": "Use este ID para integraciones API", "industry": "Sector", "size": "Tamaño de la Empresa", "country": "País", "save": "Guardar Cambios", "saved": "Organización actualizada", "saveFailed": "Fallo al guardar", "dangerZone": "Zona de Peligro", "dangerDescription": "Acciones irreversibles para esta organización", "deleteOrg": "Eliminar Organización", "deleteOrgDescription": "Eliminar permanentemente esta organización y todos sus datos", "delete": "Eliminar", "nameRequired": "El nombre de la organización es obligatorio" },
-  "scanDefaultsPage": { "title": "Configuración de Escaneo", "subtitle": "Configure los valores por defecto para los nuevos escaneos de cumplimiento", "performance": "Rendimiento", "performanceDescription": "Controlar la velocidad de escaneo y el uso de recursos", "timeoutLabel": "Tiempo (segundos)", "timeoutHelp": "Tiempo por host", "concurrency": "Concurrencia", "concurrencyHelp": "Workers paralelos", "maxHosts": "Hosts Máx.", "maxHostsHelp": "0 = ilimitado", "performanceTip": "Mayor concurrencia escanea más rápido pero usa más recursos. Un tiempo de 10s y concurrencia de 20 es óptimo para la mayoría de auditorías.", "modules": "Módulos del Escáner", "modulesDescription": "Activar o desactivar los módulos de escaneo por defecto. Los escaneos individuales pueden sobrescribirlos.", "portScan": "Escaneo de Puertos", "portScanDescription": "Escanear 14 puertos críticos (SSH, RDP, SMB, MySQL, etc.) para detección de exposición", "webChecks": "Comprobaciones de Seguridad Web", "webChecksDescription": "Cabeceras HTTP, TLS/SSL, detección WAF, cookies, SRI, secretos, security.txt", "dnsChecks": "Comprobaciones de Seguridad DNS", "dnsChecksDescription": "DNSSEC, transferencia de zona (AXFR), SPF, DMARC, redundancia MX", "whoisChecks": "WHOIS / Expiración de Dominio", "whoisChecksDescription": "Verificar fechas de expiración del registro de dominio y advertir antes del umbral de 30 días", "checks": "Comprobaciones por Defecto", "advanced": "Opciones Avanzadas", "scanTimeout": "Tiempo de Escaneo (segundos)", "save": "Guardar Configuración", "saved": "Configuración de escaneo guardada", "saveFailed": "Fallo al guardar" },
+  "organizationPage": { "title": "Organización", "subtitle": "Gestione la configuración de su organización", "details": "Detalles de la Organización", "general": "General", "generalDescription": "Información básica de la organización", "name": "Nombre de la Organización", "namePlaceholder": "Acme Corp", "slug": "Slug", "slugHelp": "Identificador URL, generado automáticamente desde el nombre. No modificable.", "plan": "Plan", "orgIdLabel": "ID de la Organización", "orgIdHelp": "Use este ID para integraciones API", "industry": "Sector", "size": "Tamaño de la Empresa", "country": "País", "save": "Guardar Cambios", "saved": "Organización actualizada", "saveFailed": "Fallo al guardar", "loadFailed": "No se pudo cargar la organización — el guardado está desactivado hasta que se cargue.", "retry": "Reintentar", "dangerZone": "Zona de Peligro", "dangerDescription": "Acciones irreversibles para esta organización", "deleteOrg": "Eliminar Organización", "deleteOrgDescription": "Eliminar permanentemente esta organización y todos sus datos", "delete": "Eliminar", "nameRequired": "El nombre de la organización es obligatorio" },
+  "scanDefaultsPage": { "title": "Configuración de Escaneo", "subtitle": "Configure los valores por defecto para los nuevos escaneos de cumplimiento", "performance": "Rendimiento", "performanceDescription": "Controlar la velocidad de escaneo y el uso de recursos", "timeoutLabel": "Tiempo (segundos)", "timeoutHelp": "Tiempo por host", "concurrency": "Concurrencia", "concurrencyHelp": "Workers paralelos", "maxHosts": "Hosts Máx.", "maxHostsHelp": "0 = ilimitado", "performanceTip": "Mayor concurrencia escanea más rápido pero usa más recursos. Un tiempo de 10s y concurrencia de 20 es óptimo para la mayoría de auditorías.", "modules": "Módulos del Escáner", "modulesDescription": "Activar o desactivar los módulos de escaneo por defecto. Los escaneos individuales pueden sobrescribirlos.", "portScan": "Escaneo de Puertos", "portScanDescription": "Escanear 14 puertos críticos (SSH, RDP, SMB, MySQL, etc.) para detección de exposición", "webChecks": "Comprobaciones de Seguridad Web", "webChecksDescription": "Cabeceras HTTP, TLS/SSL, detección WAF, cookies, SRI, secretos, security.txt", "dnsChecks": "Comprobaciones de Seguridad DNS", "dnsChecksDescription": "DNSSEC, transferencia de zona (AXFR), SPF, DMARC, redundancia MX", "whoisChecks": "WHOIS / Expiración de Dominio", "whoisChecksDescription": "Verificar fechas de expiración del registro de dominio y advertir antes del umbral de 30 días", "checks": "Comprobaciones por Defecto", "advanced": "Opciones Avanzadas", "scanTimeout": "Tiempo de Escaneo (segundos)", "save": "Guardar Configuración", "saved": "Configuración de escaneo guardada", "saveFailed": "Fallo al guardar", "loadFailed": "No se pudieron cargar los valores guardados — el guardado está desactivado para evitar sobrescribir su configuración existente.", "retry": "Reintentar" },
   "apiKeysPage": { "title": "Claves API", "subtitle": "Gestione las claves API para acceso programático", "create": "Crear Clave API", "createNewTitle": "Crear Nueva Clave API", "createNewDescription": "Asigne a su clave API un nombre descriptivo", "createdTitle": "Clave API Creada", "createdDescription": "Copie esta clave ahora. No podrá volver a verla.", "storeSecurely": "Almacene esta clave de forma segura. Solo se mostrará una vez.", "done": "Hecho", "name": "Nombre", "keyPrefix": "Prefijo de la Clave", "created": "Creada", "lastUsed": "Último Uso", "status": "Estado", "active": "activa", "revoked": "revocada", "confirm": "Confirmar", "documentation": "Documentación API", "documentationDescription": "Use su clave API en el encabezado Authorization como Bearer token. Consulte la documentación API para los endpoints y ejemplos disponibles.", "modalTitle": "Crear Clave API", "keyName": "Nombre de la Clave", "keyNamePlaceholder": "p.ej. Pipeline CI/CD", "createKey": "Crear Clave", "keyCreated": "Clave API creada", "keyCreateFailed": "Fallo al crear la clave API", "keyCopied": "Clave API copiada al portapapeles", "keyRevoked": "Clave API revocada", "keyRevokeFailed": "Error al revocar la clave API", "noKeys": "Aún sin claves API", "noKeysDescription": "Cree una clave para autenticar pipelines CI/CD, integraciones de monitorización o cualquier sistema externo que llame a la API.", "neverUsed": "nunca", "nameRequired": "Introduzca un nombre de clave" },
   "compliancePage": { "title": "Matriz de Cumplimiento NIS2", "subtitle": "Art. 21 D.Lgs 138/2024 — Medidas de gestión de riesgos de ciberseguridad", "noData": "Sin datos de cumplimiento disponibles", "noDataDescription": "Ejecute un escaneo de cumplimiento para rellenar automáticamente la matriz Art. 21. Las comprobaciones automatizadas cubren TLS, DNS, cabeceras HTTP, cifrado y más.", "runFirstScan": "Ejecutar Primer Escaneo", "compliant": "Conforme", "partial": "Parcial", "nonCompliant": "No Conforme", "manualReview": "Verificación Manual", "automated": "Automatizado", "manual": "Manual", "notVerifiedYet": "Aún no verificado", "basedOnScan": "Basado en el escaneo: {name} — Puntuación: {score}/100", "infoTitle": "Acerca de esta matriz", "infoBody": "Esta matriz mapea los requisitos del Art. 21(2) de la Directiva NIS2 (EU 2022/2555), transpuesta al derecho italiano como D.Lgs 138/2024. Las comprobaciones automatizadas verifican TLS, DNS, cabeceras HTTP, cifrado y gestión de incidentes. Las entradas \"Verificación Manual\" requieren la atestación del equipo de cumplimiento." },
   "auditLogPage": { "title": "Registro de Auditoría", "subtitle": "Rastree todos los cambios y acciones en su organización", "activity": "Actividad", "activityDescription": "Mostrando acciones recientes. Los registros de auditoría se conservan durante 90 días.", "timestamp": "Marca de Tiempo", "time": "Hora", "actor": "Actor", "user": "Usuario", "action": "Acción", "details": "Detalles", "resource": "Recurso", "ip": "Dirección IP", "noEntries": "Sin entradas de auditoría", "noEntriesShort": "Sin entradas de registro de auditoría aún", "noEntriesDescription": "Las entradas de auditoría aparecen aquí cada vez que un usuario crea, actualiza o elimina recursos.", "system": "sistema" },
@@ -29,5 +29,147 @@
   "orgSwitcher": { "currentOrg": "Organización activa", "switchTo": "Cambiar a", "switchedTo": "Cambiado a {name}", "switchFailed": "No se pudo cambiar de organización", "trigger": "Organización activa: {name}. Clic para cambiar.", "createOrg": "Crear nueva organización", "createTitle": "Crear nueva organización", "createDescription": "Lance un nuevo tenant para un cliente o proyecto distinto. Quedará configurado automáticamente como su administrador.", "createNameLabel": "Nombre de la organización", "createNamePlaceholder": "Acme Corp", "createNameRequired": "El nombre de la organización es obligatorio", "createCancel": "Cancelar", "createSubmit": "Crear organización", "createSuccess": "Creada: {name}", "createFailed": "No se pudo crear la organización" },
   "scansComparePage": { "title": "Comparación de Escaneos", "subtitle": "Compare hallazgos entre dos escaneos para seguir el progreso", "comparisonFailed": "Comparación fallida", "selectScanTitle": "Seleccionar escaneo a comparar", "selectScanPlaceholder": "Seleccione un escaneo…", "noOtherScans": "No hay otros escaneos completados disponibles", "scanOption": "{name} (Puntuación: {score}) — {date}", "compare": "Comparar", "comparing": "Comparando…", "currentScan": "Escaneo Actual", "previousScan": "Escaneo Anterior", "scoreDelta": "Diferencia de Puntuación", "newFindings": "Nuevos Hallazgos", "resolved": "Resueltos", "persistent": "Persistentes", "newFindingsCount": "Nuevos Hallazgos ({count})", "newFindingsDescription": "Problemas detectados en el escaneo actual que no estaban en el anterior", "resolvedFindingsCount": "Hallazgos Resueltos ({count})", "resolvedFindingsDescription": "Problemas del escaneo anterior que ya no están presentes" },
   "header": { "searchPlaceholder": "Buscar...", "lightMode": "Claro", "darkMode": "Oscuro", "systemMode": "Sistema" },
-  "language": { "en": "English", "it": "Italiano", "fr": "Français", "de": "Deutsch", "es": "Español", "pt": "Português" }
+  "language": { "en": "English", "it": "Italiano", "fr": "Français", "de": "Deutsch", "es": "Español", "pt": "Português" },
+  "landingPage": {
+    "header": {
+      "tagline": "Gestión continua de la postura",
+      "docs": "Documentación",
+      "github": "GitHub",
+      "signIn": "Iniciar sesión",
+      "getStarted": "Empezar",
+      "primaryNav": "Navegación principal",
+      "homeAria": "NIS2 Platform — inicio",
+      "githubAria": "Ver NIS2 Platform en GitHub"
+    },
+    "hero": {
+      "badge": "Open-source · AGPL-3.0 · diseñada para auto-hospedaje",
+      "headlineStart": "Gobernanza NIS2, validación técnica y respuesta a incidentes —",
+      "headlineEnd": "en una sola plataforma.",
+      "subtitle": "La plataforma open-source para la Directiva NIS2 (UE 2022/2555). Cierra la brecha entre la política Art. 21 y lo que tu red hace en realidad — sin enviar un solo byte de datos a un tercero.",
+      "ctaPrimary": "Empezar — gratis",
+      "ctaSecondary": "Estrella en GitHub",
+      "alreadyAccount": "¿Ya tiene una cuenta?",
+      "metaAria": "Metadatos del proyecto"
+    },
+    "trust": {
+      "ariaLabel": "Características de la plataforma",
+      "checks": "comprobaciones automáticas",
+      "languages": "idiomas UE",
+      "coverageValue": "Art. 18 / 21 / 23",
+      "coverage": "cobertura NIS2",
+      "deps": "dependencias SaaS"
+    },
+    "features": {
+      "eyebrow": "Seis módulos, un solo workspace",
+      "heading": "Todo lo que pide el Art. 21, en una plataforma auditable.",
+      "subtitle": "La mayor parte del trabajo NIS2 sigue siendo trabajo humano. La plataforma automatiza lo que debe automatizarse y registra lo que legalmente exige una firma.",
+      "learnMore": "Saber más",
+      "learnMoreAbout": "sobre {feature}",
+      "governance": {
+        "title": "Marco de Gobernanza",
+        "body": "Checklist de 30 puntos mapeada al Art. 21 NIS2 (a)–(j), con seguimiento de responsables, evidencias y cadencia de revisión. Referencias cruzadas con la transposición italiana D.Lgs 138/2024 y las determine ACN."
+      },
+      "validation": {
+        "title": "Validación Técnica",
+        "body": "Más de 30 comprobaciones asíncronas en TLS, DNS, certificados, cabeceras HTTP, exposición de puertos, secretos y resiliencia. La sonda que verifica si la política documentada se aplica realmente en la red."
+      },
+      "incident": {
+        "title": "Respuesta a Incidentes",
+        "body": "Ciclo Art. 23 con cuentas atrás en vivo para los plazos 24h / 72h / 1 mes. El Botón Rojo genera un payload Early Warning listo para el CSIRT a partir de tres campos y el inventario de activos más reciente."
+      },
+      "supply": {
+        "title": "Riesgo de Cadena de Suministro",
+        "body": "Inventario de proveedores con criticidad en 4 niveles, scoring de seguridad, seguimiento de contratos (SLA, derechos de auditoría, cláusulas de seguridad) y campos específicos del Art. 18 / ACN."
+      },
+      "bia": {
+        "title": "Análisis de Impacto (BIA)",
+        "body": "Inventario de procesos con RTO / RPO / MTPD, scoring de impacto en cinco dimensiones, mapeo de dependencias entre activos y proveedores, y detección automática de huecos BCP / DRP."
+      },
+      "ai": {
+        "title": "Copilot IA + MCP",
+        "body": "Copilot opcional de remediación vía Ollama (air-gapped) o OpenAI. Servidor Model Context Protocol nativo: Claude, Cursor y otros agentes IA pueden consultar directamente su postura de cumplimiento."
+      }
+    },
+    "showcase": {
+      "ariaLabel": "Vista previa del producto",
+      "heading": "Una postura legible en 30 segundos.",
+      "subtitle": "Un solo dashboard para escaneos totales, score medio de cumplimiento, findings abiertos y activos monitorizados — con la tendencia de los últimos escaneos en la misma pantalla.",
+      "screenshotAlt": "Dashboard NIS2 Platform: escaneos totales, score de cumplimiento, findings, activos monitorizados y panel de onboarding"
+    },
+    "how": {
+      "eyebrow": "Cómo funciona",
+      "heading": "Del clone al primer informe ejecutivo en una tarde.",
+      "step1": {
+        "title": "Clona y arranca en local",
+        "body": "make dev — la plataforma se levanta en http://localhost:8077 con Postgres, Redis y la API en un único compose."
+      },
+      "step2": {
+        "title": "Mapea tu gobernanza",
+        "body": "Recorre la checklist de 30 puntos del Art. 21 con responsables y evidencias. Añade activos, proveedores y procesos. Genera el PDF ejecutivo para el consejo."
+      },
+      "step3": {
+        "title": "Lanza la sonda técnica",
+        "body": "Programa escaneos contra tus dominios y rangos IP. Los findings llegan al mismo workspace que tu postura de gobernanza. Cada finding puede vincularse al sub-apartado del Art. 21 que debilita."
+      }
+    },
+    "audiences": {
+      "heading": "Construida con quienes realmente la usan.",
+      "subtitle": "Una plataforma que habla con fluidez tanto al consejo como al SOC.",
+      "for": "Para {role}",
+      "ciso": {
+        "role": "CISO",
+        "body": "Cierre la brecha entre la política que firmó y lo que su red está haciendo de verdad. Evidencias listas para el consejo, en plazo."
+      },
+      "dpo": {
+        "role": "DPO",
+        "body": "Postura RGPD / ePrivacy gestionada por separado de NIS2 — nunca agregada al score equivocado. Workflows de riesgo de proveedor e incidentes alineados con sus obligaciones."
+      },
+      "consultant": {
+        "role": "Consultor NIS2",
+        "body": "Multi-tenant por diseño. Gestione cada cliente en una única instancia auto-hospedada. Informes PDF white-label por organización; cambio de tenant sin cerrar sesión."
+      },
+      "secops": {
+        "role": "IT / SecOps",
+        "body": "Más de 30 comprobaciones asíncronas listas, MCP para agentes IA, métricas compatibles con Prometheus, escaneos programados con cron. Sin SaaS de terceros en el radio de su tenant."
+      }
+    },
+    "selfHosted": {
+      "badge": "Diseñada para on-premise",
+      "heading": "Sus datos de escaneo nunca salen de su infraestructura.",
+      "subtitle": "Un CISO de una entidad esencial no subirá sus datos de vulnerabilidades a un SaaS de terceros. La plataforma se ha construido partiendo de esa premisa.",
+      "point1": "Su PostgreSQL, sus datos — sin telemetría, sin llamadas externas, sin dependencias cloud.",
+      "point2": "Soporte air-gapped: el copilot Ollama corre íntegramente en local. OpenAI es opt-in.",
+      "point3": "FORCE ROW LEVEL SECURITY de Postgres impone aislamiento entre tenants en la base, no solo en la aplicación.",
+      "point4": "AGPL-3.0 — su fork es suyo, para siempre. Doble licencia comercial disponible.",
+      "techStack": "Pila tecnológica",
+      "runIt": "Arrancarla",
+      "snippetIntro": "60 segundos, un único compose",
+      "production": "Producción: <cmd>make prod</cmd> — Caddy con HTTPS automático, todos los servicios condicionados al healthcheck."
+    },
+    "finalCta": {
+      "heading": "Deje de hablar de NIS2. Empiece a mostrar la matriz.",
+      "subtitle": "Auto-hospede la plataforma en 60 segundos, o abra ya el dashboard si tiene cuenta. AGPL-3.0 — suya, para siempre.",
+      "create": "Crear su cuenta",
+      "readDocs": "Leer la documentación"
+    },
+    "footer": {
+      "blurbStart": "Gestión continua de postura NIS2 open-source. Mantenida por",
+      "blurbAuthor": "Fabrizio Salmi",
+      "blurbEnd": "consultor NIS2 independiente.",
+      "project": "Proyecto",
+      "platform": "Plataforma",
+      "github": "GitHub",
+      "readme": "README",
+      "license": "Licencia (AGPL-3.0)",
+      "security": "Política de seguridad",
+      "signIn": "Iniciar sesión",
+      "getStarted": "Empezar",
+      "forgot": "Contraseña olvidada",
+      "contact": "Contacto",
+      "copyright": "© 2024–2026 Fabrizio Salmi · Esto no es asesoramiento legal.",
+      "selfHosted": "Auto-hospedada",
+      "fiveLanguages": "5 idiomas UE",
+      "license2": "AGPL-3.0"
+    }
+  }
 }

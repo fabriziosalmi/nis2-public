@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+// Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
@@ -14,13 +14,20 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Languages } from "lucide-react"
 
+// Source-of-truth for the dropdown contents. Pre-2.4.27 this list
+// included `pt` even though `messages/pt.json` does not exist —
+// `i18n.ts` correctly excludes pt from the negotiation set, so a user
+// who picked "Português" wrote a cookie that was then silently
+// rejected and the UI snapped back to English on the next render.
+// Listing only the locales we actually ship keeps the switcher and
+// the negotiator in lockstep; add an entry here only when the
+// matching JSON file ships.
 const locales = [
   { code: "en", flag: "🇬🇧" },
   { code: "it", flag: "🇮🇹" },
   { code: "fr", flag: "🇫🇷" },
   { code: "de", flag: "🇩🇪" },
   { code: "es", flag: "🇪🇸" },
-  { code: "pt", flag: "🇵🇹" },
 ] as const
 
 export function LanguageSwitcher() {

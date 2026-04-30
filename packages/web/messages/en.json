@@ -452,6 +452,8 @@
     "save": "Save Changes",
     "saved": "Organization updated",
     "saveFailed": "Failed to save",
+    "loadFailed": "Could not load organization — saving is disabled until this loads.",
+    "retry": "Retry",
     "dangerZone": "Danger Zone",
     "dangerDescription": "Irreversible actions for this organization",
     "deleteOrg": "Delete Organization",
@@ -486,7 +488,9 @@
     "scanTimeout": "Scan Timeout (seconds)",
     "save": "Save Defaults",
     "saved": "Scan defaults saved",
-    "saveFailed": "Save failed"
+    "saveFailed": "Save failed",
+    "loadFailed": "Could not load saved defaults — saving is disabled to avoid overwriting your existing settings.",
+    "retry": "Retry"
   },
   "apiKeysPage": {
     "title": "API Keys",
@@ -752,5 +756,147 @@
     "de": "Deutsch",
     "es": "Español",
     "pt": "Português"
+  },
+  "landingPage": {
+    "header": {
+      "tagline": "Continuous Posture Management",
+      "docs": "Docs",
+      "github": "GitHub",
+      "signIn": "Sign in",
+      "getStarted": "Get started",
+      "primaryNav": "Primary",
+      "homeAria": "NIS2 Platform — home",
+      "githubAria": "View NIS2 Platform on GitHub"
+    },
+    "hero": {
+      "badge": "Open-source · AGPL-3.0 · self-hosted by design",
+      "headlineStart": "NIS2 governance, technical validation, and incident response —",
+      "headlineEnd": "under one roof.",
+      "subtitle": "The open-source platform for the EU NIS2 Directive (2022/2555). Bridge the gap between Art. 21 policy and what your network actually does — without sending a single byte of scan data to a third party.",
+      "ctaPrimary": "Get started — free",
+      "ctaSecondary": "Star on GitHub",
+      "alreadyAccount": "Already have an account?",
+      "metaAria": "Project metadata"
+    },
+    "trust": {
+      "ariaLabel": "Platform highlights",
+      "checks": "automated checks",
+      "languages": "EU languages",
+      "coverageValue": "Art. 18 / 21 / 23",
+      "coverage": "NIS2 coverage",
+      "deps": "SaaS dependencies"
+    },
+    "features": {
+      "eyebrow": "Six modules, one workspace",
+      "heading": "Everything Art. 21 asks for, in one auditable platform.",
+      "subtitle": "Most NIS2 work is human work. The platform automates the parts that should be automated, and tracks the parts that legally require a person to sign their name to.",
+      "learnMore": "Learn more",
+      "learnMoreAbout": "about {feature}",
+      "governance": {
+        "title": "Governance Framework",
+        "body": "30-item checklist mapped to NIS2 Art. 21 (a)–(j), with owner, evidence, and review-cadence tracking. Cross-referenced to the Italian D.Lgs 138/2024 transposition and ACN determine."
+      },
+      "validation": {
+        "title": "Technical Validation",
+        "body": "30+ async checks on TLS, DNS, certificates, HTTP headers, port exposure, secrets, and resilience. The probe that verifies if the policy your governance framework documents is actually enforced on the wire."
+      },
+      "incident": {
+        "title": "Incident Response",
+        "body": "Art. 23 lifecycle with the 24h / 72h / 1-month deadlines tracked as live countdowns. The Red Button generates a CSIRT-ready Early Warning JSON from three fields plus the latest asset inventory."
+      },
+      "supply": {
+        "title": "Supply Chain Risk",
+        "body": "Vendor inventory with 4-level criticality, security scoring, contract tracking (SLA, audit rights, security clauses), and ACN Art. 18 fields for Italian transposition."
+      },
+      "bia": {
+        "title": "Business Impact Analysis",
+        "body": "Process inventory with RTO / RPO / MTPD, five-dimension impact scoring, asset and vendor dependency mapping, and automatic BCP / DRP gap detection."
+      },
+      "ai": {
+        "title": "AI Copilot + MCP",
+        "body": "Optional remediation copilot via Ollama (air-gapped) or OpenAI. Native Model Context Protocol server lets Claude, Cursor, and other AI agents query your compliance posture directly."
+      }
+    },
+    "showcase": {
+      "ariaLabel": "Product preview",
+      "heading": "Posture you can read in 30 seconds.",
+      "subtitle": "One dashboard for total scans, average compliance score, open findings, and monitored assets — with the recent-scan trend on the same screen.",
+      "screenshotAlt": "NIS2 Platform dashboard: total scans, compliance score, findings, monitored assets, and the welcome onboarding panel"
+    },
+    "how": {
+      "eyebrow": "How it works",
+      "heading": "From clone to first executive report in an afternoon.",
+      "step1": {
+        "title": "Clone and run locally",
+        "body": "make dev — the platform comes up on http://localhost:8077 with Postgres, Redis, and the API in one compose file."
+      },
+      "step2": {
+        "title": "Map your governance",
+        "body": "Walk the 30-item Art. 21 checklist with owners and evidence. Add assets, vendors, and processes. Generate the executive PDF for the board."
+      },
+      "step3": {
+        "title": "Run the technical probe",
+        "body": "Schedule scans against your domains and IP ranges. Findings flow into the same workspace as the governance posture. Cross-reference each finding to the Art. 21 sub-paragraph it weakens."
+      }
+    },
+    "audiences": {
+      "heading": "Built with the people who actually use it.",
+      "subtitle": "One platform that speaks fluently to the boardroom and to the SOC.",
+      "for": "For {role}",
+      "ciso": {
+        "role": "CISO",
+        "body": "Bridge the gap between the policy you signed off and what the network actually does. Boardroom-ready evidence on a deadline."
+      },
+      "dpo": {
+        "role": "DPO",
+        "body": "GDPR / ePrivacy posture surfaced separately from NIS2 — never aggregated into the wrong score. Vendor risk and incident workflows aligned to your obligations."
+      },
+      "consultant": {
+        "role": "NIS2 Consultant",
+        "body": "Multi-tenant by design. Manage every client in one self-hosted instance. White-label PDF reports per organisation; switch tenants without logging out."
+      },
+      "secops": {
+        "role": "IT / SecOps",
+        "body": "30+ async checks shipped, MCP-ready for AI agents, Prometheus-friendly metrics, scheduled scans via cron. No third-party SaaS in your tenant blast radius."
+      }
+    },
+    "selfHosted": {
+      "badge": "Designed for on-premise",
+      "heading": "Your scan data never leaves your infrastructure.",
+      "subtitle": "A CISO of an essential entity will not upload their vulnerability data to a third-party SaaS. So we built the platform around the assumption that it won't.",
+      "point1": "Your PostgreSQL, your data — no telemetry, no external calls, no cloud dependencies.",
+      "point2": "Air-gapped support: Ollama AI copilot runs entirely local. OpenAI is opt-in.",
+      "point3": "Postgres FORCE ROW LEVEL SECURITY enforces tenant isolation in the database, not just the app.",
+      "point4": "AGPL-3.0 — own your fork forever. Commercial dual-licensing available.",
+      "techStack": "Tech stack",
+      "runIt": "Run it",
+      "snippetIntro": "60 seconds, one compose file",
+      "production": "Production: <cmd>make prod</cmd> — Caddy auto-HTTPS, all services healthy-gated."
+    },
+    "finalCta": {
+      "heading": "Stop talking about NIS2. Start showing the matrix.",
+      "subtitle": "Self-host the platform in 60 seconds, or open the dashboard now if you already have an account. AGPL-3.0 — yours, forever.",
+      "create": "Create your account",
+      "readDocs": "Read the docs"
+    },
+    "footer": {
+      "blurbStart": "Open-source NIS2 continuous posture management. Maintained by",
+      "blurbAuthor": "Fabrizio Salmi",
+      "blurbEnd": "independent NIS2 consultant.",
+      "project": "Project",
+      "platform": "Platform",
+      "github": "GitHub",
+      "readme": "README",
+      "license": "License (AGPL-3.0)",
+      "security": "Security policy",
+      "signIn": "Sign in",
+      "getStarted": "Get started",
+      "forgot": "Forgot password",
+      "contact": "Contact",
+      "copyright": "© 2024–2026 Fabrizio Salmi · This is not legal advice.",
+      "selfHosted": "Self-hosted",
+      "fiveLanguages": "5 EU languages",
+      "license2": "AGPL-3.0"
+    }
   }
 }

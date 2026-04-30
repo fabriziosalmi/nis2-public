@@ -452,6 +452,8 @@
     "save": "Enregistrer les Modifications",
     "saved": "Organisation mise à jour",
     "saveFailed": "Échec de l'enregistrement",
+    "loadFailed": "Impossible de charger l'organisation — l'enregistrement est désactivé jusqu'au chargement.",
+    "retry": "Réessayer",
     "dangerZone": "Zone de Danger",
     "dangerDescription": "Actions irréversibles pour cette organisation",
     "deleteOrg": "Supprimer l'Organisation",
@@ -486,7 +488,9 @@
     "scanTimeout": "Délai d'Analyse (secondes)",
     "save": "Enregistrer les Paramètres",
     "saved": "Paramètres d'analyse enregistrés",
-    "saveFailed": "Échec de l'enregistrement"
+    "saveFailed": "Échec de l'enregistrement",
+    "loadFailed": "Impossible de charger les paramètres — l'enregistrement est désactivé pour éviter d'écraser vos paramètres existants.",
+    "retry": "Réessayer"
   },
   "apiKeysPage": {
     "title": "Clés API",
@@ -752,5 +756,147 @@
     "de": "Deutsch",
     "es": "Español",
     "pt": "Português"
+  },
+  "landingPage": {
+    "header": {
+      "tagline": "Gestion continue de la posture",
+      "docs": "Documentation",
+      "github": "GitHub",
+      "signIn": "Connexion",
+      "getStarted": "Commencer",
+      "primaryNav": "Navigation principale",
+      "homeAria": "NIS2 Platform — accueil",
+      "githubAria": "Voir NIS2 Platform sur GitHub"
+    },
+    "hero": {
+      "badge": "Open-source · AGPL-3.0 · conçu pour l'auto-hébergement",
+      "headlineStart": "Gouvernance NIS2, validation technique et réponse aux incidents —",
+      "headlineEnd": "sur une seule plateforme.",
+      "subtitle": "La plateforme open-source pour la directive NIS2 (UE 2022/2555). Comblez l'écart entre la politique Art. 21 et ce que fait réellement votre réseau — sans envoyer un seul octet de données à un tiers.",
+      "ctaPrimary": "Commencer — gratuit",
+      "ctaSecondary": "Étoile sur GitHub",
+      "alreadyAccount": "Déjà un compte ?",
+      "metaAria": "Métadonnées du projet"
+    },
+    "trust": {
+      "ariaLabel": "Points forts de la plateforme",
+      "checks": "contrôles automatisés",
+      "languages": "langues européennes",
+      "coverageValue": "Art. 18 / 21 / 23",
+      "coverage": "couverture NIS2",
+      "deps": "dépendances SaaS"
+    },
+    "features": {
+      "eyebrow": "Six modules, un seul espace de travail",
+      "heading": "Tout ce que demande l'Art. 21, dans une plateforme auditable.",
+      "subtitle": "L'essentiel du travail NIS2 reste un travail humain. La plateforme automatise ce qui doit l'être et trace ce qui exige légalement la signature d'une personne.",
+      "learnMore": "En savoir plus",
+      "learnMoreAbout": "sur {feature}",
+      "governance": {
+        "title": "Cadre de Gouvernance",
+        "body": "Checklist de 30 points alignée sur l'Art. 21 NIS2 (a)–(j), avec suivi des responsables, preuves et cadence de revue. Références croisées avec la transposition italienne D.Lgs 138/2024 et les determine ACN."
+      },
+      "validation": {
+        "title": "Validation Technique",
+        "body": "Plus de 30 contrôles asynchrones sur TLS, DNS, certificats, en-têtes HTTP, exposition des ports, secrets et résilience. La sonde qui vérifie si la politique documentée est réellement appliquée sur le réseau."
+      },
+      "incident": {
+        "title": "Réponse aux Incidents",
+        "body": "Cycle Art. 23 avec les échéances 24h / 72h / 1 mois suivies en temps réel. Le Bouton Rouge génère un payload Early Warning prêt pour le CSIRT à partir de trois champs et de l'inventaire d'actifs le plus récent."
+      },
+      "supply": {
+        "title": "Risque de la Chaîne d'Approvisionnement",
+        "body": "Inventaire fournisseurs avec criticité à 4 niveaux, scoring sécurité, suivi contractuel (SLA, droits d'audit, clauses de sécurité) et champs spécifiques Art. 18 / ACN."
+      },
+      "bia": {
+        "title": "Analyse d'Impact (BIA)",
+        "body": "Inventaire des processus avec RTO / RPO / MTPD, scoring d'impact sur cinq dimensions, cartographie des dépendances aux actifs et fournisseurs, détection automatique des écarts BCP / DRP."
+      },
+      "ai": {
+        "title": "Copilote IA + MCP",
+        "body": "Copilote de remédiation optionnel via Ollama (air-gapped) ou OpenAI. Serveur Model Context Protocol natif : Claude, Cursor et autres agents IA peuvent interroger directement votre posture de conformité."
+      }
+    },
+    "showcase": {
+      "ariaLabel": "Aperçu du produit",
+      "heading": "Une posture lisible en 30 secondes.",
+      "subtitle": "Un seul tableau de bord pour les scans, le score moyen de conformité, les findings ouverts et les actifs surveillés — avec la tendance des scans récents sur le même écran.",
+      "screenshotAlt": "Tableau de bord NIS2 Platform : scans totaux, score de conformité, findings, actifs surveillés et panneau d'onboarding"
+    },
+    "how": {
+      "eyebrow": "Comment ça marche",
+      "heading": "Du clone au premier rapport exécutif en une après-midi.",
+      "step1": {
+        "title": "Clonez et lancez en local",
+        "body": "make dev — la plateforme démarre sur http://localhost:8077 avec Postgres, Redis et l'API dans un seul fichier compose."
+      },
+      "step2": {
+        "title": "Cartographiez votre gouvernance",
+        "body": "Parcourez la checklist Art. 21 de 30 points avec responsables et preuves. Ajoutez actifs, fournisseurs et processus. Générez le PDF exécutif pour le conseil."
+      },
+      "step3": {
+        "title": "Lancez la sonde technique",
+        "body": "Planifiez des scans sur vos domaines et plages IP. Les findings rejoignent le même espace que votre posture de gouvernance. Chaque finding peut être lié au sub-paragraphe Art. 21 qu'il affaiblit."
+      }
+    },
+    "audiences": {
+      "heading": "Pensée avec celles et ceux qui l'utilisent vraiment.",
+      "subtitle": "Une plateforme qui parle aussi bien au comité de direction qu'au SOC.",
+      "for": "Pour {role}",
+      "ciso": {
+        "role": "RSSI",
+        "body": "Comblez l'écart entre la politique que vous avez signée et ce que fait réellement le réseau. Des preuves prêtes pour le conseil, dans les délais."
+      },
+      "dpo": {
+        "role": "DPO",
+        "body": "Posture RGPD / ePrivacy gérée séparément du NIS2 — jamais agrégée dans le mauvais score. Workflows de risque fournisseur et d'incident alignés sur vos obligations."
+      },
+      "consultant": {
+        "role": "Consultant NIS2",
+        "body": "Multi-tenant par conception. Gérez chaque client dans une seule instance auto-hébergée. Rapports PDF white-label par organisation ; changement de tenant sans déconnexion."
+      },
+      "secops": {
+        "role": "IT / SecOps",
+        "body": "Plus de 30 contrôles asynchrones livrés, MCP pour les agents IA, métriques compatibles Prometheus, scans planifiés en cron. Aucun SaaS tiers dans le rayon de votre tenant."
+      }
+    },
+    "selfHosted": {
+      "badge": "Conçu pour l'on-premise",
+      "heading": "Vos données de scan ne quittent jamais votre infrastructure.",
+      "subtitle": "Un RSSI d'une entité essentielle ne téléversera pas ses données de vulnérabilité vers un SaaS tiers. La plateforme est construite à partir de cette hypothèse.",
+      "point1": "Votre PostgreSQL, vos données — aucune télémétrie, aucun appel externe, aucune dépendance cloud.",
+      "point2": "Support air-gapped : le copilote Ollama tourne entièrement en local. OpenAI est opt-in.",
+      "point3": "FORCE ROW LEVEL SECURITY de Postgres assure l'isolation des tenants au niveau de la base, pas seulement de l'application.",
+      "point4": "AGPL-3.0 — votre fork vous appartient pour toujours. Double licence commerciale disponible.",
+      "techStack": "Pile technique",
+      "runIt": "Lancez-la",
+      "snippetIntro": "60 secondes, un seul fichier compose",
+      "production": "Production : <cmd>make prod</cmd> — Caddy HTTPS automatique, tous les services soumis à un healthcheck."
+    },
+    "finalCta": {
+      "heading": "Arrêtez de parler de NIS2. Commencez à montrer la matrice.",
+      "subtitle": "Auto-hébergez la plateforme en 60 secondes, ou ouvrez la dashboard maintenant si vous avez déjà un compte. AGPL-3.0 — à vous, pour toujours.",
+      "create": "Créer votre compte",
+      "readDocs": "Lire la documentation"
+    },
+    "footer": {
+      "blurbStart": "Gestion continue de posture NIS2 open-source. Maintenue par",
+      "blurbAuthor": "Fabrizio Salmi",
+      "blurbEnd": "consultant NIS2 indépendant.",
+      "project": "Projet",
+      "platform": "Plateforme",
+      "github": "GitHub",
+      "readme": "README",
+      "license": "Licence (AGPL-3.0)",
+      "security": "Politique de sécurité",
+      "signIn": "Connexion",
+      "getStarted": "Commencer",
+      "forgot": "Mot de passe oublié",
+      "contact": "Contact",
+      "copyright": "© 2024–2026 Fabrizio Salmi · Ceci n'est pas un avis juridique.",
+      "selfHosted": "Auto-hébergé",
+      "fiveLanguages": "5 langues UE",
+      "license2": "AGPL-3.0"
+    }
   }
 }

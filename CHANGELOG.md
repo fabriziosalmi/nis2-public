@@ -1,5 +1,106 @@
 # Changelog
 
+## [2.4.27] - 2026-04-30
+
+Public landing page + multi-locale wiring, three audit fixes (frontend silent-catch, prod web healthcheck, RLS hardening), and assorted cleanup. Triggered by a request to "find blocker problems and fix all" before turning attention to UX.
+
+### What changed at a glance
+
+- **Public landing page on `/`** (replaces the `Loading…` redirect-spinner). Hero, six-card feature grid mapped to actual API router families, product screenshot in a mac-chrome frame, three-step `make dev` onboarding, four-audience block (CISO / DPO / Consultant / IT), self-hosted commitment section with tech-stack pills, gradient final CTA, and a four-column footer.
+- **Authenticated users still land on `/dashboard`** via the same client-side redirect. The visible delta is for unauthenticated visitors only.
+- **Landing page is fully i18n-wired** in en / it / fr / de / es. `Accept-Language` negotiation already worked for the rest of the app via `i18n.ts`; the landing now participates in it. ~94 new keys under `landingPage.*`, parity verified across all 5 locales.
+- **`pt` removed from the `LanguageSwitcher`** — `messages/pt.json` does not ship, so picking "Português" wrote a cookie that the negotiator (correctly) rejected, and the UI snapped back to English. Switcher and negotiator are now in lockstep.
+- **Italian copy review on the landing**: 17 anglicism-or-literal-translation tweaks (e.g. "a un terzo" → "a terze parti", "tracking di owner" → "tracciamento di responsabile", "Self-host della piattaforma" → "Avvia la piattaforma in self-hosting", "sub-paragrafo dell'Art. 21" → "lettera dell'Art. 21"). Anglicisms accepted in the GRC-IT register stay (`workspace`, `finding`, `policy`, `compliance`, `Red Button`, `Early Warning`, `air-gapped`).
+
+### Fixed — Settings pages no longer silently overwrite saved settings (BLOCKER)
+
+`/dashboard/settings/scan-defaults` and `/dashboard/settings/organization` both did `api.getOrg(orgId).then(reset).catch(() => {})`. On load failure (network blip, transient 401 before refresh, RLS misconfig) the swallow:
+
+- **scan-defaults**: rendered the hardcoded `defaults` constant and a Save click PATCH'd those defaults over the org's actual saved settings. Unrecoverable data loss disguised as a successful save toast.
+- **organization**: rendered an empty form name field plus blank disabled slug / plan / orgId fields with no toast or error explaining why.
+
+Both now surface a `loadFailed` error banner with a `retry` button, disable Save until the load succeeds, and propagate the underlying API error message to the user. New `loadFailed` and `retry` keys in the `organizationPage` and `scanDefaultsPage` namespaces of all 5 locales (10 new keys total).
+
+### Fixed — Web service has a healthcheck in prod (BLOCKER)
+
+`infra/docker/docker-compose.prod.yml` had Caddy gated on `web: { condition: service_started }`, which Docker considers green the moment the container's ENTRYPOINT process is running — NOT once it's accepting connections. Next.js standalone has a measurable warm-up window where `node server.js` is alive but the listen socket is not yet open; Caddy started proxying immediately and the first user requests after `make prod` got 502s for ~5–15s.
+
+Fix: a `node`-based healthcheck (`require('http').get('http://127.0.0.1:3000/', ...)`) that returns 0 on any 2xx/3xx/4xx and 1 on 5xx or connection error. Caddy's dependency on `web` is now `service_healthy`, mirroring the existing gate on `api: { condition: service_healthy }`.
+
+### Fixed — Cron `_should_run` no longer swallows exceptions silently (SERIOUS)
+
+`app/tasks/scan_tasks.py:_should_run` wrapped the entire matcher in `try / except: return False`. v2.4.26 added input validation at route level so new schedules cannot persist a bad expression, but legacy rows that pre-date the validator (e.g. `@daily`, day names like `MON`) would still fall into this branch and the schedule simply never fired — operators had no signal as to why. Now the except branch logs at WARNING with the offending expression. Stays at WARNING (not ERROR) because beat iterates every minute over every schedule; ERROR would spam the log if a single bad row exists.
+
+### Hardened — RLS policy now has explicit `WITH CHECK` + superuser warning at startup
+
+`app/database.py::setup_row_level_security` previously created the policy with only `USING (...)`. Postgres treats a missing `WITH CHECK` as "same as USING" for INSERT / UPDATE — which happened to be safe here, but was implicit and brittle. Making `WITH CHECK` explicit pins the contract: every INSERT and UPDATE must match the current org, so a misconfigured task cannot smuggle a row with a foreign `organization_id` even if the SELECT side were ever loosened.
+
+Defense-in-depth check on lifespan startup: if the DB role the API connects with has `rolsuper=t` or `rolbypassrls=t`, log a WARNING. The default `postgres:16-alpine` image creates `POSTGRES_USER` as a SUPERUSER, which silently bypasses every RLS policy regardless of `FORCE ROW LEVEL SECURITY`. Operators going to production should provision a non-superuser app role with BYPASSRLS revoked; this surface line tells them why and how. Not a hard-fail (would break first-run UX), just a loud signal.
+
+### Docs site — bilingual home (EN + IT) at design parity with the dashboard landing
+
+The docs site at `https://fabriziosalmi.github.io/nis2-public/` used to render the VitePress default home (Hero + Features grid). After the dashboard app got a real landing page in this same release, the docs page felt clearly behind: a generic VitePress hero next to a curated product page made the platform look unprofessional to anyone visiting both. Closed by porting the dashboard landing to a VitePress-native Vue component, with two adjustments:
+
+- **Bilingual EN + IT, zero-flash detection.** The DOM contains both languages paired through `<span class="locale-en">` / `<span class="locale-it">`. An inline detect script in `<head>` (~280 chars, sync, pre-paint) reads `localStorage.nis2-doc-locale` and falls through to `navigator.language`, then writes `class="locale-en"` or `class="locale-it"` on `<html>` BEFORE first paint. CSS hides the inactive language. An IT visitor never sees an English flash, and vice versa. A small `EN | IT` toggle in the top-right lets the user override (persisted in localStorage). hreflang `en` / `it` / `x-default` declared in head so Google indexes both versions correctly. Other doc pages stay English-only — the bilingual treatment is scoped to the marketing surface.
+- **CTA wiring differs from the app landing.** Where the app sends users to `/register` and `/login`, the docs landing sends them to `/guide/getting-started`, the GitHub repo, and `mailto:fabrizio.salmi@gmail.com` for consultation. A docs visitor wants to learn how to install, not provision a SaaS account.
+
+Implementation: Tailwind v4 wired into the VitePress Vite pipeline (`@tailwindcss/vite`), custom `theme/components/Home.vue` + `Logo.vue`, registered globally via `theme/index.ts::enhanceApp`, frontmatter on `docs/index.md` switched to `layout: page` + `sidebar: false` + `aside: false` so the marketing canvas gets full width but the VitePress nav stays for site navigation.
+
+#### Cascade-layer correction (load-bearing)
+
+First preview rendered the home as if Tailwind weren't loaded — h1 at 16px / weight 400, padding utilities collapsed, `bg-slate-900` no-op. Root cause: `@import "tailwindcss"` (the canonical one-liner) wraps everything in `@layer theme/base/components/utilities`, but VitePress ships its global stylesheet UNLAYERED. CSS rule: anything outside `@layer` outranks anything inside `@layer`, regardless of selector specificity. So VitePress's `h1,h2,h3,...,h6 { font-size: 16px; font-weight: 400 }` reset beat Tailwind's `.text-4xl { font-size: 2.25rem }` (in `@layer utilities`) and the heading rendered at body size. Same mechanism killed `pt-20`, `bg-slate-900`, etc.
+
+Fix: split the Tailwind import so theme + preflight stay in low-priority layers but **utilities land unlayered**, putting them at the same cascade level as VitePress and giving specificity its normal say:
+
+```css
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/preflight" layer(base);
+@import "tailwindcss/utilities";  /* unlayered — beats VitePress unlayered */
+```
+
+After: h1 = 60px / weight 700, all responsive utilities (`sm:text-5xl`, `lg:text-6xl`, `pt-20`, `sm:py-24`, `bg-slate-900`, etc) apply correctly. Verified via `getComputedStyle()` on the rendered DOM and visual diff against the dashboard landing.
+
+The dashboard app (Next.js + Tailwind v4 in webpack) was unaffected because it doesn't ship competing unlayered base styles. The collision was VitePress-specific.
+
+Companion fixes shipped in the same change:
+- `@custom-variant dark (&:where(.dark, .dark *))` — Tailwind v4's `dark:` modifier defaults to `prefers-color-scheme`; VitePress drives dark via `<html class="dark">`, so without the custom variant the topbar flipped dark while the home stayed light.
+- `.docs-home a { color: inherit; text-decoration: none }` (full-specificity, not `:where()`) plus Tailwind v4 `!` prefix on CTA color utilities (`!text-white`, `!text-slate-900`) — VitePress's `a { color: var(--vp-c-brand-1) }` was beating low-specificity resets and rendering CTA buttons with invisible text on bright backgrounds.
+- Explicit `line-height` on `.docs-home h1/h2/h3` (1.1 / 1.2 / 1.3) — Italian copy is markedly more verbose than English, and several headings wrap to 2-3 lines; the default Tailwind line-height made wrapped lines visually collide.
+
+### Misc
+
+- `next.config.ts`: pin `outputFileTracingRoot` to silence the Next 15 multi-lockfile warning ("We detected multiple lockfiles..." — caused by the docs root having its own `package-lock.json` for the VitePress build).
+- Removed two stray empty escaped-paren directories `packages/web/src/app/\(auth\)` and `packages/web/src/app/\(dashboard\)` (cruft from a botched shell command, never tracked in git).
+- Removed the duplicate untracked `screenshot.png` at the repo root; the docs version under `docs/public/screenshot.png` (referenced by README) is the only copy needed.
+- Fixed a `t.rich` runtime error on the SelfHosted section: the `production` message used a `{cmd}` placeholder when called via `t.rich({ cmd: ... })`, which expects a `<cmd>...</cmd>` rich-text tag. Updated all 5 locales to use the tag form, so the styled `<code>` injection works.
+
+### Audit transparency: 7 reported issues, 3 real, 4 false positives
+
+The post-v2.4.26 audit pass turned up the usual mix. This CHANGELOG records what was actually broken vs. what was misread, so future readers don't think a phantom security bug existed and was silently dropped.
+
+| # | Reported issue | Verdict |
+|---|---|---|
+| 1 | Settings pages silently swallow load errors | **Real BLOCKER**, fixed above. |
+| 2 | Web service in prod has no healthcheck | **Real BLOCKER**, fixed above. |
+| 3 | Cron `_should_run` swallows exceptions silently | **Real SERIOUS**, fixed above. |
+| 4 | Celery tasks bypass RLS context — "cross-tenant access could leak" | **False positive.** Tasks correctly propagate `organization_id` from the queued message (read from the loaded `Scan` / `Schedule` row, not from session context). The application-layer scoping is correct; RLS would only be relevant as defense-in-depth, and that surfaces in #5. |
+| 5 | RLS effectively disabled when DB role is SUPERUSER | **Real, architectural** — but not an active runtime vuln (see #4). Hardened with explicit `WITH CHECK` + startup warning, above. |
+| 6 | TanStack `refetchInterval` leaks after status flip | **False positive.** v5 stops polling on `false` return; not leaking. |
+| 7 | `AUTH_PUBLIC_PATHS` mis-fires on `?` paths | **False positive.** The four public auth routes are POST-with-body, never carry query strings. |
+| 8 | Caddyfile missing `X-Forwarded-*` headers | **False positive.** Caddy 2 `reverse_proxy` injects them by default. |
+| 9 | POSTGRES_PASSWORD has no default in prod compose | **False positive — by design.** Production refusing to boot without an explicit secret is the contract; defaulting would be a security regression. |
+| 10 | "Retry-then-Save race" on settings forms | **False positive.** The audit hallucinated the symptom — `disabled={loading \|\| !isDirty \|\| !!loadError \|\| loadingInitial}` resolves to `!isDirty` after a successful retry, which is correct (don't enable Save until the user has changed something). |
+
+### Verified
+
+- Web build green (24/24 pages).
+- API tests in Docker: **187 passed, 62 skipped**, 0 failed.
+- Scanner tests: 19 passed.
+- E2E HTTP smoke (logged-in cookie jar, all 21 user-facing pages): all 200, zero React-error markers in the rendered HTML.
+- Multi-language live test: `/`, `/login`, `/dashboard/settings/scan-defaults` correctly localised in en / it / fr / de / es via `Accept-Language` negotiation.
+- i18n parity: 5/5 files with identical key set (782 keys each), all ICU placeholders aligned, all rich-text tags balanced, no empty values.
+
 ## [2.4.26] - 2026-04-29
 
 API surface audit triage — closes the only **real** BLOCKER from the v2.4.25 audit pass plus one verified SERIOUS gap. The other "blockers" the audit agent flagged turned out to be false positives on close reading; this CHANGELOG documents what was actually broken vs. what was misread, so the audit trail is honest.

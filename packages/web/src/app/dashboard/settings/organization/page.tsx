@@ -1,14 +1,14 @@
-// Copyright (c) 2024-2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+// Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { Loader2, Building2 } from "lucide-react"
+import { Loader2, Building2, AlertTriangle } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,19 +37,38 @@ export default function OrganizationSettingsPage() {
   const orgId = useAuthStore((s) => s.orgId)
   const [loading, setLoading] = useState(false)
   const [org, setOrg] = useState<any>(null)
+  // The previous version called `.catch(() => {})` here — a load
+  // failure left the form name field empty AND the slug/plan/orgId
+  // disabled fields blank, with no toast or error to explain. The
+  // user could still type a name and submit; the PATCH would succeed
+  // but every other piece of context shown to them was wrong. Now we
+  // surface the error and disable Save until the org loads cleanly,
+  // so the screen never silently lies about the org state.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadingInitial, setLoadingInitial] = useState(true)
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<OrgForm>({
     resolver: zodResolver(orgSchema),
   })
 
-  useEffect(() => {
-    if (orgId) {
-      api.getOrg(orgId).then((data) => {
-        setOrg(data)
-        reset({ name: data.name })
-      }).catch(() => {})
+  const loadOrg = useCallback(async () => {
+    if (!orgId) return
+    setLoadingInitial(true)
+    setLoadError(null)
+    try {
+      const data = await api.getOrg(orgId)
+      setOrg(data)
+      reset({ name: data.name })
+    } catch (err: any) {
+      setLoadError(err?.message || "load failed")
+    } finally {
+      setLoadingInitial(false)
     }
   }, [orgId, reset])
+
+  useEffect(() => {
+    loadOrg()
+  }, [loadOrg])
 
   const onSubmit = async (data: OrgForm) => {
     if (!orgId) return
@@ -72,6 +91,23 @@ export default function OrganizationSettingsPage() {
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+          <div className="flex-1 space-y-1">
+            <p className="text-sm font-medium text-destructive">{t("loadFailed")}</p>
+            <p className="text-xs text-muted-foreground">{loadError}</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={loadOrg} disabled={loadingInitial}>
+            {loadingInitial && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            {t("retry")}
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -109,7 +145,7 @@ export default function OrganizationSettingsPage() {
             <Separator />
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={loading || !isDirty}>
+              <Button type="submit" disabled={loading || !isDirty || !!loadError || loadingInitial}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t("save")}
               </Button>
