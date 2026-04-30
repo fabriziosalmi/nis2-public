@@ -49,7 +49,7 @@ When you write to `fabrizio.salmi@gmail.com` (e.g. for a consultation request, d
 
 | Data | Purpose | Legal basis | Retention |
 |---|---|---|---|
-| Email address | Theta Consulting to your message | Legitimate interest (Art. 6(1)(f)) — answering a deliberate inquiry from you | Until the conversation is concluded + reasonable archival period (max. 24 months) for follow-up reference |
+| Email address | Reply to your message | Legitimate interest (Art. 6(1)(f)) — answering a deliberate inquiry from you | Until the conversation is concluded + reasonable archival period (max. 24 months) for follow-up reference |
 | Message content (including any data you include) | Same as above | Same | Same |
 
 If your message leads to a paid engagement, processing for that engagement is then governed by the contract and applicable accounting / VAT-record-keeping retention obligations (typically 10 years under Italian fiscal law).
