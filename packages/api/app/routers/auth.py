@@ -1,8 +1,10 @@
 # Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import asyncio
 import hashlib
 import logging
+import random
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -183,6 +185,13 @@ def _build_token_response(
 
     access_token = create_access_token(token_data, iat_override=iat_override)
     refresh_token = create_refresh_token(token_data, iat_override=iat_override)
+    # v2.5.4 (Tier 2-A): the CSRF token is intentionally re-minted on
+    # every call — including from /refresh — so it rotates in lockstep
+    # with the refresh-token rotation. A captured CSRF cookie (the
+    # cookie is JS-readable by design, so XSS in a same-site context
+    # could leak it) therefore has the same short lifetime as the
+    # access token rather than surviving for the full refresh-token
+    # window. Regression-locked by TestCSRF.test_csrf_token_rotates_on_refresh.
     csrf_token = secrets.token_urlsafe(32)
 
     _set_auth_cookies(response, access_token, refresh_token, csrf_token)
@@ -1047,6 +1056,28 @@ async def forgot_password(
     Bypass RLS for the bookkeeping: same rationale as register/login
     (the user has no session yet, the password_reset_tokens table is
     not tenant-scoped anyway).
+
+    v2.5.4 (Tier 2-B) hardening:
+      * The unknown-email path used to early-return after the SELECT,
+        so its wall-clock time was 5–20× shorter than the known-email
+        path (which generates a token, hashes it, INSERTs, and awaits
+        SMTP). Pre-2.5.4 a chatty attacker could still enumerate
+        registered emails via response timing alone — defeating the
+        whole point of the always-204 contract. Two defenses now run
+        on every request:
+          (a) the unknown path performs the SAME token + hash work
+              as the known path and discards the result, so the CPU
+              and DB time profiles are within a few microseconds;
+          (b) BOTH paths sleep a randomised duration ≥ typical SMTP
+              latency before returning, so the variable cost of the
+              real send_email() is masked under the same jitter.
+      * The MTA-failure log used to print `user.email`, which (a)
+        promotes a transient operational error into a long-lived
+        PII record in the application logs and (b) creates a
+        secondary enumeration channel (anyone with log access can
+        confirm "this email is registered"). Now logged by user.id
+        only — sufficient for an operator triaging the failure and
+        non-identifying on its own.
     """
     await _bypass_rls_for_bootstrap(db)
 
@@ -1059,11 +1090,16 @@ async def forgot_password(
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
-        # No row to write. Returning here keeps response time roughly
-        # constant — bcrypt timing attacks (which would exist if we
-        # hashed something here) aren't relevant for an enumeration
-        # primitive on email lookup, but the principle holds: do as
-        # little as possible work-wise on the unknown-email path.
+        # Constant-time defense: do the same CPU and DB-ish work as
+        # the known-email branch, then discard. Generating a token
+        # and hashing it costs the same regardless of whether we
+        # later persist it; the cost is what we're matching.
+        _ = _hash_reset_token(secrets.token_urlsafe(32))
+        # Latency-jitter defense: typical SMTP send (Mailpit local /
+        # transactional provider) sits in the 50–250ms range. We
+        # sleep a uniform window over that band so neither tail of
+        # the distribution is a reliable enumeration signal.
+        await asyncio.sleep(random.uniform(0.05, 0.25))
         return None
 
     # 2. Mint and persist.
@@ -1092,9 +1128,18 @@ async def forgot_password(
         )
     except Exception:
         # Don't leak the failure to the client — but log it so an
-        # operator notices a misconfigured MTA before users do.
-        logger.exception("forgot-password: failed to send email to %s", user.email)
+        # operator notices a misconfigured MTA before users do. Log
+        # by user.id (not email) so the logs aren't a back-door
+        # email-enumeration channel for anyone with log access.
+        logger.exception(
+            "forgot-password: failed to send reset email (user_id=%s)", user.id
+        )
 
+    # Latency-jitter on the known path too — see the timing-constant
+    # rationale in the docstring. Without this, the known-path response
+    # time would be dominated by send_email() variance and still differ
+    # measurably from the unknown path on any given request.
+    await asyncio.sleep(random.uniform(0.05, 0.25))
     return None
 
 

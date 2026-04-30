@@ -373,3 +373,32 @@ class TestCSRF:
             headers={"X-CSRF-Token": "wrong-value"},
         )
         assert r.status_code == 403
+
+    def test_csrf_token_rotates_on_refresh(self, fresh_client):
+        """v2.5.4 (Tier 2-A): the double-submit CSRF cookie is rotated
+        on every /auth/refresh, alongside the access + refresh tokens.
+
+        Why this is a regression-grade invariant: if rotation breaks,
+        a CSRF token captured once (e.g. from a same-site sub-resource
+        leak) keeps working for the entire refresh-token lifetime —
+        days, not minutes. The token is JS-readable by design (the SPA
+        echoes it back as `X-CSRF-Token`), so a brief leak window must
+        not become a long-lived foothold.
+        """
+        _register_org(fresh_client, "csrf-rotate")
+        csrf_before = fresh_client.cookies.get("csrf_token")
+        assert csrf_before, "csrf_token cookie not set after /register"
+
+        r = fresh_client.post("/api/v1/auth/refresh")
+        assert r.status_code == 200, r.text
+
+        csrf_after = fresh_client.cookies.get("csrf_token")
+        assert csrf_after, "csrf_token cookie missing after /refresh"
+        assert csrf_after != csrf_before, (
+            "CSRF token did not rotate on /refresh — "
+            "_build_token_response must mint a fresh secrets.token_urlsafe(32)"
+        )
+        # And the response body advertises the same value as the cookie,
+        # so SDK clients (which can't read cookies) get it too.
+        body = r.json()
+        assert body.get("csrf_token") == csrf_after

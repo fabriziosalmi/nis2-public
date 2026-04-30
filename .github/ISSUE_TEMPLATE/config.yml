@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+# NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+#
+# `blank_issues_enabled: false` forces every new issue through one of
+# the structured templates below — saves a triage round on "what version
+# are you on", "is this a bug or a question", etc.
+
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/fabriziosalmi/nis2-public/security/advisories/new
+    about: |
+      Please use GitHub's private vulnerability reporting flow. Public
+      issues for security bugs leave every operator running this code
+      exposed before a fix is available — see SECURITY.md for the full
+      policy and SLA.
+  - name: Question / discussion
+    url: https://github.com/fabriziosalmi/nis2-public/discussions
+    about: |
+      For questions, configuration help, or open-ended design
+      discussions, please open a Discussion instead of an Issue.
+      Issues are reserved for actionable bugs and feature requests.
+  - name: Commercial / dual-license inquiry
+    url: mailto:fabrizio.salmi@gmail.com
+    about: |
+      Email the maintainer directly for dual-license / consultancy
+      requests. The codebase is AGPL-3.0; commercial-friendly licensing
+      is available on a case-by-case basis.

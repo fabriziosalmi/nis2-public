@@ -295,6 +295,9 @@
   "findings": {
     "title": "Risultati",
     "subtitle": "Verifica e gestisci i risultati di conformità",
+    "piiNoticeTitle": "I findings possono contenere dati personali",
+    "piiNoticeBody": "I risultati delle scansioni possono includere hostname, indirizzi IP, indirizzi email o altri identificatori estratti da fonti pubbliche (DNS, certificate transparency, pattern-matching su secret). Ai sensi del GDPR sei il titolare del trattamento per queste evidenze — applica agli export, alla condivisione e alla retention la stessa cura che applicheresti ai dati personali sottostanti.",
+    "piiNoticeDismiss": "Ho capito",
     "filters": "Filtri",
     "severity": "Gravità",
     "category": "Categoria",

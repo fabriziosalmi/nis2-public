@@ -1,0 +1,63 @@
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: Feature request
+description: Suggest a new capability or an enhancement to an existing feature.
+title: "[feat] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for thinking about how the platform could be better. The bar for accepting a feature request is "this helps a real NIS2 / Art. 21 / Art. 18 use case for an Italian or EU operator", so the framing below is what we'll triage against.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Lead with the pain, not the proposed solution. "I can't see X" is more useful than "Add a new tab".
+      placeholder: |
+        When I run a scan against …, I cannot tell whether …
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How would you like the platform to behave? UI mock-ups, API shape, or just prose are all fine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds that exist today, and why they fall short.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface does this touch?
+      multiple: true
+      options:
+        - API
+        - Web UI / Dashboard
+        - Scanner
+        - Documentation site
+        - Compliance / Governance / Vendors content
+        - Deployment / packaging
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: nis2-context
+    attributes:
+      label: NIS2 / regulatory context (optional)
+      description: |
+        If the request is driven by a specific Article — Art. 21 sub-paragraph, Art. 18, ACN-specific obligation, GDPR cross-cut, etc. — cite it. It's a tie-breaker on prioritisation.
+    validations:
+      required: false

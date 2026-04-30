@@ -6,7 +6,7 @@
 
 # Privacy Policy / Informativa privacy
 
-*Last updated: 2026-04-30 — version 1.0*
+*Last updated: 2026-04-30 — version 1.1*
 
 > **Scope of this notice.** This document covers (a) the **public maintainer-operated surfaces** of the project — the documentation site at `https://fabriziosalmi.github.io/nis2-public/` and direct contact via the email address listed below — and (b) provides a **template** that operators of self-hosted instances are expected to adapt for their own deployments (see *Self-hosted deployments* below).
 >
@@ -98,24 +98,66 @@ In the event of a personal data breach affecting the maintainer-operated surface
 
 ## 7. Self-hosted deployments — you are the data controller
 
-When you `git clone` and `make prod` on your own infrastructure, **you become the sole data controller** (Art. 4(7) GDPR) for the personal data processed by your instance:
+When you `git clone` and `make prod` on your own infrastructure, **you become the sole data controller** (Art. 4(7) GDPR) for the personal data processed by your instance.
 
-- Registered user accounts (email, full name, hashed password, locale preference)
-- Asset inventories and scan targets you supply
-- Scan results and findings
-- Audit log entries (90-day retention, configurable)
-- Authentication tokens (session cookies, refresh tokens, CSRF tokens)
-- Any scan-side content that incidentally captures personal data (e.g. emails surfaced by the secrets scanner)
+### 7.1 What your instance processes (data inventory)
+
+| Category | What | Where it lives | Default retention |
+|---|---|---|---|
+| Account data | email, full name, bcrypt-hashed password, locale preference, `password_changed_at`, `is_active` | `users` table | until user-initiated erasure (DELETE `/api/v1/auth/me`) |
+| Membership data | `user_id`, `organization_id`, `role` (`owner`/`admin`/`auditor`/`viewer`) | `memberships` table | until user erasure or org deletion |
+| Authentication state | httpOnly access + refresh JWT cookies, JS-readable CSRF cookie, JTI revocation list | browser cookies + `revoked_tokens` table | access: 15 min; refresh: 7 days; revoked JTIs pruned hourly past expiry |
+| Audit log | `user_id` (nullable post-erasure), `action`, `resource_type`, `resource_id`, **`ip_address`**, **`user_agent`**, `created_at`, optional `metadata` JSON | `audit_logs` table | 90 days, configurable via `AUDIT_LOG_RETENTION_DAYS` |
+| Password-reset tokens | `user_id`, `token_hash` (SHA-256), `expires_at`, `used_at` | `password_reset_tokens` table | 30 min TTL; pruned hourly post-expiry |
+| Asset inventory | domain / IP / CIDR records and tags supplied by the user | `assets` table | until user-initiated deletion |
+| Scan results | per-scan rollups, raw `scan_results` rows, deduplicated `findings` | `scans`, `scan_results`, `findings` tables | until user-initiated deletion (no automatic purge) |
+| API keys | hashed key, name, scopes, last-used timestamp | `api_keys` table | until revoked |
+
+### 7.2 IP address and User-Agent in `audit_logs`
+
+Every successful state-changing request (Pre-`AuditMiddleware` v2.4.x) writes an `audit_logs` row that includes the originating **IP address** and **User-Agent**. Both are personal data when they relate to an identifiable person.
+
+- **Legal basis** — Art. 6(1)(f) legitimate interest in maintaining a forensic trail of administrative actions on tenant data, with a documented retention ceiling. Art. 32 GDPR (security of processing) makes this trail expected for any system processing organisational compliance data.
+- **Pseudonymisation on erasure** — when a user invokes `DELETE /api/v1/auth/me`, their `audit_logs` rows are not deleted (the audit trail is the controller's legitimate interest under Art. 89(1)). Instead `user_id` is nulled, `ip_address` is replaced with `127.0.0.1`, and `user_agent` is replaced with `[erased]`. The action / resource columns survive so the audit chain remains intact.
+- **Retention** — default 90 days. Set `AUDIT_LOG_RETENTION_DAYS` to your own jurisdiction's requirement.
+
+### 7.3 Outbound network calls during scans
+
+The scanner makes **direct DNS, TLS, HTTP, and TCP connections to the targets the user configures**. These are by definition personal data flows when the targets resolve to identifiable persons (e.g. an individual's mail server, a freelancer's homepage). Beyond the targets themselves, the scanner also queries the following **third-party services** that the deployer must disclose to data subjects:
+
+| Service | Purpose | Data sent | Provider | Data flow |
+|---|---|---|---|---|
+| `crt.sh` (Sectigo) | Certificate Transparency log lookup for subdomain enumeration | the domain being scanned | Sectigo Limited (USA / UK) | scanner → crt.sh over HTTPS |
+| Public DNS resolvers (system-configured) | Name resolution for scan targets | the domain being scanned | the deployer's resolver chain (often Cloudflare 1.1.1.1, Google 8.8.8.8, ISP) | OS resolver |
+| Target hosts | TLS / HTTP / port probes | source IP of the scanner pod, scanner User-Agent | the target's operator | direct connection |
+
+If your deployment uses a corporate proxy or a dedicated egress IP, replace the rows above accordingly. **No telemetry leaves the platform**: there is no callback to the maintainer, no error-reporting service, no analytics endpoint.
+
+### 7.4 PII captured incidentally by the scanner
+
+Some scanner modules surface evidence that may itself be personal data:
+
+- **Secrets scanner** — pattern matches that look like AWS keys, JWTs, GitHub tokens, etc. are stored as the *finding evidence*. If a leaked secret happens to be shaped like an email address (e.g. `noreply@example.com`), it lands in `findings.technical_detail` verbatim.
+- **Subdomain enumeration** — `crt.sh` returns FQDNs that may identify individual employees (e.g. `john-laptop.corp.example.com`).
+- **Port / banner scans** — service banners can echo internal hostnames or admin email addresses.
+
+The dashboard surfaces an in-product GDPR notice on the Findings page (`v2.5.4`) reminding the operator that they are the controller for this evidence and must apply the same retention / sharing care as for the underlying personal data.
+
+### 7.5 What the maintainer is *not*
 
 The maintainer:
 - Is **not** a data processor for your instance — there is no contract under Art. 28 between you and the maintainer for self-hosted deployments
 - Provides this software *as is* under AGPL-3.0 with no warranty (see [LICENSE](https://github.com/fabriziosalmi/nis2-public/blob/main/LICENSE))
 - Receives **no telemetry**, no scan data, no user data from your instance — see the architectural commitment in the [README](https://github.com/fabriziosalmi/nis2-public#deployment-designed-for-on-premise)
 
+### 7.6 Your obligations
+
 You are obliged to:
 - Publish your own privacy notice (you may use this template as a starting point — adapt the controller, recipients, retention, and rights sections to your own facts)
 - Maintain your records of processing (Art. 30) and conduct a DPIA (Art. 35) if your processing meets the criteria
 - Notify your users in case of breach (Art. 33-34) on your timeline, not the maintainer's
+- Disclose the third-party data flows in §7.3 to your users — `crt.sh` in particular is a transfer to a non-EEA controller and may require either contractual safeguards or disabling of subdomain enumeration
+- Configure `AUDIT_LOG_RETENTION_DAYS` to match your own retention obligations
 
 ## 8. Updates
 

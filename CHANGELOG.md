@@ -1,5 +1,75 @@
 # Changelog
 
+## [2.5.4] - 2026-04-30
+
+Tier 2 + Tier 3 closure — security hardening on the auth surfaces, GDPR-aware UX on findings, and the OSS-hygiene files (SECURITY.md, security.txt, CODE_OF_CONDUCT, issue/PR templates, CODEOWNERS) the project had been carrying as deferred items.
+
+### 🟠 Security — `/auth/forgot-password` is now constant-time and PII-free in the logs
+
+**Pre-2.5.4 problem.** The unknown-email path early-returned after the `SELECT`, so its wall-clock time was 5–20× shorter than the known-email path (which generates a token, hashes it, INSERTs, and awaits SMTP). A chatty attacker could enumerate registered emails via response timing alone, defeating the always-204 contract. Separately, the MTA-failure log printed `user.email`, promoting a transient operational error into a long-lived PII record and creating a secondary email-enumeration channel for anyone with log access.
+
+**v2.5.4 changes** in `packages/api/app/routers/auth.py::forgot_password`:
+
+1. The unknown-email path now performs the **same** `secrets.token_urlsafe(32)` + SHA-256 hash work as the known-email path and discards the result, so CPU and DB-ish profiles match within a few microseconds.
+2. **Both** paths sleep a randomised `asyncio.sleep(uniform(0.05, 0.25))` before returning, so the variable cost of the real `send_email()` call is masked under the same jitter band.
+3. The MTA-failure log now records `user.id` only — sufficient for an operator triaging the failure, not an enumeration channel.
+
+The full rationale is in the function docstring so the next reader doesn't strip the defenses thinking they're noise.
+
+### 🟠 Security — CSRF token rotation on `/auth/refresh` (regression-locked)
+
+The double-submit CSRF cookie was already being re-minted on every call to `_build_token_response` — but the invariant was nowhere asserted in tests, and the inline rationale was missing. v2.5.4 adds:
+
+- A focused inline comment in `_build_token_response` explaining *why* the rotation is intentional (a captured CSRF cookie has the same short lifetime as the access token rather than surviving for the full refresh-token window).
+- `TestCSRF.test_csrf_token_rotates_on_refresh` in the integration suite, asserting both cookie and response-body reflect a fresh token after `/auth/refresh`.
+
+### 🟠 GDPR — Findings page now carries an explicit personal-data notice
+
+Scan results capture hostnames, IP addresses, employee email addresses (from secrets scanning), and other identifiers that count as personal data under GDPR Art. 4(1). Pre-2.5.4 the operator was given no in-product notice that they are the controller for this evidence and that exports / sharing / retention need to reflect that.
+
+The new dismissible `FindingsPiiNotice` banner sits between the Findings page header and the filters, with content like:
+
+> **I findings possono contenere dati personali**
+>
+> I risultati delle scansioni possono includere hostname, indirizzi IP, indirizzi email o altri identificatori estratti da fonti pubbliche (DNS, certificate transparency, pattern-matching su secret). Ai sensi del GDPR sei il titolare del trattamento per queste evidenze — applica agli export, alla condivisione e alla retention la stessa cura che applicheresti ai dati personali sottostanti.
+
+Implementation: same SSR-empty-tree pattern as `LegalDisclaimerModal` and `OrientationCard`; versioned `localStorage` key `nis2-findings-pii-notice-v1`; 3 keys × 5 locales (en/it/fr/de/es) = 15 new i18n entries, parity 5/5.
+
+### 🟠 GDPR — `docs/privacy.md` rewritten with concrete data-flow disclosures
+
+`§7 Self-hosted deployments` was a generic "you're the controller" stub. v1.1 splits it into six numbered sub-sections that lay out **specifically** what a self-hosted instance processes:
+
+- **§7.1 Data inventory** — explicit table of every personal-data category, the table it lives in, and the default retention.
+- **§7.2 IP address and User-Agent in `audit_logs`** — names the columns, cites the legal basis (Art. 6(1)(f)), documents pseudonymisation on Art. 17 erasure, and points at `AUDIT_LOG_RETENTION_DAYS`.
+- **§7.3 Outbound network calls** — names `crt.sh` (Sectigo), DNS resolvers, and target hosts as third-party data flows the deployer has to disclose to data subjects. Reaffirms zero outbound telemetry.
+- **§7.4 PII captured incidentally by the scanner** — secrets-scanner output, subdomain enumeration, port banners.
+- **§7.5 / §7.6** — what the maintainer is *not* (no Art. 28 contract, no warranty), and the deployer's own GDPR obligations.
+
+Doc version bumped to 1.1; the existing template structure for self-hosted deployers is preserved.
+
+### 🟠 OSS hygiene — SECURITY.md, security.txt, CODE_OF_CONDUCT, issue / PR templates, CODEOWNERS
+
+The project had a thin `SECURITY.md` (3-row supported-versions table, 7-day-fix promise, no PGP, no CRA reference) and no other OSS-hygiene scaffolding. v2.5.4 ships a coordinated rewrite:
+
+- **`SECURITY.md`** — RFC 9116 cross-reference, GitHub-private-disclosure preferred channel, 24h/48h/5d/10d response-by-severity SLAs, **35-day medium-severity patch ceiling** (aligned with EU Cyber Resilience Act Reg. EU 2024/2847 conventions), 90-day coordinated-disclosure default, in-scope / out-of-scope matrix, full enumerated security-measures section reflecting code as it ships in `main`, hall-of-fame placeholder, PGP placeholder until the maintainer's permanent key is provisioned.
+- **`packages/web/public/.well-known/security.txt`** — RFC 9116-compliant: GitHub private-disclosure URL + email contact, policy URL, languages `en, it`, canonical URL, `Expires: 2027-04-30`.
+- **`CODE_OF_CONDUCT.md`** — verbatim Contributor Covenant 2.1 with the project's community spaces and reporting contact filled in.
+- **`.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` + `config.yml`** — structured forms with `blank_issues_enabled: false`. The config `contact_links` redirect security reports to the private-advisory flow, questions to Discussions, and dual-license inquiries to email — saving a triage round on miscategorised issues.
+- **`.github/PULL_REQUEST_TEMPLATE.md`** — summary / why / surface-impact checkboxes / verification checklist / NIS2-GDPR-legal-exposure prompt. Mirrors the structure of the maintainer's commit-message and CHANGELOG style.
+- **`.github/CODEOWNERS`** — every path falls back to `@fabriziosalmi` (single maintainer), with explicit re-listing of the security-sensitive paths (auth, RLS bootstrap, target validator, alembic, infra, gitleaks config) so that growth into multi-maintainer requires no schema change. Documents the *intent* of strictest review on those paths.
+
+### Misc
+
+- `.gitignore`: `.ruff_cache/` added (was leaking into `git status`).
+- `.gitleaks.toml`: `nis2-findings-pii-notice-v\d+` added to the localStorage-key allowlist family.
+- `API_VERSION` literal bumped 2.5.3 → 2.5.4 in lockstep with `pyproject.toml`.
+
+### Verified
+
+- Web build: green (24/24 pages, /dashboard/findings page builds cleanly).
+- 5/5 i18n locales validate; new `findings.piiNotice*` namespace present and aligned (3 keys × 5 locales = 15 entries).
+- `.well-known/security.txt` linted by hand against RFC 9116 §2 (Expires set, Contact present, Canonical and Policy URLs absolute).
+
 ## [2.5.3] - 2026-04-30
 
 External-reviewer feedback round (Davide, fresh-clone walkthrough). Four concrete fixes — one runtime blocker, one onboarding trap, one operability paper-cut, one orientation gap.

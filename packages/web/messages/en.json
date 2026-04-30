@@ -295,6 +295,9 @@
   "findings": {
     "title": "Findings",
     "subtitle": "Review and manage compliance findings",
+    "piiNoticeTitle": "Findings may contain personal data",
+    "piiNoticeBody": "Scan results can include hostnames, IP addresses, email addresses or other identifiers extracted from public sources (DNS, certificate transparency, secrets pattern-matching). Under GDPR you are the data controller for this evidence — apply the same care to exports, sharing and retention as you would to the underlying personal data.",
+    "piiNoticeDismiss": "I understand",
     "filters": "Filters",
     "severity": "Severity",
     "category": "Category",

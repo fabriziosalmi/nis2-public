@@ -295,6 +295,9 @@
   "findings": {
     "title": "Résultats",
     "subtitle": "Examinez et gérez les résultats de conformité",
+    "piiNoticeTitle": "Les résultats peuvent contenir des données personnelles",
+    "piiNoticeBody": "Les résultats d'analyse peuvent inclure des noms d'hôte, des adresses IP, des adresses e-mail ou d'autres identifiants extraits de sources publiques (DNS, transparence des certificats, recherche de motifs sur des secrets). Au titre du RGPD, vous êtes responsable du traitement pour ces preuves — appliquez aux exports, au partage et à la rétention le même soin qu'aux données personnelles sous-jacentes.",
+    "piiNoticeDismiss": "J'ai compris",
     "filters": "Filtres",
     "severity": "Gravité",
     "category": "Catégorie",

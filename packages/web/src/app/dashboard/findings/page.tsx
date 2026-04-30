@@ -3,8 +3,8 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useState, Fragment } from "react"
-import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle, Download } from "lucide-react"
+import { useEffect, useState, Fragment } from "react"
+import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle, Download, ShieldAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,6 +40,69 @@ const severityVariant: Record<string, "critical" | "high" | "medium" | "low" | "
 const severityOptions = ["all", "critical", "high", "medium", "low", "info"]
 const statusOptions = ["all", "open", "acknowledged", "resolved", "false_positive"]
 const categoryOptions = ["all", "TLS", "Headers", "DNS", "Web", "Ports", "WHOIS"]
+
+// v2.5.4 (Tier 2-C): GDPR notice banner. Findings rows can capture
+// hostnames, employee email addresses (from secrets scanning), public
+// IP addresses (from ports / certificate transparency lookups) and
+// other identifiers — all of which are personal data under GDPR Art.
+// 4(1) when they relate to an identified or identifiable person. The
+// platform is a *processor* of that evidence; the deployer is the
+// controller. This banner is the explicit notice that closes the
+// audit gap "no in-product warning that finding evidence has GDPR
+// implications". Dismissible because once internalised it adds noise.
+const PII_NOTICE_KEY = "nis2-findings-pii-notice-v1"
+
+function FindingsPiiNotice() {
+  const t = useTranslations("findings")
+  const [mounted, setMounted] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    try {
+      if (localStorage.getItem(PII_NOTICE_KEY) === "dismissed") {
+        setDismissed(true)
+      }
+    } catch {
+      /* localStorage unavailable — show every visit, acceptable */
+    }
+  }, [])
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(PII_NOTICE_KEY, "dismissed")
+    } catch { /* no persistence — re-shows next visit */ }
+    setDismissed(true)
+  }
+
+  // SSR-empty pattern (same as LegalDisclaimerModal / OrientationCard):
+  // render nothing on the server so a stale localStorage state can't
+  // produce a hydration mismatch on first paint.
+  if (!mounted) return null
+  if (dismissed) return null
+
+  return (
+    <div
+      role="note"
+      className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-4"
+    >
+      <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+      <div className="flex-1 space-y-1 text-sm">
+        <p className="font-semibold text-foreground">{t("piiNoticeTitle")}</p>
+        <p className="leading-relaxed text-muted-foreground">{t("piiNoticeBody")}</p>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleDismiss}
+        aria-label={t("piiNoticeDismiss")}
+        className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+      >
+        <X className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </div>
+  )
+}
 
 export default function FindingsPage() {
   const t = useTranslations("findings")
@@ -188,6 +251,8 @@ export default function FindingsPage() {
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
+
+      <FindingsPiiNotice />
 
       {/* Filters */}
       <Card>

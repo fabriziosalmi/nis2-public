@@ -90,6 +90,7 @@ Thumbs.db
 # Misc caches
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 *.pyc
 # VitePress build artifacts
 docs/.vitepress/cache/

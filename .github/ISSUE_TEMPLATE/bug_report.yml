@@ -1,0 +1,98 @@
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: Bug report
+description: Something works incorrectly or breaks. Not for security issues — see SECURITY.md.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. The platform is
+        AGPL-3.0 *as is, without warranty* — but well-formed reports get
+        addressed faster, so a few specifics here go a long way.
+
+        **Not a bug?** Use [Discussions](https://github.com/fabriziosalmi/nis2-public/discussions) for questions or design conversations.
+        **Security issue?** Use the [private advisory flow](https://github.com/fabriziosalmi/nis2-public/security/advisories/new), not this template.
+
+  - type: input
+    id: version
+    attributes:
+      label: Platform version
+      description: |
+        Run `cat packages/api/pyproject.toml | grep ^version` or check the bottom-left of the dashboard. If you can, also include the commit SHA (`git rev-parse HEAD`).
+      placeholder: e.g. 2.5.4 (commit abc1234)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running the platform?
+      options:
+        - "make dev (local Docker compose)"
+        - "make prod (Caddy + production compose)"
+        - "Custom deployment (Kubernetes / cloud / other)"
+        - "Not running yet — bug in the install path"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Host OS
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (Debian / Ubuntu)
+        - Linux (RHEL / Fedora / Rocky / Alma)
+        - Linux (other distro)
+        - Windows + WSL2
+        - Windows native (cmd.exe / PowerShell)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug. What did you see versus what you expected?
+      placeholder: |
+        I clicked X and got Y, but I expected Z because the docs said …
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal repro from a fresh `make dev` clone whenever possible. Concrete commands beat prose.
+      placeholder: |
+        1. `git clone … && make dev`
+        2. Register at /register with …
+        3. Click …
+        4. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Output from `make api-logs`, `make web-logs`, browser DevTools console — whatever helps. **Strip any production secrets, real customer data, or internal hostnames before pasting.**
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I confirmed this is not a security vulnerability (security goes via the private advisory flow).
+          required: true
+        - label: I searched existing issues and discussions before opening this.
+          required: true

@@ -1,0 +1,32 @@
+# RFC 9116 — Security.txt for the NIS2 Compliance Platform
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+# https://github.com/fabriziosalmi/nis2-public
+
+# Where to send a vulnerability report. The GitHub private-disclosure
+# flow is preferred — it keeps the conversation in the same place as
+# the patch and produces a CVE-shaped advisory once the fix lands.
+Contact: https://github.com/fabriziosalmi/nis2-public/security/advisories/new
+Contact: mailto:fabrizio.salmi@gmail.com
+
+# Human-readable security policy. Always in sync with this file —
+# bump both together when changing scope, SLAs, or contact details.
+Policy: https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md
+
+# Where to find prior security advisories.
+Acknowledgments: https://github.com/fabriziosalmi/nis2-public/security/advisories
+
+# Languages the maintainer can read and reply in.
+Preferred-Languages: en, it
+
+# Source of this file. Operators of self-hosted instances should
+# replace this URL with their own deployment's hostname.
+Canonical: https://github.com/fabriziosalmi/nis2-public/blob/main/packages/web/public/.well-known/security.txt
+
+# Hiring? Currently no — left here per RFC 9116 §2.5.7.
+# Hiring:
+
+# Optional but recommended by RFC 9116 §2.5.5: file expiry. Re-issue
+# with a refreshed Expires when the date below is reached so a stale
+# disclosure channel cannot be assumed live indefinitely.
+Expires: 2027-04-30T00:00:00.000Z

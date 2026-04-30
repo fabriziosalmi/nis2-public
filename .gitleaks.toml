@@ -44,4 +44,5 @@ regexes = [
     '''nis2-doc-locale''',
     '''nis2-auth-v\d+''',
     '''nis2-dashboard-orientation-v\d+''',
+    '''nis2-findings-pii-notice-v\d+''',
 ]

@@ -1,0 +1,45 @@
+# Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-only
+# NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+#
+# CODEOWNERS controls auto-assignment of reviewers on pull requests.
+# Today the project has a single maintainer, so every path falls back
+# to the same owner. The file still earns its keep:
+#   - it makes the ownership explicit for any future fork or
+#     dual-maintained scenario (just add lines, no schema change);
+#   - it auto-requests review on every PR so nothing slips through
+#     waiting for the author to remember to assign;
+#   - GitHub uses it for required-review branch protection rules
+#     even when there is only one owner.
+#
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default — every path not matched by a more specific rule below.
+*                                       @fabriziosalmi
+
+# Security-sensitive surfaces. Listing them again is redundant while
+# there is one owner, but it documents the surfaces that warrant the
+# strictest review when ownership grows.
+SECURITY.md                             @fabriziosalmi
+.well-known/                            @fabriziosalmi
+packages/web/public/.well-known/        @fabriziosalmi
+packages/api/app/middleware/csrf.py     @fabriziosalmi
+packages/api/app/database.py            @fabriziosalmi
+packages/api/app/routers/auth.py        @fabriziosalmi
+packages/api/app/utils/target_validator.py  @fabriziosalmi
+packages/api/alembic/                   @fabriziosalmi
+infra/                                  @fabriziosalmi
+
+# Legal / compliance copy. Any change here should ship in lockstep
+# with the dashboard's compliance page and the CHANGELOG.
+docs/privacy.md                         @fabriziosalmi
+docs/terms.md                           @fabriziosalmi
+LICENSE                                 @fabriziosalmi
+CODE_OF_CONDUCT.md                      @fabriziosalmi
+
+# CI / supply chain. A bad workflow change can leak secrets or
+# downgrade the security gates — explicit ownership prompts a
+# closer review.
+.github/workflows/                      @fabriziosalmi
+.github/dependabot.yml                  @fabriziosalmi
+.gitleaks.toml                          @fabriziosalmi
