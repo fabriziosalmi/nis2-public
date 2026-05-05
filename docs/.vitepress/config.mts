@@ -57,24 +57,114 @@ export default defineConfig({
         ['meta', { name: 'twitter:image', content: OG_IMAGE }],
         // Structured data for rich search results
         ['script', { type: 'application/ld+json' }, JSON.stringify(jsonLd)],
-        // hreflang signals to Google that the home page exists in EN and IT —
-        // even though the URL is the same (we render both versions in the DOM
-        // and CSS-hide one based on `<html class="locale-X">`). This is the
-        // canonical way to declare bilingual content without per-locale URLs.
-        ['link', { rel: 'alternate', hreflang: 'en', href: SITE_URL }],
-        ['link', { rel: 'alternate', hreflang: 'it', href: SITE_URL }],
-        ['link', { rel: 'alternate', hreflang: 'x-default', href: SITE_URL }],
-        // Pre-paint locale detection. Runs synchronously in <head> (before
-        // <body> renders) so the user never sees the "wrong" language flash.
-        // Read order: explicit user choice in localStorage > navigator.language
-        // > default 'en'. Sets `class="locale-en|it"` on <html>; the home
-        // CSS hides the inactive language. ~280 chars, no deps.
-        [
-            'script',
-            {},
-            `(function(){try{var s=localStorage.getItem('nis2-doc-locale');var l=s||((navigator.language||'en').toLowerCase().split('-')[0]);var c=l==='it'?'locale-it':'locale-en';document.documentElement.classList.add(c);}catch(e){document.documentElement.classList.add('locale-en');}})();`,
-        ],
     ],
+    locales: {
+        root: {
+            label: 'English',
+            lang: 'en',
+            themeConfig: {
+                nav: [
+                    { text: 'Home', link: '/' },
+                    { text: 'Guide', link: '/guide/getting-started' },
+                    { text: 'National Modules', link: '/guide/acn-compliance' },
+                    { text: 'API', link: '/reference/api' },
+                    { text: 'Services', link: '/guide/services' },
+                    {
+                        text: 'v2.4',
+                        items: [
+                            { text: 'Releases', link: 'https://github.com/fabriziosalmi/nis2-public/releases' },
+                            { text: 'Changelog', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md' },
+                            { text: 'Security policy', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md' },
+                        ],
+                    },
+                ],
+                sidebar: [
+                    {
+                        text: 'Guide',
+                        items: [
+                            { text: 'Getting Started', link: '/guide/getting-started' },
+                            { text: 'Configuration', link: '/guide/configuration' },
+                            { text: 'Usage', link: '/guide/usage' },
+                            { text: 'Deployment', link: '/guide/deployment' },
+                            { text: 'Secrets Rotation', link: '/guide/secrets-rotation' },
+                        ]
+                    },
+                    {
+                        text: 'Compliance',
+                        collapsed: true,
+                        items: [
+                            { text: 'Italy: D.Lgs 138/2024 + ACN', link: '/guide/acn-compliance' },
+                            { text: 'Governance Checklist', link: '/governance/checklist' },
+                            { text: 'Services', link: '/guide/services' }
+                        ]
+                    },
+                    {
+                        text: 'Reference',
+                        collapsed: true,
+                        items: [
+                            { text: 'API Reference', link: '/reference/api' },
+                            { text: 'Scanner Checks', link: '/reference/scanner-checks' },
+                            { text: 'Architecture', link: '/reference/architecture' }
+                        ]
+                    }
+                ],
+            }
+        },
+        it: {
+            label: 'Italiano',
+            lang: 'it',
+            link: '/it/',
+            title: 'NIS2 Platform',
+            description: "Piattaforma GRC open-source per la Direttiva NIS2 (UE 2022/2555). Framework di governance, motore di validazione tecnica, risposta agli incidenti e gestione del rischio di supply chain.",
+            themeConfig: {
+                nav: [
+                    { text: 'Home', link: '/it/' },
+                    { text: 'Guida', link: '/it/guide/getting-started' },
+                    { text: 'Moduli Nazionali', link: '/it/guide/acn-compliance' },
+                    { text: 'API', link: '/it/reference/api' },
+                    { text: 'Servizi', link: '/it/guide/services' },
+                    {
+                        text: 'v2.4',
+                        items: [
+                            { text: 'Rilasci', link: 'https://github.com/fabriziosalmi/nis2-public/releases' },
+                            { text: 'Changelog', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md' },
+                            { text: 'Policy di Sicurezza', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md' },
+                        ],
+                    },
+                ],
+                sidebar: [
+                    {
+                        text: 'Guida',
+                        items: [
+                            { text: 'Per Iniziare', link: '/it/guide/getting-started' },
+                            { text: 'Configurazione', link: '/it/guide/configuration' },
+                            { text: 'Utilizzo', link: '/it/guide/usage' },
+                            { text: 'Deployment', link: '/it/guide/deployment' },
+                            { text: 'Rotazione Segreti', link: '/it/guide/secrets-rotation' },
+                        ]
+                    },
+                    {
+                        text: 'Conformità',
+                        collapsed: true,
+                        items: [
+                            { text: 'Italia: D.Lgs 138/2024 + ACN', link: '/it/guide/acn-compliance' },
+                            { text: 'Checklist Governance', link: '/it/governance/checklist' },
+                            { text: 'Servizi', link: '/it/guide/services' }
+                        ]
+                    },
+                    {
+                        text: 'Riferimento',
+                        collapsed: true,
+                        items: [
+                            { text: 'Riferimento API', link: '/it/reference/api' },
+                            { text: 'Controlli Scanner', link: '/it/reference/scanner-checks' },
+                            { text: 'Architettura', link: '/it/reference/architecture' }
+                        ]
+                    }
+                ],
+            }
+        }
+    },
     // Wire Tailwind v4 into the VitePress Vite pipeline so the custom Home
     // component (theme/components/Home.vue) can use utility classes parity-
     // matched with the dashboard app. Scoped to the docs build only — does
@@ -85,53 +175,6 @@ export default defineConfig({
     themeConfig: {
         logo: '/logo.svg',
         siteTitle: 'NIS2 Platform',
-
-        nav: [
-            { text: 'Home', link: '/' },
-            { text: 'Guide', link: '/guide/getting-started' },
-            { text: 'National Modules', link: '/guide/acn-compliance' },
-            { text: 'API', link: '/reference/api' },
-            { text: 'Services', link: '/guide/services' },
-            {
-                text: 'v2.4',
-                items: [
-                    { text: 'Releases', link: 'https://github.com/fabriziosalmi/nis2-public/releases' },
-                    { text: 'Changelog', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/CHANGELOG.md' },
-                    { text: 'Security policy', link: 'https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md' },
-                ],
-            },
-        ],
-
-        sidebar: [
-            {
-                text: 'Guide',
-                items: [
-                    { text: 'Getting Started', link: '/guide/getting-started' },
-                    { text: 'Configuration', link: '/guide/configuration' },
-                    { text: 'Usage', link: '/guide/usage' },
-                    { text: 'Deployment', link: '/guide/deployment' },
-                    { text: 'Secrets Rotation', link: '/guide/secrets-rotation' },
-                ]
-            },
-            {
-                text: 'Compliance',
-                collapsed: true,
-                items: [
-                    { text: 'Italy: D.Lgs 138/2024 + ACN', link: '/guide/acn-compliance' },
-                    { text: 'Governance Checklist', link: '/governance/checklist' },
-                    { text: 'Services', link: '/guide/services' }
-                ]
-            },
-            {
-                text: 'Reference',
-                collapsed: true,
-                items: [
-                    { text: 'API Reference', link: '/reference/api' },
-                    { text: 'Scanner Checks', link: '/reference/scanner-checks' },
-                    { text: 'Architecture', link: '/reference/architecture' }
-                ]
-            }
-        ],
 
         socialLinks: [
             { icon: 'github', link: 'https://github.com/fabriziosalmi/nis2-public' },

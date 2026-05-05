@@ -92,6 +92,13 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.pyc
+
+# Maintainer-only watermark playbook. Intentionally NEVER committed —
+# the file describes the methodology (categories of markers, detection
+# workflow, legal posture) and points at an encrypted vault for the
+# specific Layer-3 deployment. Committing it would defeat the
+# steganographic layer and tip off any future forker.
+WATERMARK.md
 # VitePress build artifacts
 docs/.vitepress/cache/
 docs/.vitepress/dist/

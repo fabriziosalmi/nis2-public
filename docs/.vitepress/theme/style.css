@@ -70,19 +70,7 @@
   --color-brand-to: #6e40c9;
 }
 
-/* Locale gating — hide the inactive language entirely. `display: none`
-   (not `visibility: hidden`) so reflow is correct and accessible names
-   computed by AT skip the hidden tree. */
-html.locale-en .locale-it,
-html.locale-it .locale-en {
-  display: none !important;
-}
 
-/* Belt-and-braces: if neither class lands (e.g. JS disabled), fall
-   back to showing English so the page is still legible. */
-html:not(.locale-en):not(.locale-it) .locale-it {
-  display: none;
-}
 
 /*
  * VitePress override neutralisation — only inside .docs-home.

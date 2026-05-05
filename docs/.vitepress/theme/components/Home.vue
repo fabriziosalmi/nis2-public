@@ -15,7 +15,7 @@
  *
  * Bilingual rendering strategy — important to understand:
  *   - The DOM contains BOTH the English and Italian copy, paired
- *     through `<span class="locale-en">…</span><span class="locale-it">…</span>`.
+ *     through `<span v-if="lang === 'en' || lang === 'en-US'">…</span><span v-else-if="lang === 'it'">…</span>`.
  *   - The active language is gated via CSS in theme/style.css —
  *     `html.locale-it .locale-en { display: none }` and the mirror.
  *   - The class on `<html>` is set BEFORE first paint by an inline
@@ -32,7 +32,7 @@
  *     slightly larger HTML.
  */
 import { ref, onMounted } from 'vue'
-import { withBase } from 'vitepress'
+import { withBase, useData } from 'vitepress'
 import {
   ShieldCheck,
   Radar,
@@ -51,43 +51,9 @@ import {
 } from 'lucide-vue-next'
 import Logo from './Logo.vue'
 
-// Reactive locale state — drives the toggle's pressed-state, NOT the
-// DOM rendering (the DOM stays bilingual). Initialised on mount from
-// the same source the inline script uses, so toggle and CSS always
-// agree.
-const locale = ref<'en' | 'it'>('en')
-
-onMounted(() => {
-  try {
-    const stored = localStorage.getItem('nis2-doc-locale') as
-      | 'en'
-      | 'it'
-      | null
-    if (stored === 'en' || stored === 'it') {
-      locale.value = stored
-      return
-    }
-    const nav = (navigator.language || 'en').toLowerCase().split('-')[0]
-    locale.value = nav === 'it' ? 'it' : 'en'
-  } catch {
-    locale.value = 'en'
-  }
-})
-
-function setLocale(next: 'en' | 'it') {
-  locale.value = next
-  try {
-    localStorage.setItem('nis2-doc-locale', next)
-  } catch {
-    /* private browsing / disabled storage — fail silently, the in-page
-       toggle still works for this session via the class swap below. */
-  }
-  // Swap the class on <html> live so the CSS hide rules pick the new
-  // language without a reload.
-  const root = document.documentElement
-  root.classList.toggle('locale-it', next === 'it')
-  root.classList.toggle('locale-en', next === 'en')
-}
+// Reactive locale state — no longer using manual toggles or localStorage
+// Instead we use native VitePress i18n
+const { lang } = useData()
 
 // ─────────────────────────────────────────────────────────────────
 // Legal-disclaimer interstitial (v2.5.2)
@@ -336,22 +302,22 @@ const AUDIENCES = [
           <path d="m9 12 2 2 4-4"></path>
         </svg>
         <h2 id="legal-disclaimer-title" class="text-center text-2xl font-bold tracking-tight text-slate-100">
-          <span class="locale-en">Legal Notice</span>
-          <span class="locale-it">Avviso Legale</span>
+          <span v-if="lang === 'en' || lang === 'en-US'">Legal Notice</span>
+          <span v-else-if="lang === 'it'">Avviso Legale</span>
         </h2>
         <p id="legal-disclaimer-body" class="mt-6 text-center text-base leading-relaxed text-slate-300">
-          <span class="locale-en">This tool provides automated classifications based on a subset of the NIS2 Directive (EU 2022/2555). It does not constitute legal advice. Consult a qualified lawyer to determine the obligations applicable to you.</span>
-          <span class="locale-it">Questo strumento fornisce classificazioni automatizzate basate su un sottoinsieme della Direttiva NIS2 (UE 2022/2555). Non costituisce consulenza legale. Consultare un avvocato qualificato per determinare gli obblighi applicabili.</span>
+          <span v-if="lang === 'en' || lang === 'en-US'">This tool provides automated classifications based on a subset of the NIS2 Directive (EU 2022/2555). It does not constitute legal advice. Consult a qualified lawyer to determine the obligations applicable to you.</span>
+          <span v-else-if="lang === 'it'">Questo strumento fornisce classificazioni automatizzate basate su un sottoinsieme della Direttiva NIS2 (UE 2022/2555). Non costituisce consulenza legale. Consultare un avvocato qualificato per determinare gli obblighi applicabili.</span>
         </p>
         <div class="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
           <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/terms.md" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-400 underline-offset-4 hover:underline">
-            <span class="locale-en">Terms of Use</span>
-            <span class="locale-it">Termini di utilizzo</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">Terms of Use</span>
+            <span v-else-if="lang === 'it'">Termini di utilizzo</span>
           </a>
           <span aria-hidden="true" class="text-slate-600">·</span>
           <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/privacy.md" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-400 underline-offset-4 hover:underline">
-            <span class="locale-en">Privacy Policy</span>
-            <span class="locale-it">Privacy Policy</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">Privacy Policy</span>
+            <span v-else-if="lang === 'it'">Privacy Policy</span>
           </a>
         </div>
         <button
@@ -359,48 +325,13 @@ const AUDIENCES = [
           @click="acceptLegal"
           class="mt-8 w-full rounded-md bg-blue-600 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900"
         >
-          <span class="locale-en">I understand — Proceed</span>
-          <span class="locale-it">Ho compreso — Procedi</span>
+          <span v-if="lang === 'en' || lang === 'en-US'">I understand — Proceed</span>
+          <span v-else-if="lang === 'it'">Ho compreso — Procedi</span>
         </button>
       </div>
     </div>
 
-    <!-- Locale toggle: top-right, sticks above hero. Tiny, unobtrusive,
-         keyboard-focusable. Persists in localStorage. -->
-    <div class="pointer-events-none fixed top-20 right-4 z-40 flex justify-end sm:top-24 sm:right-8">
-      <div
-        role="group"
-        aria-label="Page language"
-        class="pointer-events-auto inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/90 p-0.5 text-xs font-medium shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80"
-      >
-        <button
-          type="button"
-          @click="setLocale('en')"
-          :class="[
-            'rounded-full px-3 py-1 transition-colors',
-            locale === 'en'
-              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-          ]"
-          :aria-pressed="locale === 'en'"
-        >
-          EN
-        </button>
-        <button
-          type="button"
-          @click="setLocale('it')"
-          :class="[
-            'rounded-full px-3 py-1 transition-colors',
-            locale === 'it'
-              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-          ]"
-          :aria-pressed="locale === 'it'"
-        >
-          IT
-        </button>
-      </div>
-    </div>
+
 
     <main>
       <!-- Hero -->
@@ -413,20 +344,20 @@ const AUDIENCES = [
           <div class="mx-auto max-w-3xl text-center">
             <div class="mx-auto inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/80 dark:text-slate-400">
               <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>
-              <span class="locale-en">Open-source · AGPL-3.0 · self-hosted by design</span>
-              <span class="locale-it">Open-source · AGPL-3.0 · progettato per il self-hosting</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Open-source · AGPL-3.0 · self-hosted by design</span>
+              <span v-else-if="lang === 'it'">Open-source · AGPL-3.0 · progettato per il self-hosting</span>
             </div>
             <h1 class="mt-6 text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-              <span class="locale-en">NIS2 governance, technical validation, and incident response —</span>
-              <span class="locale-it">Governance NIS2, validazione tecnica e gestione incidenti —</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">NIS2 governance, technical validation, and incident response —</span>
+              <span v-else-if="lang === 'it'">Governance NIS2, validazione tecnica e gestione incidenti —</span>
               <span class="bg-gradient-to-br from-blue-600 to-violet-600 bg-clip-text text-transparent">
-                <span class="locale-en"> under one roof.</span>
-                <span class="locale-it"> in un'unica piattaforma.</span>
+                <span v-if="lang === 'en' || lang === 'en-US'"> under one roof.</span>
+                <span v-else-if="lang === 'it'"> in un'unica piattaforma.</span>
               </span>
             </h1>
             <p class="mx-auto mt-6 max-w-2xl text-pretty text-lg text-slate-600 dark:text-slate-400">
-              <span class="locale-en">The open-source platform for the EU NIS2 Directive (2022/2555). Bridge the gap between Art. 21 policy and what your network actually does — without sending a single byte of scan data to a third party.</span>
-              <span class="locale-it">La piattaforma open-source per la Direttiva NIS2 (UE 2022/2555). Colma il divario tra ciò che dichiarano le tue policy ex Art. 21 e ciò che fa realmente la tua rete — senza inviare un solo byte a terze parti.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">The open-source platform for the EU NIS2 Directive (2022/2555). Bridge the gap between Art. 21 policy and what your network actually does — without sending a single byte of scan data to a third party.</span>
+              <span v-else-if="lang === 'it'">La piattaforma open-source per la Direttiva NIS2 (UE 2022/2555). Colma il divario tra ciò che dichiarano le tue policy ex Art. 21 e ciò che fa realmente la tua rete — senza inviare un solo byte a terze parti.</span>
             </p>
             <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <!-- Primary CTA — install path. Differs from the app
@@ -440,8 +371,8 @@ const AUDIENCES = [
                 :href="withBase('/guide/getting-started')"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-8 py-3 text-sm font-medium !text-white transition-colors hover:bg-slate-800 dark:bg-white dark:!text-slate-900 dark:hover:bg-slate-100 sm:w-auto"
               >
-                <span class="locale-en">Get started — free</span>
-                <span class="locale-it">Inizia ora — gratis</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Get started — free</span>
+                <span v-else-if="lang === 'it'">Inizia ora — gratis</span>
                 <ArrowRight class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
               </a>
               <a
@@ -451,15 +382,15 @@ const AUDIENCES = [
                 class="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-8 py-3 text-sm font-medium !text-slate-900 transition-colors hover:bg-slate-50 dark:border-neutral-700 dark:bg-neutral-900 dark:!text-slate-100 dark:hover:bg-neutral-800 sm:w-auto"
               >
                 <Github class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
-                <span class="locale-en">Star on GitHub</span>
-                <span class="locale-it">Star su GitHub</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Star on GitHub</span>
+                <span v-else-if="lang === 'it'">Star su GitHub</span>
               </a>
             </div>
             <p class="mt-4 text-xs text-slate-500 dark:text-slate-500">
-              <span class="locale-en">Need a guided tour?
+              <span v-if="lang === 'en' || lang === 'en-US'">Need a guided tour?
                 <a :href="withBase('/guide/getting-started')" class="font-medium text-slate-900 underline-offset-4 hover:underline dark:text-slate-100">Read the Guide</a>
               </span>
-              <span class="locale-it">Serve un tour guidato?
+              <span v-else-if="lang === 'it'">Serve un tour guidato?
                 <a :href="withBase('/guide/getting-started')" class="font-medium text-slate-900 underline-offset-4 hover:underline dark:text-slate-100">Leggi la guida</a>
               </span>
             </p>
@@ -473,29 +404,29 @@ const AUDIENCES = [
           <dl class="grid grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-4">
             <div class="text-center">
               <dt class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <span class="locale-en">automated checks</span>
-                <span class="locale-it">controlli automatici</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">automated checks</span>
+                <span v-else-if="lang === 'it'">controlli automatici</span>
               </dt>
               <dd class="mt-1 text-2xl font-bold tracking-tight">30+</dd>
             </div>
             <div class="text-center">
               <dt class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <span class="locale-en">EU languages</span>
-                <span class="locale-it">lingue UE</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">EU languages</span>
+                <span v-else-if="lang === 'it'">lingue UE</span>
               </dt>
               <dd class="mt-1 text-2xl font-bold tracking-tight">5</dd>
             </div>
             <div class="text-center">
               <dt class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <span class="locale-en">NIS2 coverage</span>
-                <span class="locale-it">copertura NIS2</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">NIS2 coverage</span>
+                <span v-else-if="lang === 'it'">copertura NIS2</span>
               </dt>
               <dd class="mt-1 text-2xl font-bold tracking-tight">Art. 18 / 21 / 23</dd>
             </div>
             <div class="text-center">
               <dt class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <span class="locale-en">SaaS dependencies</span>
-                <span class="locale-it">dipendenze SaaS</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">SaaS dependencies</span>
+                <span v-else-if="lang === 'it'">dipendenze SaaS</span>
               </dt>
               <dd class="mt-1 text-2xl font-bold tracking-tight">0</dd>
             </div>
@@ -510,16 +441,16 @@ const AUDIENCES = [
       >
         <div class="mx-auto max-w-2xl text-center">
           <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            <span class="locale-en">Six modules, one workspace</span>
-            <span class="locale-it">Sei moduli, un solo workspace</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">Six modules, one workspace</span>
+            <span v-else-if="lang === 'it'">Sei moduli, un solo workspace</span>
           </p>
           <h2 id="features-heading" class="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-            <span class="locale-en">Everything Art. 21 asks for, in one auditable platform.</span>
-            <span class="locale-it">Tutto ciò che chiede l'Art. 21, in una piattaforma auditabile.</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">Everything Art. 21 asks for, in one auditable platform.</span>
+            <span v-else-if="lang === 'it'">Tutto ciò che chiede l'Art. 21, in una piattaforma auditabile.</span>
           </h2>
           <p class="mt-4 text-slate-600 dark:text-slate-400">
-            <span class="locale-en">Most NIS2 work is human work. The platform automates the parts that should be automated, and tracks the parts that legally require a person to sign their name to.</span>
-            <span class="locale-it">La maggior parte del lavoro NIS2 resta lavoro umano. La piattaforma automatizza ciò che è automatizzabile e tiene traccia di ciò che richiede legalmente la firma di una persona.</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">Most NIS2 work is human work. The platform automates the parts that should be automated, and tracks the parts that legally require a person to sign their name to.</span>
+            <span v-else-if="lang === 'it'">La maggior parte del lavoro NIS2 resta lavoro umano. La piattaforma automatizza ciò che è automatizzabile e tiene traccia di ciò che richiede legalmente la firma di una persona.</span>
           </p>
         </div>
         <ul class="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -537,19 +468,19 @@ const AUDIENCES = [
               </span>
             </div>
             <h3 class="mt-5 text-lg font-semibold tracking-tight">
-              <span class="locale-en">{{ f.en.title }}</span>
-              <span class="locale-it">{{ f.it.title }}</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">{{ f.en.title }}</span>
+              <span v-else-if="lang === 'it'">{{ f.it.title }}</span>
             </h3>
             <p class="mt-2 flex-1 text-sm text-slate-600 dark:text-slate-400">
-              <span class="locale-en">{{ f.en.body }}</span>
-              <span class="locale-it">{{ f.it.body }}</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">{{ f.en.body }}</span>
+              <span v-else-if="lang === 'it'">{{ f.it.body }}</span>
             </p>
             <a
               :href="withBase(f.href)"
               class="mt-4 inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
             >
-              <span class="locale-en">Learn more</span>
-              <span class="locale-it">Scopri di più</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Learn more</span>
+              <span v-else-if="lang === 'it'">Scopri di più</span>
               <ArrowRight class="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" :stroke-width="2" />
             </a>
           </li>
@@ -563,12 +494,12 @@ const AUDIENCES = [
         <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
           <div class="mx-auto max-w-2xl text-center">
             <h2 class="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              <span class="locale-en">Posture you can read in 30 seconds.</span>
-              <span class="locale-it">Una postura leggibile in 30 secondi.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Posture you can read in 30 seconds.</span>
+              <span v-else-if="lang === 'it'">Una postura leggibile in 30 secondi.</span>
             </h2>
             <p class="mt-4 text-slate-600 dark:text-slate-400">
-              <span class="locale-en">One dashboard for total scans, average compliance score, open findings, and monitored assets — with the recent-scan trend on the same screen.</span>
-              <span class="locale-it">Una sola dashboard per scansioni totali, score medio di conformità, finding aperti e asset monitorati — con il trend delle scansioni recenti sulla stessa schermata.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">One dashboard for total scans, average compliance score, open findings, and monitored assets — with the recent-scan trend on the same screen.</span>
+              <span v-else-if="lang === 'it'">Una sola dashboard per scansioni totali, score medio di conformità, finding aperti e asset monitorati — con il trend delle scansioni recenti sulla stessa schermata.</span>
             </p>
           </div>
           <div class="mx-auto mt-12 max-w-5xl rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-blue-500/5 ring-1 ring-black/5 dark:border-neutral-800 dark:bg-neutral-900 dark:ring-white/5">
@@ -598,12 +529,12 @@ const AUDIENCES = [
       >
         <div class="mx-auto max-w-2xl text-center">
           <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            <span class="locale-en">How it works</span>
-            <span class="locale-it">Come funziona</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">How it works</span>
+            <span v-else-if="lang === 'it'">Come funziona</span>
           </p>
           <h2 id="how-heading" class="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-            <span class="locale-en">From clone to first executive report in an afternoon.</span>
-            <span class="locale-it">Dal clone al primo report direzionale in un pomeriggio.</span>
+            <span v-if="lang === 'en' || lang === 'en-US'">From clone to first executive report in an afternoon.</span>
+            <span v-else-if="lang === 'it'">Dal clone al primo report direzionale in un pomeriggio.</span>
           </h2>
         </div>
         <ol class="mx-auto mt-14 grid max-w-5xl gap-8 sm:grid-cols-3">
@@ -617,12 +548,12 @@ const AUDIENCES = [
               <span class="h-px flex-1 bg-slate-200 dark:bg-neutral-800" aria-hidden="true"></span>
             </div>
             <h3 class="mt-4 text-lg font-semibold tracking-tight">
-              <span class="locale-en">{{ s.en.title }}</span>
-              <span class="locale-it">{{ s.it.title }}</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">{{ s.en.title }}</span>
+              <span v-else-if="lang === 'it'">{{ s.it.title }}</span>
             </h3>
             <p class="mt-2 flex-1 text-sm text-slate-600 dark:text-slate-400">
-              <span class="locale-en">{{ s.en.body }}</span>
-              <span class="locale-it">{{ s.it.body }}</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">{{ s.en.body }}</span>
+              <span v-else-if="lang === 'it'">{{ s.it.body }}</span>
             </p>
             <pre v-if="s.showCmd" class="mt-4 overflow-x-auto rounded-md bg-slate-100 p-3 text-xs dark:bg-neutral-800/60"><code class="font-mono text-slate-900 dark:text-slate-100"><span class="text-slate-500">$ </span>git clone … &amp;&amp; make dev</code></pre>
           </li>
@@ -637,12 +568,12 @@ const AUDIENCES = [
         <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
           <div class="mx-auto max-w-2xl text-center">
             <h2 id="audiences-heading" class="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              <span class="locale-en">Built with the people who actually use it.</span>
-              <span class="locale-it">Costruita con le persone che la usano davvero.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Built with the people who actually use it.</span>
+              <span v-else-if="lang === 'it'">Costruita con le persone che la usano davvero.</span>
             </h2>
             <p class="mt-4 text-slate-600 dark:text-slate-400">
-              <span class="locale-en">One platform that speaks fluently to the boardroom and to the SOC.</span>
-              <span class="locale-it">Una piattaforma che parla con scioltezza sia al CdA sia al SOC.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">One platform that speaks fluently to the boardroom and to the SOC.</span>
+              <span v-else-if="lang === 'it'">Una piattaforma che parla con scioltezza sia al CdA sia al SOC.</span>
             </p>
           </div>
           <div class="mx-auto mt-14 grid max-w-5xl gap-6 sm:grid-cols-2">
@@ -652,12 +583,12 @@ const AUDIENCES = [
               class="rounded-xl border border-slate-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900"
             >
               <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                <span class="locale-en">For {{ a.en.role }}</span>
-                <span class="locale-it">Per {{ a.it.role }}</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">For {{ a.en.role }}</span>
+                <span v-else-if="lang === 'it'">Per {{ a.it.role }}</span>
               </p>
               <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                <span class="locale-en">{{ a.en.body }}</span>
-                <span class="locale-it">{{ a.it.body }}</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">{{ a.en.body }}</span>
+                <span v-else-if="lang === 'it'">{{ a.it.body }}</span>
               </p>
             </div>
           </div>
@@ -673,52 +604,52 @@ const AUDIENCES = [
           <div>
             <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-slate-400">
               <Lock class="h-3 w-3" aria-hidden="true" :stroke-width="2" />
-              <span class="locale-en">Designed for on-premise</span>
-              <span class="locale-it">Pensato per l'on-premise</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Designed for on-premise</span>
+              <span v-else-if="lang === 'it'">Pensato per l'on-premise</span>
             </div>
             <h2 id="self-hosted-heading" class="mt-4 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              <span class="locale-en">Your scan data never leaves your infrastructure.</span>
-              <span class="locale-it">I tuoi dati non lasciano mai la tua infrastruttura.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Your scan data never leaves your infrastructure.</span>
+              <span v-else-if="lang === 'it'">I tuoi dati non lasciano mai la tua infrastruttura.</span>
             </h2>
             <p class="mt-4 text-slate-600 dark:text-slate-400">
-              <span class="locale-en">A CISO of an essential entity will not upload their vulnerability data to a third-party SaaS. So we built the platform around the assumption that it won't.</span>
-              <span class="locale-it">Un CISO di un soggetto essenziale non caricherà mai i propri dati di vulnerabilità su un SaaS terzo. La piattaforma è costruita partendo da questo presupposto.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">A CISO of an essential entity will not upload their vulnerability data to a third-party SaaS. So we built the platform around the assumption that it won't.</span>
+              <span v-else-if="lang === 'it'">Un CISO di un soggetto essenziale non caricherà mai i propri dati di vulnerabilità su un SaaS terzo. La piattaforma è costruita partendo da questo presupposto.</span>
             </p>
             <ul class="mt-8 space-y-3">
               <li class="flex items-start gap-3 text-sm">
                 <Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" :stroke-width="2.5" />
                 <span class="text-slate-600 dark:text-slate-400">
-                  <span class="locale-en">Your PostgreSQL, your data — no telemetry, no external calls, no cloud dependencies.</span>
-                  <span class="locale-it">Il tuo PostgreSQL, i tuoi dati — nessuna telemetria, nessuna chiamata esterna, nessuna dipendenza cloud.</span>
+                  <span v-if="lang === 'en' || lang === 'en-US'">Your PostgreSQL, your data — no telemetry, no external calls, no cloud dependencies.</span>
+                  <span v-else-if="lang === 'it'">Il tuo PostgreSQL, i tuoi dati — nessuna telemetria, nessuna chiamata esterna, nessuna dipendenza cloud.</span>
                 </span>
               </li>
               <li class="flex items-start gap-3 text-sm">
                 <Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" :stroke-width="2.5" />
                 <span class="text-slate-600 dark:text-slate-400">
-                  <span class="locale-en">Air-gapped support: Ollama AI copilot runs entirely local. OpenAI is opt-in.</span>
-                  <span class="locale-it">Supporto air-gapped: il copilot Ollama gira interamente in locale. OpenAI è opt-in.</span>
+                  <span v-if="lang === 'en' || lang === 'en-US'">Air-gapped support: Ollama AI copilot runs entirely local. OpenAI is opt-in.</span>
+                  <span v-else-if="lang === 'it'">Supporto air-gapped: il copilot Ollama gira interamente in locale. OpenAI è opt-in.</span>
                 </span>
               </li>
               <li class="flex items-start gap-3 text-sm">
                 <Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" :stroke-width="2.5" />
                 <span class="text-slate-600 dark:text-slate-400">
-                  <span class="locale-en">Postgres FORCE ROW LEVEL SECURITY enforces tenant isolation in the database, not just the app.</span>
-                  <span class="locale-it">FORCE ROW LEVEL SECURITY di Postgres garantisce l'isolamento tra tenant nel database, non solo nell'applicazione.</span>
+                  <span v-if="lang === 'en' || lang === 'en-US'">Postgres FORCE ROW LEVEL SECURITY enforces tenant isolation in the database, not just the app.</span>
+                  <span v-else-if="lang === 'it'">FORCE ROW LEVEL SECURITY di Postgres garantisce l'isolamento tra tenant nel database, non solo nell'applicazione.</span>
                 </span>
               </li>
               <li class="flex items-start gap-3 text-sm">
                 <Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" :stroke-width="2.5" />
                 <span class="text-slate-600 dark:text-slate-400">
-                  <span class="locale-en">AGPL-3.0 — own your fork forever. Commercial dual-licensing available.</span>
-                  <span class="locale-it">AGPL-3.0 — il tuo fork è tuo, per sempre. Doppia licenza commerciale disponibile.</span>
+                  <span v-if="lang === 'en' || lang === 'en-US'">AGPL-3.0 — own your fork forever. Commercial dual-licensing available.</span>
+                  <span v-else-if="lang === 'it'">AGPL-3.0 — il tuo fork è tuo, per sempre. Doppia licenza commerciale disponibile.</span>
                 </span>
               </li>
             </ul>
           </div>
           <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <span class="locale-en">Tech stack</span>
-              <span class="locale-it">Stack tecnologico</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Tech stack</span>
+              <span v-else-if="lang === 'it'">Stack tecnologico</span>
             </p>
             <ul class="mt-4 flex flex-wrap gap-2">
               <li
@@ -730,17 +661,17 @@ const AUDIENCES = [
               </li>
             </ul>
             <p class="mt-8 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <span class="locale-en">Run it</span>
-              <span class="locale-it">Avvialo</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Run it</span>
+              <span v-else-if="lang === 'it'">Avvialo</span>
             </p>
-            <pre class="mt-4 overflow-x-auto rounded-lg bg-slate-100 p-4 text-xs leading-relaxed dark:bg-neutral-800/60"><code class="font-mono"><span class="text-slate-500"># <span class="locale-en">60 seconds, one compose file</span><span class="locale-it">60 secondi, un solo file compose</span></span>
+            <pre class="mt-4 overflow-x-auto rounded-lg bg-slate-100 p-4 text-xs leading-relaxed dark:bg-neutral-800/60"><code class="font-mono"><span class="text-slate-500"># <span v-if="lang === 'en' || lang === 'en-US'">60 seconds, one compose file</span><span v-else-if="lang === 'it'">60 secondi, un solo file compose</span></span>
 <span class="text-slate-500">$</span> git clone https://github.com/fabriziosalmi/nis2-public.git
 <span class="text-slate-500">$</span> cd nis2-public
 <span class="text-slate-500">$</span> cp .env.example .env
 <span class="text-slate-500">$</span> make dev</code></pre>
             <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              <span class="locale-en">Production: <code class="font-mono">make prod</code> — Caddy auto-HTTPS, all services healthy-gated.</span>
-              <span class="locale-it">Produzione: <code class="font-mono">make prod</code> — Caddy con HTTPS automatico, tutti i servizi vincolati all'healthcheck.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Production: <code class="font-mono">make prod</code> — Caddy auto-HTTPS, all services healthy-gated.</span>
+              <span v-else-if="lang === 'it'">Produzione: <code class="font-mono">make prod</code> — Caddy con HTTPS automatico, tutti i servizi vincolati all'healthcheck.</span>
             </p>
           </div>
         </div>
@@ -755,12 +686,12 @@ const AUDIENCES = [
               class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_60%_at_50%_0%,rgba(255,255,255,0.15),transparent_70%)]"
             ></div>
             <h2 class="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              <span class="locale-en">Stop talking about NIS2. Start showing the matrix.</span>
-              <span class="locale-it">Smetti di parlare di NIS2. Inizia a mostrare la matrice di conformità.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Stop talking about NIS2. Start showing the matrix.</span>
+              <span v-else-if="lang === 'it'">Smetti di parlare di NIS2. Inizia a mostrare la matrice di conformità.</span>
             </h2>
             <p class="mx-auto mt-4 max-w-xl text-pretty text-white/80">
-              <span class="locale-en">Self-host the platform in 60 seconds. AGPL-3.0 — yours, forever. Need a hand? Reach out.</span>
-              <span class="locale-it">Self-host della piattaforma in 60 secondi. AGPL-3.0 — tua, per sempre. Serve una mano? Scrivimi.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">Self-host the platform in 60 seconds. AGPL-3.0 — yours, forever. Need a hand? Reach out.</span>
+              <span v-else-if="lang === 'it'">Self-host della piattaforma in 60 secondi. AGPL-3.0 — tua, per sempre. Serve una mano? Scrivimi.</span>
             </p>
             <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <!-- Primary CTA differs from app landing: docs visitor
@@ -774,15 +705,15 @@ const AUDIENCES = [
                 class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-white px-8 py-3 text-sm font-medium !text-slate-900 transition-colors hover:bg-slate-100 sm:w-auto"
               >
                 <Terminal class="h-4 w-4" aria-hidden="true" :stroke-width="2" />
-                <span class="locale-en">Read the Guide</span>
-                <span class="locale-it">Leggi la guida</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Read the Guide</span>
+                <span v-else-if="lang === 'it'">Leggi la guida</span>
               </a>
               <a
                 href="mailto:fabrizio.salmi@gmail.com"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-md border border-white/30 bg-transparent px-8 py-3 text-sm font-medium !text-white transition-colors hover:bg-white/10 sm:w-auto"
               >
-                <span class="locale-en">Request Consultation</span>
-                <span class="locale-it">Richiedi consulenza</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Request Consultation</span>
+                <span v-else-if="lang === 'it'">Richiedi consulenza</span>
                 <ArrowRight class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
               </a>
             </div>
@@ -800,18 +731,18 @@ const AUDIENCES = [
                 <span class="font-semibold tracking-tight">NIS2 Platform</span>
               </a>
               <p class="mt-4 max-w-md text-sm text-slate-600 dark:text-slate-400">
-                <span class="locale-en">Open-source NIS2 continuous posture management. Maintained by
+                <span v-if="lang === 'en' || lang === 'en-US'">Open-source NIS2 continuous posture management. Maintained by
                   <a href="mailto:fabrizio.salmi@gmail.com" class="font-medium text-slate-900 underline-offset-4 hover:underline dark:text-slate-100">Fabrizio Salmi</a>, independent NIS2 consultant.
                 </span>
-                <span class="locale-it">Posture management continuo NIS2 open-source. Mantenuto da
+                <span v-else-if="lang === 'it'">Posture management continuo NIS2 open-source. Mantenuto da
                   <a href="mailto:fabrizio.salmi@gmail.com" class="font-medium text-slate-900 underline-offset-4 hover:underline dark:text-slate-100">Fabrizio Salmi</a>, consulente NIS2 indipendente.
                 </span>
               </p>
             </div>
             <div>
               <h3 class="text-sm font-semibold tracking-tight">
-                <span class="locale-en">Project</span>
-                <span class="locale-it">Progetto</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Project</span>
+                <span v-else-if="lang === 'it'">Progetto</span>
               </h3>
               <ul class="mt-4 space-y-3">
                 <li>
@@ -826,46 +757,46 @@ const AUDIENCES = [
                 </li>
                 <li>
                   <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">License (AGPL-3.0)</span>
-                    <span class="locale-it">Licenza (AGPL-3.0)</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">License (AGPL-3.0)</span>
+                    <span v-else-if="lang === 'it'">Licenza (AGPL-3.0)</span>
                   </a>
                 </li>
                 <li>
                   <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">Security policy</span>
-                    <span class="locale-it">Policy di sicurezza</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">Security policy</span>
+                    <span v-else-if="lang === 'it'">Policy di sicurezza</span>
                   </a>
                 </li>
               </ul>
             </div>
             <div>
               <h3 class="text-sm font-semibold tracking-tight">
-                <span class="locale-en">Documentation</span>
-                <span class="locale-it">Documentazione</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Documentation</span>
+                <span v-else-if="lang === 'it'">Documentazione</span>
               </h3>
               <ul class="mt-4 space-y-3">
                 <li>
                   <a :href="withBase('/guide/getting-started')" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">Getting started</span>
-                    <span class="locale-it">Per iniziare</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">Getting started</span>
+                    <span v-else-if="lang === 'it'">Per iniziare</span>
                   </a>
                 </li>
                 <li>
                   <a :href="withBase('/reference/api')" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">API reference</span>
-                    <span class="locale-it">Riferimento API</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">API reference</span>
+                    <span v-else-if="lang === 'it'">Riferimento API</span>
                   </a>
                 </li>
                 <li>
                   <a :href="withBase('/guide/acn-compliance')" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">National modules (ACN)</span>
-                    <span class="locale-it">Moduli nazionali (ACN)</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">National modules (ACN)</span>
+                    <span v-else-if="lang === 'it'">Moduli nazionali (ACN)</span>
                   </a>
                 </li>
                 <li>
                   <a href="mailto:fabrizio.salmi@gmail.com" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">Contact</span>
-                    <span class="locale-it">Contatti</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">Contact</span>
+                    <span v-else-if="lang === 'it'">Contatti</span>
                   </a>
                 </li>
                 <!--
@@ -876,14 +807,14 @@ const AUDIENCES = [
                 -->
                 <li>
                   <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/privacy.md" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">Privacy</span>
-                    <span class="locale-it">Privacy</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">Privacy</span>
+                    <span v-else-if="lang === 'it'">Privacy</span>
                   </a>
                 </li>
                 <li>
                   <a href="https://github.com/fabriziosalmi/nis2-public/blob/main/docs/terms.md" target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-                    <span class="locale-en">Terms</span>
-                    <span class="locale-it">Termini</span>
+                    <span v-if="lang === 'en' || lang === 'en-US'">Terms</span>
+                    <span v-else-if="lang === 'it'">Termini</span>
                   </a>
                 </li>
               </ul>
@@ -891,19 +822,19 @@ const AUDIENCES = [
           </div>
           <div class="mt-12 flex flex-col items-start gap-4 border-t border-slate-200 pt-8 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800">
             <p class="text-xs text-slate-500 dark:text-slate-500">
-              <span class="locale-en">© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova · This is not legal advice.</span>
-              <span class="locale-it">© 2026 Salmi Fabrizio — P.IVA IT 03072120995 — Via Sapri 9, 16134 Genova · Questo non è un parere legale.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova · This is not legal advice.</span>
+              <span v-else-if="lang === 'it'">© 2026 Salmi Fabrizio — P.IVA IT 03072120995 — Via Sapri 9, 16134 Genova · Questo non è un parere legale.</span>
             </p>
             <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-500">
               <span class="inline-flex items-center gap-1.5">
                 <Server class="h-3 w-3" aria-hidden="true" :stroke-width="2" />
-                <span class="locale-en">Self-hosted</span>
-                <span class="locale-it">Self-hosted</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">Self-hosted</span>
+                <span v-else-if="lang === 'it'">Self-hosted</span>
               </span>
               <span class="inline-flex items-center gap-1.5">
                 <Globe class="h-3 w-3" aria-hidden="true" :stroke-width="2" />
-                <span class="locale-en">5 EU languages</span>
-                <span class="locale-it">5 lingue UE</span>
+                <span v-if="lang === 'en' || lang === 'en-US'">5 EU languages</span>
+                <span v-else-if="lang === 'it'">5 lingue UE</span>
               </span>
               <span class="inline-flex items-center gap-1.5">
                 <Code2 class="h-3 w-3" aria-hidden="true" :stroke-width="2" /> AGPL-3.0
