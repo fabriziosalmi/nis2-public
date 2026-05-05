@@ -257,10 +257,8 @@ class TestRefreshTokenRotation:
 
         # Replay the original refresh token in a fresh client — must fail.
         replay = _new_client()
-        r2 = replay.post(
-            "/api/v1/auth/refresh",
-            cookies={"refresh_token": original_refresh},
-        )
+        replay.cookies.set("refresh_token", original_refresh)
+        r2 = replay.post("/api/v1/auth/refresh")
         assert r2.status_code == 401, r2.text
         detail = (r2.json().get("detail") or "").lower()
         assert "revoke" in detail or "invalid" in detail or "expired" in detail
@@ -283,10 +281,8 @@ class TestRefreshTokenRotation:
 
         # The original refresh token cannot be reused.
         replay = _new_client()
-        r = replay.post(
-            "/api/v1/auth/refresh",
-            cookies={"refresh_token": original_refresh},
-        )
+        replay.cookies.set("refresh_token", original_refresh)
+        r = replay.post("/api/v1/auth/refresh")
         assert r.status_code == 401
 
 
