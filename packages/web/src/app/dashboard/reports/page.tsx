@@ -72,7 +72,7 @@ export default function ReportsPage() {
   const setRow = (scanId: string, patch: Partial<RowState>) =>
     setRowState((prev) => ({
       ...prev,
-      [scanId]: { format: "pdf", phase: "idle", ...prev[scanId], ...patch },
+      [scanId]: { ...{ format: "pdf" as FormatValue, phase: "idle" as const }, ...prev[scanId], ...patch },
     }))
 
   const handleGenerate = async (scanId: string, fmt: FormatValue) => {
