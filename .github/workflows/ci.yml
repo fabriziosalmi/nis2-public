@@ -11,19 +11,10 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  # Node 22 LTS (Active until 2027-10). Bumped from 20 because the
-  # local lockfile is generated with npm 11 (Node 22+/25), and npm 10
-  # (bundled with Node 20) reads it as out-of-sync — the tell-tale
-  # symptom is `npm ci` failing with `Missing: @swc/helpers@x.y.z
-  # from lock file` even though the entry exists. Aligning CI to a
-  # Node version whose bundled npm matches the lockfile generator
-  # avoids regenerating the lockfile every time someone bumps a dep
-  # on a fresh machine.
-  # P2-06 audit fix: aligned to Node 20 to match the production
-  # Dockerfile (node:20.18.0-alpine). Node 22 ships npm 11 which
-  # creates a different lockfile format than npm 10 in Node 20,
-  # causing non-reproducible builds.
-  NODE_VERSION: "20"
+  # Node 22 LTS (Active until 2027-10). The lockfile is generated
+  # with npm 11 (Node 22+); npm 10 (Node 20) reads it as out-of-sync.
+  # GitHub Actions also deprecated Node 20 runners (Sept 2025).
+  NODE_VERSION: "22"
 
 jobs:
   # -----------------------------------------------------------------------

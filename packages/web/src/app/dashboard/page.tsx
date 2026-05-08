@@ -3,7 +3,7 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Radar, ShieldCheck, AlertTriangle, Server, Plus, ArrowUpRight, CheckCircle2, XCircle, Info, X } from "lucide-react"
@@ -18,17 +18,22 @@ import { useAssets } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
-// Lazy load Recharts (400KB+) — only loads when charts are visible
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BarChart = dynamic(() => import("recharts").then(m => m.BarChart) as any, { ssr: false })
-const Bar = dynamic(() => import("recharts").then(m => m.Bar) as any, { ssr: false })
-const XAxis = dynamic(() => import("recharts").then(m => m.XAxis) as any, { ssr: false })
-const YAxis = dynamic(() => import("recharts").then(m => m.YAxis) as any, { ssr: false })
-const CartesianGrid = dynamic(() => import("recharts").then(m => m.CartesianGrid) as any, { ssr: false })
-const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip) as any, { ssr: false })
-const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer) as any, { ssr: false })
-const LineChart = dynamic(() => import("recharts").then(m => m.LineChart) as any, { ssr: false })
-const Line = dynamic(() => import("recharts").then(m => m.Line) as any, { ssr: false })
+// Lazy load Recharts (400KB+) — only loads when charts are visible.
+// The `as any` + explicit ComponentType<any> cast is required because
+// next/dynamic wraps the named export and loses the original prop
+// types. Without this, strict TS (P1-08) rejects JSX props like
+// `width`, `height`, `children` on the dynamically loaded component.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const BarChart = dynamic(() => import("recharts").then(m => m.BarChart as any), { ssr: false }) as React.ComponentType<any>
+const Bar = dynamic(() => import("recharts").then(m => m.Bar as any), { ssr: false }) as React.ComponentType<any>
+const XAxis = dynamic(() => import("recharts").then(m => m.XAxis as any), { ssr: false }) as React.ComponentType<any>
+const YAxis = dynamic(() => import("recharts").then(m => m.YAxis as any), { ssr: false }) as React.ComponentType<any>
+const CartesianGrid = dynamic(() => import("recharts").then(m => m.CartesianGrid as any), { ssr: false }) as React.ComponentType<any>
+const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip as any), { ssr: false }) as React.ComponentType<any>
+const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer as any), { ssr: false }) as React.ComponentType<any>
+const LineChart = dynamic(() => import("recharts").then(m => m.LineChart as any), { ssr: false }) as React.ComponentType<any>
+const Line = dynamic(() => import("recharts").then(m => m.Line as any), { ssr: false }) as React.ComponentType<any>
+/* eslint-enable @typescript-eslint/no-explicit-any */
 import { useFormatDate } from "@/lib/dates"
 
 function StatusBadge({ status }: { status: string }) {
