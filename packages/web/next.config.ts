@@ -13,10 +13,12 @@ const config: NextConfig = {
   // file warning per build. Pinning to __dirname keeps file tracing
   // scoped to packages/web.
   outputFileTracingRoot: path.join(__dirname),
-  typescript: {
-    // Recharts dynamic imports have known type incompatibilities with Next.js 15
-    ignoreBuildErrors: true,
-  },
+  // P1-08 audit fix: removed `typescript: { ignoreBuildErrors: true }`.
+  // Globally ignoring TS errors let any type bug pass silently into
+  // production — unacceptable for a security compliance platform.
+  // Recharts-specific type incompatibilities should be fixed at source
+  // (targeted @ts-expect-error on the specific import, or a typed
+  // wrapper component) rather than silencing the entire compiler.
   experimental: {
     optimizePackageImports: [
       'lucide-react',
@@ -59,7 +61,12 @@ const config: NextConfig = {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const scriptSrc = isDev
       ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-      : "script-src 'self' 'unsafe-inline'"
+      // P1-09 audit fix: production CSP drops 'unsafe-inline'. Next.js
+      // standalone builds are fully pre-compiled — no inline scripts.
+      // Pre-fix, 'unsafe-inline' neutralised CSP's XSS protection
+      // entirely: any attacker who could inject HTML could also inject
+      // and execute <script> blocks. Dev mode keeps it for HMR.
+      : "script-src 'self'"
     const connectSrc = isDev
       ? `connect-src 'self' ${apiUrl} ws: wss:`
       : `connect-src 'self' ${apiUrl}`

@@ -1,0 +1,5 @@
+# This directory is reserved for environment-specific configuration
+# overrides (e.g. Prometheus rules, Grafana dashboards, Nginx snippets).
+#
+# P2-04 audit note: the directory was empty since repo creation.
+# This .gitkeep preserves it in git while documenting its purpose.

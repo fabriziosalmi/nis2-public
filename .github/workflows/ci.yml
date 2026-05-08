@@ -19,7 +19,11 @@ env:
   # Node version whose bundled npm matches the lockfile generator
   # avoids regenerating the lockfile every time someone bumps a dep
   # on a fresh machine.
-  NODE_VERSION: "22"
+  # P2-06 audit fix: aligned to Node 20 to match the production
+  # Dockerfile (node:20.18.0-alpine). Node 22 ships npm 11 which
+  # creates a different lockfile format than npm 10 in Node 20,
+  # causing non-reproducible builds.
+  NODE_VERSION: "20"
 
 jobs:
   # -----------------------------------------------------------------------

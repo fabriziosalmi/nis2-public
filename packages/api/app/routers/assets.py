@@ -165,7 +165,18 @@ async def import_assets_csv(
             detail="File must be a CSV",
         )
 
-    content = await file.read()
+    # P1-05 audit fix: cap file size to prevent OOM. Without this,
+    # an authenticated user could upload a multi-GB CSV and crash
+    # the API process. 5 MB is generous for an asset list (100k+
+    # rows of domain/IP entries).
+    MAX_CSV_BYTES = 5 * 1024 * 1024  # 5 MB
+    content = await file.read(MAX_CSV_BYTES + 1)
+    if len(content) > MAX_CSV_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"CSV file too large. Maximum size: {MAX_CSV_BYTES // (1024*1024)} MB",
+        )
+
     try:
         decoded = content.decode("utf-8")
     except UnicodeDecodeError:
@@ -179,7 +190,16 @@ async def import_assets_csv(
     skipped = 0
     errors_list: list[str] = []
 
+    # P1-05 audit fix: cap the number of rows processed. Each row
+    # triggers a SELECT (dedup) + DNS resolution (SSRF validation),
+    # so a 100k-row CSV is effectively 200k blocking queries. 10k
+    # rows covers any reasonable asset inventory import.
+    MAX_ROWS = 10_000
+
     for row_num, row in enumerate(reader, start=2):
+        if row_num - 1 > MAX_ROWS:
+            errors_list.append(f"Row limit exceeded: maximum {MAX_ROWS} rows allowed")
+            break
         name = row.get("name", "").strip()
         target_type = row.get("target_type", "").strip()
         target_value = row.get("target_value", "").strip()

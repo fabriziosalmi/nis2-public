@@ -9,9 +9,9 @@ current jti here; /refresh rotates by adding the OLD jti and minting a
 new pair. Any subsequent reuse of the old refresh token (replay or
 stolen-token reuse) hits the revocation list and is rejected.
 
-Rows are kept until `expires_at`; a periodic Celery task can prune
-expired rows. Until that task ships, the table grows linearly with
-sessions — the index keeps lookups O(log N).
+Rows are kept until `expires_at`; the `cleanup_expired_auth_records`
+Celery beat task (v2.5.1, see `cleanup_tasks.py`) prunes expired rows
+hourly. The index on `expires_at` keeps both lookups and deletes O(log N).
 """
 from __future__ import annotations
 

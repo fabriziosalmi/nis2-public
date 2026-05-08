@@ -15,6 +15,15 @@ class RegisterRequest(BaseModel):
     org_name: str = Field(..., min_length=1, max_length=256)
 
 
+class AcceptInviteRequest(BaseModel):
+    """P0-02 audit fix (v2.5.5): lets an invited user set their password
+    and activate their account. The email must match a pre-existing
+    is_active=False user created by the invite_member flow."""
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: str = Field(..., min_length=1, max_length=256)
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

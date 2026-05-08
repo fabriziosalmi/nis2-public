@@ -140,9 +140,18 @@ async def create_scan(
         task = run_scan_task.delay(str(scan.id))
         scan.celery_task_id = task.id
         await db.flush()
-    except Exception:
-        # If Celery is not available, scan stays in pending
-        pass
+    except Exception as exc:
+        # P2-02 audit fix: don't silently leave the scan in 'pending'
+        # forever. Mark it as 'error' so the UI shows a clear failure
+        # and the user can retry. Pre-fix, a Celery/Redis outage left
+        # scans in limbo with no feedback.
+        import logging
+        logging.getLogger(__name__).error(
+            "Failed to enqueue scan %s: %s", scan.id, exc, exc_info=True,
+        )
+        scan.status = "error"
+        scan.error_message = "Task queue unavailable — please retry later"
+        await db.flush()
 
     # Refresh so DB-side defaults (created_at, updated_at, server_default
     # columns) are present on the instance BEFORE Pydantic serialises it.
@@ -265,8 +274,17 @@ async def cancel_scan(
             from app.tasks.celery_app import celery_app
 
             celery_app.control.revoke(scan.celery_task_id, terminate=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            # P2-01 audit fix: log revoke failure. The scan still gets
+            # marked 'cancelled' in the DB, but the Celery task may
+            # continue running if the broker couldn't deliver the
+            # revoke signal (e.g. Redis down). Logging gives operators
+            # visibility into this orphaned-task scenario.
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to revoke Celery task %s for scan cancel: %s",
+                scan.celery_task_id, exc,
+            )
 
     scan.status = "cancelled"
     await db.flush()

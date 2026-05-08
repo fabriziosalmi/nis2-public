@@ -105,6 +105,17 @@ services:
       redis: { condition: service_healthy }
     restart: unless-stopped
     networks: [nis2-net]
+    # P2-07 audit fix: healthcheck for worker liveness. Without this,
+    # a worker that dies silently (OOM, broker disconnect) leaves scans
+    # in `pending` forever with no Docker-level signal. `celery inspect
+    # ping` contacts the worker through the broker and fails if it
+    # doesn't respond within timeout.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 5 2>/dev/null | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   celery-beat:
     build:

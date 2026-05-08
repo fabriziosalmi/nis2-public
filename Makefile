@@ -87,6 +87,15 @@ db-migrate:
 db-upgrade:
 	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic upgrade head
 
+# P0-01: mark an EXISTING database as up-to-date with the current
+# Alembic head. Run this ONCE when adopting Alembic on a database
+# that was previously managed by ensure_schema().
+db-stamp:
+	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic stamp head
+
+db-history:
+	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic history --verbose
+
 db-seed:
 	docker compose -f infra/docker/docker-compose.dev.yml exec api python -m scripts.seed
 

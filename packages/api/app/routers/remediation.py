@@ -190,7 +190,13 @@ Respond in a structured format with clear headings."""
                         data = await resp.json()
                         explanation = data["choices"][0]["message"]["content"]
         except Exception:
-            pass
+            # P2-01 audit fix: log LLM connection failure instead of
+            # swallowing silently. The fallback to OpenAI / playbook
+            # still fires, but we now have visibility into why.
+            import logging
+            logging.getLogger(__name__).debug(
+                "Local LLM call failed for finding %s, trying fallback", finding_id, exc_info=True,
+            )
 
     # Fallback to OpenAI
     if not explanation and openai_key:
@@ -212,7 +218,11 @@ Respond in a structured format with clear headings."""
                         data = await resp.json()
                         explanation = data["choices"][0]["message"]["content"]
         except Exception:
-            pass
+            # P2-01 audit fix: same as the local LLM handler above.
+            import logging
+            logging.getLogger(__name__).debug(
+                "OpenAI call failed for finding %s, falling back to playbook", finding_id, exc_info=True,
+            )
 
     # Final fallback: use playbook
     if not explanation:

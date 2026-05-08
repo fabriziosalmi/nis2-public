@@ -8,21 +8,34 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.config import settings
 from app.database import Base
 
-# Import all models so they are registered with Base.metadata
+# Import all models so they are registered with Base.metadata.
+# P0-01 audit fix: this list must be exhaustive — any model missing
+# here will be silently ignored by `alembic revision --autogenerate`.
+# The original list was missing Vendor, Incident, BusinessProcess,
+# PasswordResetToken, GovernanceItem, and IncidentReport.
 from app.models import (  # noqa: F401
     ApiKey,
     Asset,
     AuditLog,
+    BusinessProcess,
     Finding,
+    Incident,
     Membership,
     NotificationChannel,
     Organization,
+    PasswordResetToken,
     RevokedToken,
     Scan,
     ScanResult,
     ScanSchedule,
     User,
+    Vendor,
 )
+# Inline-defined models in routers. They inherit from Base so they
+# must be imported here for metadata.create_all / autogenerate to
+# see them.
+from app.routers.governance import GovernanceItem  # noqa: F401
+from app.routers.incidents import IncidentReport  # noqa: F401
 
 # Alembic Config object
 config = context.config

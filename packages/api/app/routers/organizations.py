@@ -221,8 +221,19 @@ async def invite_member(
     target_user = result.scalar_one_or_none()
 
     if not target_user:
-        # Create a placeholder user
-        target_user = User(email=payload.email, full_name="", is_active=True)
+        # P0-02 audit fix: create with is_active=False. The invited user
+        # must complete registration (set a password) before they can
+        # log in. Pre-fix, the placeholder had is_active=True + no
+        # password_hash — the account appeared "active" in the member
+        # list but could never actually authenticate (login rejects
+        # users without password_hash). Setting is_active=False makes
+        # the state explicit and prevents any future code path from
+        # accidentally granting access to a passwordless account.
+        target_user = User(
+            email=payload.email,
+            full_name=payload.email.split("@")[0],  # placeholder name
+            is_active=False,
+        )
         db.add(target_user)
         await db.flush()
 

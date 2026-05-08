@@ -179,6 +179,7 @@ async def _run_scheduled_scan(schedule_id: str):
         # Resolve asset targets
         domains = []
         ip_ranges = []
+        pinned_ips: dict[str, str] = {}
         if asset_ids:
             from sqlalchemy import select
             assets_result = await db.execute(
@@ -191,6 +192,13 @@ async def _run_scheduled_scan(schedule_id: str):
             for asset in assets_result.scalars().all():
                 if asset.target_type == "domain":
                     domains.append(asset.target_value)
+                    # P2-05 audit fix: forward the validation-time
+                    # pinned IP so the scanner connects to the exact
+                    # address resolved at asset-creation time, closing
+                    # the DNS-rebinding TOCTOU window. This mirrors
+                    # the manual scan flow in routers/scans.py.
+                    if asset.pinned_ip:
+                        pinned_ips[asset.target_value] = asset.pinned_ip
                 elif asset.target_type in ("ip", "cidr"):
                     ip_ranges.append(asset.target_value)
 
@@ -207,6 +215,7 @@ async def _run_scheduled_scan(schedule_id: str):
                 "name": schedule.name,
                 "domains": domains,
                 "ip_ranges": ip_ranges,
+                "pinned_ips": pinned_ips,
                 "features": config.get("features", {}),
                 "concurrency": config.get("concurrency", 20),
                 "scan_timeout": config.get("scan_timeout", 10),

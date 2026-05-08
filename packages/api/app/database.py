@@ -108,18 +108,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def ensure_schema() -> None:
-    """Best-effort idempotent schema bootstrap.
+    """Best-effort idempotent schema bootstrap (dev / first-run convenience).
 
-    The repo does not yet ship Alembic migration files (alembic/versions/
-    is empty). Until that gap is closed, we let the FastAPI lifespan
-    create missing tables and apply the small set of known column
-    additions, so a fresh `docker compose up` works without manual SQL
-    and existing volumes auto-heal on restart.
+    P0-01 audit (v2.5.5): the initial Alembic migration now exists at
+    ``alembic/versions/001_initial_schema.py``. The recommended path for
+    production and CI is::
 
-    DEBT: this is not a substitute for migrations. It cannot rename
-    columns, drop columns safely, alter types, or coordinate data
-    backfills. Generate proper Alembic revisions before any production
-    deployment.
+        alembic upgrade head      # new database
+        alembic stamp head        # existing database, first time using Alembic
+
+    This function is **kept** as a degraded-mode fallback so a bare
+    ``docker compose up`` still works without running ``alembic`` first.
+    It cannot rename/drop columns, alter types, or coordinate data
+    backfills — any non-additive change MUST go through an Alembic
+    revision.
     """
     if not IS_POSTGRES:
         # SQLite-backed tests do their own create_all in conftest.
@@ -203,7 +205,19 @@ async def setup_row_level_security() -> None:
 
     applied: list[str] = []
     skipped: list[str] = []
+    # P2-03 audit fix: defensive table-name validation. `tname` comes
+    # from Base.metadata.tables (defined in Python models, not user
+    # input), but f-string SQL with unvalidated identifiers is fragile:
+    # if a table name were ever derived from external input, it would be
+    # direct SQL injection. The regex whitelist ensures only sane
+    # Postgres identifier characters survive.
+    import re
+    _SAFE_TABLE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
     for tname in tenant_tables:
+        if not _SAFE_TABLE_NAME.match(tname):
+            logger.error("RLS: refusing to operate on unsafe table name: %r", tname)
+            skipped.append(tname)
+            continue
         # Per-table transaction. The previous single-transaction version
         # aborted on the first failure and `InFailedSQLTransactionError`
         # silently disabled RLS on every table after that — exactly the

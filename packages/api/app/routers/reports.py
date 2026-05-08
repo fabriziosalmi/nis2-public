@@ -212,11 +212,29 @@ async def download_report(
         raise HTTPException(status_code=404, detail="Report file not found")
 
     import os
-    if not os.path.exists(file_path):
+
+    # P0-06 audit fix: path traversal guard. `file_path` comes from
+    # the Celery result backend (Redis). If an attacker poisons a
+    # result key (e.g. via a Redis compromise or SSRF to the unauthed
+    # dev-mode Redis), they could set file_path to
+    # `/etc/shadow` or `../../../../app/config.py` and have
+    # FileResponse serve it. We resolve to an absolute, symlink-free
+    # path and verify it lives under the expected REPORTS_DIR.
+    from app.tasks.report_tasks import REPORTS_DIR
+    real_path = os.path.realpath(file_path)
+    real_reports_dir = os.path.realpath(REPORTS_DIR)
+    if not real_path.startswith(real_reports_dir + os.sep) and real_path != real_reports_dir:
+        logger.warning(
+            "Path traversal blocked: file_path=%r resolved to %r (outside %r)",
+            file_path, real_path, real_reports_dir,
+        )
+        raise HTTPException(status_code=404, detail="Report file not found")
+
+    if not os.path.exists(real_path):
         raise HTTPException(status_code=404, detail="Report file no longer available")
 
     return FileResponse(
-        path=file_path,
+        path=real_path,
         filename=filename,
         media_type=content_type,
     )

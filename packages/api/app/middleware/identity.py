@@ -58,15 +58,29 @@ def _extract_token(request: Request) -> Optional[str]:
 
 class IdentityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        token = _extract_token(request)
-        if token:
-            try:
-                payload = decode_token(token)
-                if payload.get("type") == "access":
-                    current_user_id.set(_maybe_uuid(payload.get("sub")))
-                    current_org_id.set(_maybe_uuid(payload.get("org_id")))
-            except JWTError:
-                # Invalid token: leave contextvars at None. Auth dependencies
-                # downstream will produce a proper 401.
-                pass
-        return await call_next(request)
+        # P1-04 audit fix: save ContextVar tokens so we can reset them
+        # in the finally block. Without this, a valid identity from
+        # Request A can leak into Request B if B is anonymous and
+        # lands on the same asyncio task context (BaseHTTPMiddleware
+        # runs each request as a task, and uvicorn reuses the event
+        # loop). The ContextVar.set() method returns a Token that
+        # allows us to reliably restore the previous value.
+        uid_token = current_user_id.set(None)
+        oid_token = current_org_id.set(None)
+        try:
+            token = _extract_token(request)
+            if token:
+                try:
+                    payload = decode_token(token)
+                    if payload.get("type") == "access":
+                        current_user_id.set(_maybe_uuid(payload.get("sub")))
+                        current_org_id.set(_maybe_uuid(payload.get("org_id")))
+                except JWTError:
+                    # Invalid token: leave contextvars at None. Auth dependencies
+                    # downstream will produce a proper 401.
+                    pass
+            return await call_next(request)
+        finally:
+            # Always restore to prevent cross-request identity leakage.
+            current_user_id.reset(uid_token)
+            current_org_id.reset(oid_token)

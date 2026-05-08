@@ -120,10 +120,19 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
     """Execute an MCP tool call and return the result."""
 
     if name == "check_certificate":
+        # P0-04 audit fix: validate domain against SSRF blocklist
+        # before any outbound connection.
+        from app.utils.target_validator import validate_domain_pinned, TargetValidationError
+        domain = arguments.get("domain", "")
+        try:
+            validate_domain_pinned(domain)
+        except TargetValidationError as exc:
+            return {"error": f"Target blocked: {exc}"}
+
         from nis2scan.certificate import CertificateAnalyzer
         analyzer = CertificateAnalyzer(timeout=10)
         info = await analyzer.analyze(
-            arguments["domain"],
+            domain,
             arguments.get("port", 443),
         )
         return analyzer.to_dict(info)
@@ -133,7 +142,29 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
         from nis2scan.scanner import Scanner
         from nis2scan.compliance import ComplianceEngine
 
-        target = arguments["target"]
+        target = arguments.get("target", "")
+
+        # P0-04 audit fix: validate the scan target against the SSRF
+        # blocklist BEFORE any outbound connection. Without this, an
+        # authenticated user could scan localhost, cloud metadata
+        # endpoints (169.254.169.254), or internal RFC-1918 ranges
+        # via the HTTP MCP endpoint.
+        from app.utils.target_validator import (
+            validate_domain_pinned, validate_ip_pinned,
+            TargetValidationError,
+        )
+        import ipaddress as _ipaddress
+        try:
+            # Heuristic: if it parses as an IP, validate as IP;
+            # otherwise treat as domain.
+            try:
+                _ipaddress.ip_address(target)
+                validate_ip_pinned(target)
+            except ValueError:
+                validate_domain_pinned(target)
+        except TargetValidationError as exc:
+            return {"error": f"Target blocked: {exc}"}
+
         features = arguments.get("features", {
             "dns_checks": True, "web_checks": True, "port_scan": True,
         })
@@ -235,7 +266,7 @@ def run_mcp_stdio():
                             "capabilities": {"tools": {}},
                             "serverInfo": {
                                 "name": "nis2-compliance",
-                                "version": "2.4.26",
+                                "version": "2.5.6",
                             },
                         },
                     }
@@ -288,6 +319,11 @@ def run_mcp_stdio():
 # All HTTP MCP routes require authentication: the stdio entry point is local
 # and trusted, but the HTTP entry point sits behind FastAPI and must be
 # tenant-scoped.
+#
+# P1-07 audit fix: rate-limited. MCP tools like scan_target trigger
+# full network scans which are expensive on both the platform and the
+# target. Without limits a single client could saturate every Celery
+# worker.
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
@@ -305,7 +341,12 @@ async def call_tool(
     request: dict,
     auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
 ):
-    """Execute an MCP tool call via HTTP."""
+    """Execute an MCP tool call via HTTP.
+
+    P0-05 audit fix: internal exceptions are logged server-side and the
+    client receives a generic error string. Pre-fix, ``str(e)`` leaked
+    filesystem paths, connection-string fragments, and table names.
+    """
     name = request.get("name", "")
     arguments = request.get("arguments", {})
     if not name:
@@ -314,4 +355,6 @@ async def call_tool(
         result = await handle_tool_call(name, arguments)
         return {"result": result}
     except Exception as e:
-        return {"error": str(e)}
+        # P0-05 audit fix: never leak internal exception text.
+        logger.error("MCP tool %r failed: %s", name, e, exc_info=True)
+        return {"error": "Internal error processing MCP tool call"}

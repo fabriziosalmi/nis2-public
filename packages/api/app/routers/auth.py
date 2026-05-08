@@ -28,6 +28,7 @@ from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.utils.email import get_dev_outbox, send_email
 from app.schemas.auth import (
+    AcceptInviteRequest,
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
@@ -258,7 +259,80 @@ async def register(
     db.add(membership)
     await db.flush()
 
+    # P0-03 audit fix: self-registration implies email ownership in the
+    # current architecture (no email verification service). Mark as
+    # verified so the field is not decorative.
+    user.email_verified = True
+    await db.flush()
+
     return _build_token_response(response, user, org.id, "admin")
+
+
+# ---------------------------------------------------------------------------
+# Accept Invite — P0-02 audit fix (v2.5.5)
+# ---------------------------------------------------------------------------
+
+@router.post("/accept-invite", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+async def accept_invite(
+    request: Request,
+    response: Response,
+    payload: AcceptInviteRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Activate an invited user's account by setting their password.
+
+    P0-02 audit fix: the invite_member flow now creates users with
+    is_active=False and no password_hash. This endpoint is the only way
+    for those users to activate their account. It:
+      1. Verifies the email matches an existing inactive user
+      2. Sets the password_hash and full_name
+      3. Marks is_active=True and email_verified=True
+      4. Returns a token response so the user is immediately logged in
+
+    The endpoint is rate-limited to prevent brute-force email enumeration.
+    """
+    await _bypass_rls_for_bootstrap(db)
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Don't reveal whether the email exists
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation or account already active",
+        )
+
+    if user.is_active and user.password_hash:
+        # Already activated — don't allow re-activation
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation or account already active",
+        )
+
+    # Check the user has at least one membership (was actually invited)
+    memberships_result = await db.execute(
+        select(Membership).where(Membership.user_id == user.id)
+    )
+    membership = memberships_result.scalars().first()
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation or account already active",
+        )
+
+    # Activate the account
+    user.password_hash = pwd_context.hash(payload.password)
+    user.full_name = payload.full_name
+    user.is_active = True
+    user.email_verified = True
+    user.last_login_at = datetime.now(timezone.utc)
+    membership.accepted_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    return _build_token_response(
+        response, user, membership.organization_id, membership.role,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

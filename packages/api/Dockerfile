@@ -59,4 +59,7 @@ WORKDIR /app/packages/api
 
 EXPOSE 8000
 
+# P0-01 audit fix: run Alembic migrations before the server starts.
+# The entrypoint falls back gracefully if alembic fails.
+ENTRYPOINT ["/app/packages/api/entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
