@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.5.8] - 2026-05-15
+
+Finalized high-fidelity security and usability hardening.
+
+### 🔴 Security & Stability
+
+- **Fixed 500 Internal Server Error in `findings.py`**: Restored the accidentally removed `FindingResponse` import, restoring full findings API functionality.
+- **Dependabot Patch**: Updated npm dependencies resolving known CVEs.
+
+### 🟠 Audit & Compliance
+
+- **Enhanced Audit Logging**: Integrated the `log_action` logger across all destructive and state-altering asset and finding management flows, strengthening compliance posture.
+
+### 🟢 UI/UX & Localization
+
+- **Support & Documentation Affordances**: Added new navigation links for "Support" and "Documentation" across the dashboard sidebar.
+- **Fixed `MISSING_MESSAGE` Next-Intl Runtime Error**: Fully mapped and injected the `common.support`, `nav.support`, and `nav.documentation` keys across all 5 supported locales (en, it, fr, de, es).
+- **Component Polish**: Created the missing `Alert` component and resolved the build-time "Module not found" error.
+
+### ⚡ Performance
+
+- **Bulk Finding Updates Refactor**: Consolidated multiple network requests into a single, dedicated API endpoint (`/api/v1/findings/bulk`) with atomic transactional guarantees, eliminating race conditions and significantly boosting performance on massive arrays of findings.
+
 ## [2.5.4] - 2026-04-30
 
 Tier 2 + Tier 3 closure — security hardening on the auth surfaces, GDPR-aware UX on findings, and the OSS-hygiene files (SECURITY.md, security.txt, CODE_OF_CONDUCT, issue/PR templates, CODEOWNERS) the project had been carrying as deferred items.

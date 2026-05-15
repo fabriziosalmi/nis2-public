@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Round-2 audit caught this hardcoded literal lagging behind the
 # pyproject by three patch releases (2.4.26 vs 2.5.0), which made the
 # audit log claim a wrong release was running.
-API_VERSION = "2.5.6"
+API_VERSION = "2.5.8"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.
