@@ -332,7 +332,19 @@
     "updatedCount": "Updated {count} findings",
     "updateFailed": "Failed to update findings",
     "exportCsv": "Export CSV",
-    "exportedCount": "Exported {count} findings"
+    "exportedCount": "Exported {count} findings",
+    "total": "Total Findings",
+    "technicalDetail": "Technical Details",
+    "rationale": "Impact & Rationale",
+    "noRemediationProvided": "No recommended solution provided for this finding.",
+    "effort": "Effort",
+    "cost": "Cost",
+    "showing": "Showing",
+    "to": "to",
+    "of": "of",
+    "results": "results",
+    "previous": "Previous",
+    "next": "Next"
   },
   "certificates": {
     "title": "Certificate Intelligence",
@@ -540,16 +552,46 @@
     "title": "NIS2 Compliance Matrix",
     "subtitle": "Art. 24(2) D.Lgs 138/2024 (transposes Art. 21 NIS2) — Cybersecurity risk management measures",
     "art21Sections": {
-      "a": { "title": "Risk analysis and IS security policies", "description": "Policies on risk analysis and information system security" },
-      "b": { "title": "Incident handling", "description": "Detection, classification, response, and reporting procedures" },
-      "c": { "title": "Business continuity and crisis management", "description": "BCP, backup management, disaster recovery, and crisis response" },
-      "d": { "title": "Supply chain security", "description": "Direct suppliers and service providers, including criticality and contracts" },
-      "e": { "title": "Network and IS security in acquisition / development / maintenance", "description": "Including vulnerability handling and disclosure" },
-      "f": { "title": "Effectiveness of cybersecurity risk-management measures", "description": "Policies and procedures to assess effectiveness" },
-      "g": { "title": "Cyber hygiene practices and cybersecurity training", "description": "Basic hygiene practices and ongoing awareness training" },
-      "h": { "title": "Cryptography and, where appropriate, encryption", "description": "Use of cryptography and encryption where appropriate" },
-      "i": { "title": "Human resources security, access control and asset management", "description": "HR security, access control policies, asset management" },
-      "j": { "title": "MFA, secured communications and emergency comms", "description": "Multi-factor or continuous authentication, secured voice/video/text and emergency communications" }
+      "a": {
+        "title": "Risk analysis and IS security policies",
+        "description": "Policies on risk analysis and information system security"
+      },
+      "b": {
+        "title": "Incident handling",
+        "description": "Detection, classification, response, and reporting procedures"
+      },
+      "c": {
+        "title": "Business continuity and crisis management",
+        "description": "BCP, backup management, disaster recovery, and crisis response"
+      },
+      "d": {
+        "title": "Supply chain security",
+        "description": "Direct suppliers and service providers, including criticality and contracts"
+      },
+      "e": {
+        "title": "Network and IS security in acquisition / development / maintenance",
+        "description": "Including vulnerability handling and disclosure"
+      },
+      "f": {
+        "title": "Effectiveness of cybersecurity risk-management measures",
+        "description": "Policies and procedures to assess effectiveness"
+      },
+      "g": {
+        "title": "Cyber hygiene practices and cybersecurity training",
+        "description": "Basic hygiene practices and ongoing awareness training"
+      },
+      "h": {
+        "title": "Cryptography and, where appropriate, encryption",
+        "description": "Use of cryptography and encryption where appropriate"
+      },
+      "i": {
+        "title": "Human resources security, access control and asset management",
+        "description": "HR security, access control policies, asset management"
+      },
+      "j": {
+        "title": "MFA, secured communications and emergency comms",
+        "description": "Multi-factor or continuous authentication, secured voice/video/text and emergency communications"
+      }
     },
     "noData": "No compliance data available",
     "noDataDescription": "Run a compliance scan to populate the Art. 21 matrix automatically. Automated checks cover TLS, DNS, HTTP security headers, encryption, and more.",
