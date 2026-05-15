@@ -17,10 +17,10 @@ from app.models.user import User
 from app.schemas.finding import (
     BulkFindingUpdate,
     FindingListResponse,
-    FindingResponse,
     FindingStats,
     FindingUpdate,
 )
+from app.middleware.audit import log_action
 
 router = APIRouter(prefix="/findings", tags=["findings"])
 
@@ -151,6 +151,17 @@ async def update_finding(
         finding.resolved_at = datetime.now(timezone.utc)
 
     await db.flush()
+
+    await log_action(
+        db,
+        org_id=membership.organization_id,
+        user_id=user.id,
+        action="finding.updated",
+        resource_type="finding",
+        resource_id=str(finding.id),
+        details={"status": payload.status, "updated_fields": list(update_data.keys())},
+    )
+
     return FindingResponse.model_validate(finding)
 
 
@@ -182,5 +193,14 @@ async def bulk_update_findings(
         updated_count += 1
 
     await db.flush()
+
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=user.id,
+        action="finding.bulk_updated",
+        resource_type="finding",
+        details={"status": payload.status, "updated_count": updated_count, "requested_count": len(payload.finding_ids)},
+    )
 
     return {"updated": updated_count, "total_requested": len(payload.finding_ids)}

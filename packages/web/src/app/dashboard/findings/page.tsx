@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useFindings, useUpdateFinding } from "@/hooks/use-findings"
+import { useFindings, useUpdateFinding, useBulkUpdateFindings } from "@/hooks/use-findings"
 import { useDebounce } from "@/hooks/use-debounce"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
@@ -164,6 +164,7 @@ export default function FindingsPage() {
 
   const { data, isLoading } = useFindings(params)
   const updateFinding = useUpdateFinding()
+  const bulkUpdateFindings = useBulkUpdateFindings()
 
   const findings = data?.items || []
 
@@ -182,11 +183,7 @@ export default function FindingsPage() {
   const handleBulkUpdate = async () => {
     if (!bulkStatus || selectedIds.length === 0) return
     try {
-      await Promise.all(
-        selectedIds.map((id) =>
-          updateFinding.mutateAsync({ id, data: { status: bulkStatus } })
-        )
-      )
+      await bulkUpdateFindings.mutateAsync({ findingIds: selectedIds, status: bulkStatus })
       toast.success(t("updatedCount", { count: selectedIds.length }))
       setSelectedIds([])
       setBulkStatus("")

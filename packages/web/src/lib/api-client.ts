@@ -275,6 +275,13 @@ class ApiClient {
     return this.request<any>('/api/v1/findings/stats')
   }
 
+  async bulkUpdateFindings(findingIds: string[], status: string, resolutionNote?: string) {
+    return this.request<any>('/api/v1/findings/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify({ finding_ids: findingIds, status, resolution_note: resolutionNote })
+    })
+  }
+
   // ------------------------------------------------------------------ Assets
   async listAssets(page = 1) {
     return this.request<any>(`/api/v1/assets?page=${page}`)

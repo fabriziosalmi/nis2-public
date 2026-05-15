@@ -35,3 +35,15 @@ export function useUpdateFinding() {
     },
   })
 }
+
+export function useBulkUpdateFindings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ findingIds, status, resolutionNote }: { findingIds: string[]; status: string; resolutionNote?: string }) => 
+      api.bulkUpdateFindings(findingIds, status, resolutionNote),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['findings'] })
+      qc.invalidateQueries({ queryKey: ['finding-stats'] })
+    },
+  })
+}
