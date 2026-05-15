@@ -4,12 +4,13 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import dual_auth_with_scope, get_current_org
+from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
 from app.models.finding import Finding
 from app.models.membership import Membership
@@ -65,7 +66,9 @@ async def list_scans(
 
 
 @router.post("", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_scan(
+    request: Request,
     payload: ScanCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),

@@ -5,12 +5,13 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import dual_auth_with_scope, get_current_org
+from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
 from app.models.membership import Membership
 from app.models.user import User
@@ -55,7 +56,9 @@ async def list_assets(
 
 
 @router.post("", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 async def create_asset(
+    request: Request,
     payload: AssetCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
@@ -179,7 +182,9 @@ async def delete_asset(
 
 
 @router.post("/import", response_model=dict, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def import_assets_csv(
+    request: Request,
     file: UploadFile = File(...),
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
