@@ -362,32 +362,43 @@ function FeatureGrid() {
         </p>
       </div>
       <StaggerContainer className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((f) => {
+        {FEATURES.map((f, index) => {
           const title = t(`${f.key}.title`)
           const body = t(`${f.key}.body`)
+          
+          // Bento Grid logic: alternate column spans to break visual monotony
+          const bentoClass = index === 0 || index === 3 || index === 4 
+            ? "sm:col-span-2 lg:col-span-2" 
+            : "sm:col-span-1 lg:col-span-1"
+
           return (
             <StaggerItem
               key={f.key}
-              className="group relative flex flex-col rounded-xl border bg-card/80 backdrop-blur-md p-6 transition-all duration-300 hover:shadow-md hover:bg-card hover:border-primary/20"
+              className={cn(
+                "group relative flex flex-col justify-between rounded-xl border bg-card/80 backdrop-blur-md p-6 lg:p-8 transition-all duration-300 hover:shadow-md hover:bg-card hover:border-primary/20",
+                bentoClass
+              )}
             >
-              <div className="flex items-center justify-between">
-                <div className="rounded-lg bg-primary/10 p-2.5">
-                  <f.icon className="h-5 w-5 text-primary" aria-hidden="true" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="rounded-lg bg-primary/10 p-3">
+                    <f.icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <span className="rounded-full border bg-background px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">
+                    {f.label}
+                  </span>
                 </div>
-                <span className="rounded-full border bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {f.label}
-                </span>
+                <h3 className="mt-6 text-xl font-semibold tracking-tight">{title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
               </div>
-              <h3 className="mt-5 text-lg font-semibold tracking-tight">{title}</h3>
-              <p className="mt-2 flex-1 text-sm text-muted-foreground">{body}</p>
               <a
                 href={f.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-foreground underline-offset-4 hover:underline"
+                className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
               >
                 {t("learnMore")}
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 <span className="sr-only"> {t("learnMoreAbout", { feature: title })}</span>
               </a>
             </StaggerItem>
