@@ -105,11 +105,43 @@ export default function AssetsPage() {
     setDialogOpen(true)
   }
 
+  const [selectedForBulk, setSelectedForBulk] = useState<string[]>([])
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+
+  const toggleBulkSelect = (id: string) => {
+    setSelectedForBulk(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  }
+
+  const toggleAll = () => {
+    if (selectedForBulk.length === assets.length && assets.length > 0) {
+      setSelectedForBulk([])
+    } else {
+      setSelectedForBulk(assets.map((a: any) => a.id))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedForBulk.length} items?`)) return
+    setIsBulkDeleting(true)
+    try {
+      for (const id of selectedForBulk) {
+        await deleteAsset.mutateAsync(id)
+      }
+      toast.success(t("removed"))
+      setSelectedForBulk([])
+    } catch (err: any) {
+      toast.error(t("deleteFailed"), { description: err.message })
+    } finally {
+      setIsBulkDeleting(false)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     try {
       await deleteAsset.mutateAsync(id)
       toast.success(t("removed"))
       setDeleteId(null)
+      setSelectedForBulk(prev => prev.filter(i => i !== id))
     } catch (err: any) {
       toast.error(t("deleteFailed"), { description: err.message })
     }
@@ -205,9 +237,26 @@ export default function AssetsPage() {
       </div>
 
       <Card>
+        {selectedForBulk.length > 0 && (
+          <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-destructive">
+              {selectedForBulk.length} items selected
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+            >
+              {isBulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Selected
+            </Button>
+          </div>
+        )}
         <CardContent className="p-0">
           {isLoading ? (
-            <TableSkeleton columns={6} rows={5} />
+            <TableSkeleton columns={7} rows={5} />
           ) : assets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
               <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
@@ -229,6 +278,14 @@ export default function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12 text-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-input"
+                      checked={assets.length > 0 && selectedForBulk.length === assets.length}
+                      onChange={toggleAll}
+                    />
+                  </TableHead>
                   <TableHead>{t("name")}</TableHead>
                   <TableHead>{t("type")}</TableHead>
                   <TableHead>{t("target")}</TableHead>
@@ -239,7 +296,15 @@ export default function AssetsPage() {
               </TableHeader>
               <TableBody>
                 {assets.map((asset: any) => (
-                  <TableRow key={asset.id}>
+                  <TableRow key={asset.id} className={selectedForBulk.includes(asset.id) ? "bg-muted/50" : ""}>
+                    <TableCell className="text-center">
+                      <input
+                        type="checkbox"
+                        className="rounded border-input"
+                        checked={selectedForBulk.includes(asset.id)}
+                        onChange={() => toggleBulkSelect(asset.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{asset.name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={typeColors[asset.target_type] || ""}>
