@@ -34,16 +34,16 @@
   --color-chart-4: hsl(43 74% 66%);
   --color-chart-5: hsl(27 87% 67%);
 
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: var(--font-sans, system-ui, sans-serif);
+  --font-mono: var(--font-mono, monospace);
 }
 
 .dark {
-  --color-background: hsl(222.2 84% 4.9%);
+  --color-background: hsl(224 71% 4%);
   --color-foreground: hsl(210 40% 98%);
-  --color-card: hsl(222.2 84% 4.9%);
+  --color-card: hsl(224 71% 6%);
   --color-card-foreground: hsl(210 40% 98%);
-  --color-popover: hsl(222.2 84% 4.9%);
+  --color-popover: hsl(224 71% 6%);
   --color-popover-foreground: hsl(210 40% 98%);
   --color-primary: hsl(210 40% 98%);
   --color-primary-foreground: hsl(222.2 47.4% 11.2%);

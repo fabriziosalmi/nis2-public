@@ -29,7 +29,7 @@
 //     around them via the namespace.
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
@@ -48,9 +48,12 @@ import {
   Check,
   Globe,
   Terminal,
+  Menu,
+  X,
 } from "lucide-react"
 import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
+import { StaggerContainer, StaggerItem } from "@/components/ui/fade-in"
 import { LegalDisclaimerModal } from "@/components/legal/legal-disclaimer-modal"
 import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
 
@@ -120,49 +123,127 @@ export default function Home() {
 
 function SiteHeader() {
   const t = useTranslations("landingPage.header")
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Prevent scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "unset"
+    }
+    return () => { document.body.style.overflow = "unset" }
+  }, [mobileOpen])
+
   return (
-    <header className="sticky top-0 z-30 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2.5" aria-label={t("homeAria")}>
-          <Logo size={28} />
-          <span className="font-semibold tracking-tight">NIS2 Platform</span>
-          <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
-            · {t("tagline")}
-          </span>
-        </Link>
-        <nav className="flex items-center gap-1" aria-label={t("primaryNav")}>
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <a
-              href="https://github.com/fabriziosalmi/nis2-public#readme"
-              target="_blank"
-              rel="noopener noreferrer"
+    <>
+      <header className="sticky top-0 z-30 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2.5" aria-label={t("homeAria")}>
+            <Logo size={28} />
+            <span className="font-semibold tracking-tight">NIS2 Platform</span>
+            <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
+              · {t("tagline")}
+            </span>
+          </Link>
+          <nav className="flex items-center gap-2" aria-label={t("primaryNav")}>
+            <div className="hidden md:flex items-center gap-1">
+              <Button asChild variant="ghost" size="sm">
+                <a
+                  href="https://github.com/fabriziosalmi/nis2-public#readme"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("docs")}
+                </a>
+              </Button>
+              <Button asChild variant="ghost" size="sm">
+                <a
+                  href="https://github.com/fabriziosalmi/nis2-public"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t("githubAria")}
+                >
+                  <Github className="h-4 w-4" aria-hidden="true" />
+                  {t("github")}
+                </a>
+              </Button>
+            </div>
+            
+            <div className="hidden sm:flex items-center gap-1">
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/login">{t("signIn")}</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/register">
+                  {t("getStarted")}
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open mobile menu"
             >
-              {t("docs")}
-            </a>
-          </Button>
-          <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-            <a
-              href="https://github.com/fabriziosalmi/nis2-public"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={t("githubAria")}
-            >
-              <Github className="h-4 w-4" aria-hidden="true" />
-              {t("github")}
-            </a>
-          </Button>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/login">{t("signIn")}</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/register">
-              {t("getStarted")}
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-          </Button>
-        </nav>
-      </div>
-    </header>
+              <Menu className="h-5 w-5" />
+            </Button>
+          </nav>
+        </div>
+      </header>
+
+      {/* Mobile Menu */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xs border-l bg-background p-6 shadow-lg sm:max-w-sm">
+            <div className="flex items-center justify-between mb-8">
+              <span className="font-semibold tracking-tight">NIS2 Platform</span>
+              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Navigazione</p>
+                <a
+                  href="https://github.com/fabriziosalmi/nis2-public#readme"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm font-medium p-2 hover:bg-muted rounded-md transition-colors"
+                >
+                  {t("docs")}
+                </a>
+                <a
+                  href="https://github.com/fabriziosalmi/nis2-public"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm font-medium p-2 hover:bg-muted rounded-md transition-colors"
+                >
+                  <Github className="h-4 w-4" />
+                  {t("github")}
+                </a>
+              </div>
+              <div className="flex flex-col gap-3 pt-6 border-t">
+                <Button asChild variant="outline" className="w-full justify-center">
+                  <Link href="/login" onClick={() => setMobileOpen(false)}>{t("signIn")}</Link>
+                </Button>
+                <Button asChild className="w-full justify-center">
+                  <Link href="/register" onClick={() => setMobileOpen(false)}>
+                    {t("getStarted")}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -280,14 +361,14 @@ function FeatureGrid() {
           {t("subtitle")}
         </p>
       </div>
-      <ul className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <StaggerContainer className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f) => {
           const title = t(`${f.key}.title`)
           const body = t(`${f.key}.body`)
           return (
-            <li
+            <StaggerItem
               key={f.key}
-              className="group relative flex flex-col rounded-xl border bg-card p-6 transition-shadow hover:shadow-md"
+              className="group relative flex flex-col rounded-xl border bg-card/80 backdrop-blur-md p-6 transition-all duration-300 hover:shadow-md hover:bg-card hover:border-primary/20"
             >
               <div className="flex items-center justify-between">
                 <div className="rounded-lg bg-primary/10 p-2.5">
@@ -309,10 +390,10 @@ function FeatureGrid() {
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 <span className="sr-only"> {t("learnMoreAbout", { feature: title })}</span>
               </a>
-            </li>
+            </StaggerItem>
           )
         })}
-      </ul>
+      </StaggerContainer>
     </section>
   )
 }

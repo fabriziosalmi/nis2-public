@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Manrope, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/components/layout/providers"
 import { NextIntlClientProvider } from "next-intl"
 import { getLocale, getMessages } from "next-intl/server"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const sansFont = Manrope({ subsets: ["latin"], variable: "--font-sans" })
+const monoFont = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
   title: "NIS2 Platform",
@@ -36,7 +37,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // diff on this element, not deeper-tree hydration bugs.
     <html lang={locale} suppressHydrationWarning>
       <body
-        className={`${inter.variable} font-sans antialiased`}
+        className={`${sansFont.variable} ${monoFont.variable} font-sans antialiased tabular-nums`}
         suppressHydrationWarning
       >
         <NextIntlClientProvider messages={messages}>

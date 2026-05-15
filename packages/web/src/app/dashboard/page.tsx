@@ -17,6 +17,7 @@ import { useFindingStats } from "@/hooks/use-findings"
 import { useAssets } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
+import { StaggerContainer, StaggerItem, FadeIn } from "@/components/ui/fade-in"
 
 // Lazy load Recharts (400KB+) — only loads when charts are visible.
 // The `as any` + explicit ComponentType<any> cast is required because
@@ -276,7 +277,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <FadeIn className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
@@ -287,121 +288,127 @@ export default function DashboardPage() {
             {t("newScan")}
           </Link>
         </Button>
-      </div>
+      </FadeIn>
 
       <OrientationCard />
 
       {/* Stat cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <StaggerContainer className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <div className={cn("rounded-lg p-2", stat.bg)}>
-                <stat.icon className={cn("h-4 w-4", stat.iconColor)} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.change}</p>
-            </CardContent>
-          </Card>
+          <StaggerItem key={stat.title}>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <div className={cn("rounded-lg p-2", stat.bg)}>
+                  <stat.icon className={cn("h-4 w-4", stat.iconColor)} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.change}</p>
+              </CardContent>
+            </Card>
+          </StaggerItem>
         ))}
-      </div>
+      </StaggerContainer>
 
       {/* Charts row - only show when there's data */}
       {hasData && (
-        <div className="grid gap-4 lg:grid-cols-7">
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>{t("findingsBySeverity")}</CardTitle>
-              <CardDescription>{t("severityDistribution")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* v2.4.23 audit a11y-16 (WCAG SC 1.1.1 Non-text Content):
-                  Recharts renders SVG with no programmatic data
-                  exposed to AT. Wrapping the chart in a labelled
-                  region gives the visualisation a name + role, and
-                  the sr-only data table below offers an equivalent
-                  textual representation that SR users can read. */}
-              {severityChartData.some((d) => d.count > 0) ? (
-                <div role="img" aria-label={t("findingsBySeverity")}>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={severityChartData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" />
-                      <YAxis dataKey="severity" type="category" width={70} tick={{ fontSize: 12 }} />
-                      <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                      <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(222.2, 47.4%, 11.2%)" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <table className="sr-only">
-                    <caption>{t("findingsBySeverity")}</caption>
-                    <thead>
-                      <tr>
-                        <th>{tf("severity")}</th>
-                        <th>{t("findingsColumn")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {severityChartData.map((d) => (
-                        <tr key={d.severity}>
-                          <td>{d.severity}</td>
-                          <td>{d.count}</td>
+        <StaggerContainer className="grid gap-4 lg:grid-cols-7">
+          <StaggerItem className="lg:col-span-3">
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>{t("findingsBySeverity")}</CardTitle>
+                <CardDescription>{t("severityDistribution")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* v2.4.23 audit a11y-16 (WCAG SC 1.1.1 Non-text Content):
+                    Recharts renders SVG with no programmatic data
+                    exposed to AT. Wrapping the chart in a labelled
+                    region gives the visualisation a name + role, and
+                    the sr-only data table below offers an equivalent
+                    textual representation that SR users can read. */}
+                {severityChartData.some((d) => d.count > 0) ? (
+                  <div role="img" aria-label={t("findingsBySeverity")}>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={severityChartData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis dataKey="severity" type="category" width={70} tick={{ fontSize: 12 }} />
+                        <Tooltip contentStyle={{ borderRadius: "8px" }} />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(222.2, 47.4%, 11.2%)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <table className="sr-only">
+                      <caption>{t("findingsBySeverity")}</caption>
+                      <thead>
+                        <tr>
+                          <th>{tf("severity")}</th>
+                          <th>{t("findingsColumn")}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">{t("noFindingsData")}</div>
-              )}
-            </CardContent>
-          </Card>
+                      </thead>
+                      <tbody>
+                        {severityChartData.map((d) => (
+                          <tr key={d.severity}>
+                            <td>{d.severity}</td>
+                            <td>{d.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">{t("noFindingsData")}</div>
+                )}
+              </CardContent>
+            </Card>
+          </StaggerItem>
 
-          <Card className="lg:col-span-4">
-            <CardHeader>
-              <CardTitle>{t("complianceScoreTrend")}</CardTitle>
-              <CardDescription>{t("scoreProgression")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {trendData.length > 1 ? (
-                <div role="img" aria-label={t("complianceScoreTrend")}>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                      <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                      <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                      <Line type="monotone" dataKey="score" stroke="hsl(222.2, 47.4%, 11.2%)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <table className="sr-only">
-                    <caption>{t("complianceScoreTrend")}</caption>
-                    <thead>
-                      <tr>
-                        <th>{t("date")}</th>
-                        <th>{t("score")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trendData.map((d: any, i: number) => (
-                        <tr key={i}>
-                          <td>{d.date}</td>
-                          <td>{d.score}</td>
+          <StaggerItem className="lg:col-span-4">
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>{t("complianceScoreTrend")}</CardTitle>
+                <CardDescription>{t("scoreProgression")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {trendData.length > 1 ? (
+                  <div role="img" aria-label={t("complianceScoreTrend")}>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                        <Tooltip contentStyle={{ borderRadius: "8px" }} />
+                        <Line type="monotone" dataKey="score" stroke="hsl(222.2, 47.4%, 11.2%)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <table className="sr-only">
+                      <caption>{t("complianceScoreTrend")}</caption>
+                      <thead>
+                        <tr>
+                          <th>{t("date")}</th>
+                          <th>{t("score")}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
-                  {trendData.length === 1 ? t("needTwoScans") : t("noCompletedScans")}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                      </thead>
+                      <tbody>
+                        {trendData.map((d: any, i: number) => (
+                          <tr key={i}>
+                            <td>{d.date}</td>
+                            <td>{d.score}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+                    {trendData.length === 1 ? t("needTwoScans") : t("noCompletedScans")}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </StaggerItem>
+        </StaggerContainer>
       )}
 
       {/* Getting started - show when no data */}

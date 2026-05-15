@@ -5,6 +5,8 @@ import pytest
 # Add packages/api to path so tests can import app modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+os.environ["ENVIRONMENT"] = "development"
+
 from app.routers.auth import limiter
 
 @pytest.fixture(autouse=True)

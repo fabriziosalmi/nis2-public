@@ -114,6 +114,7 @@ export default function RegisterPage() {
               placeholder={t("auth.passwordMin8")}
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
+              autoComplete="new-password"
               {...register("password")}
             />
             {errors.password && (

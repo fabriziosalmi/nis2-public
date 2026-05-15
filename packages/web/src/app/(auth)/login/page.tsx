@@ -128,6 +128,7 @@ export default function LoginPage() {
               placeholder={t("auth.passwordPlaceholder")}
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
+              autoComplete="current-password"
               {...register("password")}
             />
             {errors.password && (

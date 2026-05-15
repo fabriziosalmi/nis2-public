@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # enough that the disk doesn't grow unbounded.
     report_ttl_days: int = 30
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @model_validator(mode="after")
     def _validate_runtime_config(self) -> "Settings":

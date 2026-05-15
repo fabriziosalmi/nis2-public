@@ -1,6 +1,6 @@
 {
   "name": "@nis2/web",
-  "version": "2.5.6",
+  "version": "2.5.7",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -26,6 +26,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^0.468.0",
     "next": "^15.5.9",
     "next-auth": "^5.0.0-beta.30",
