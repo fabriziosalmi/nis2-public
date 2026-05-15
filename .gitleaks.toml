@@ -19,6 +19,10 @@ description = "NIS2-specific allowlist for known test fixtures and CI placeholde
 # without them the scanner has no positive coverage. None are real.
 paths = [
     '''packages/scanner/tests/test_features\.py''',
+    # test_secrets_detection.py embeds canonical JWT example tokens (from jwt.io
+    # documentation) to verify the scanner's JWT detection rule fires. These are
+    # well-known public examples; none are real credentials.
+    '''packages/scanner/tests/test_secrets_detection\.py''',
     # test_jwt_rs256.py patches settings with placeholder HS256 secrets and uses
     # runtime-generated RSA keypairs for round-trip coverage. None are real.
     '''packages/api/tests/test_jwt_rs256\.py''',

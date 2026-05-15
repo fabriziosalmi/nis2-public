@@ -176,7 +176,7 @@ jobs:
       CORS_ORIGINS: http://localhost:3000
       # Credentials used both to register the E2E user and to run the suite.
       E2E_LIVE_BASE_URL: http://localhost:8000
-      E2E_LIVE_EMAIL: e2e-ci@nis2.local
+      E2E_LIVE_EMAIL: e2e-ci@example.com
       E2E_LIVE_PASSWORD: E2eC!password99
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
