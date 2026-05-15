@@ -11,6 +11,7 @@ and scan time cannot redirect the scanner to a private/internal address.
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 import socket
@@ -67,11 +68,10 @@ class ValidationResult:
     pinned_ip: Optional[str] = None
 
 
-import asyncio
 
 def validate_domain(domain: str) -> str:
     """Backwards-compatible wrapper. Returns just the cleaned domain.
-    
+
     WARNING: Since validation is now async to prevent event loop blocking,
     this synchronous wrapper does NOT pin the IP. Use `await validate_domain_pinned(domain)`
     instead whenever possible.
@@ -204,7 +204,7 @@ async def validate_target_pinned(target_type: str, target_value: str) -> Validat
         return validate_ip_pinned(target_value)
     elif target_type == "cidr":
         return validate_cidr_pinned(target_value)
-    
+
     raise TargetValidationError(f"Unknown target type: {target_type}")
 
 
