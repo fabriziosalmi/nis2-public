@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nis2-api"
-version = "2.5.9"
+version = "2.5.10"
 description = "NIS2 Compliance Platform API"
 requires-python = ">=3.11"
 dependencies = [
