@@ -49,6 +49,15 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.cleanup_tasks.cleanup_expired_auth_records",
         "schedule": 3600.0,
     },
+    # NIS2 Art. 23 deadline monitor. Checks every 15 minutes whether any
+    # open incident is approaching or past its early-warning (24h),
+    # notification (72h) or final-report (1 month) deadline and dispatches
+    # alerts via the org's configured notification channels.  Redis-backed
+    # dedup prevents re-alerting on every tick for the same deadline.
+    "check-incident-deadlines": {
+        "task": "app.tasks.incident_tasks.check_incident_deadlines",
+        "schedule": 900.0,  # 15 minutes
+    },
 }
 
 # v2.4.19 hotfix: explicitly import the task modules so their
@@ -73,3 +82,4 @@ celery_app.conf.beat_schedule = {
 from app.tasks import scan_tasks  # noqa: E402,F401
 from app.tasks import report_tasks  # noqa: E402,F401
 from app.tasks import cleanup_tasks  # noqa: E402,F401
+from app.tasks import incident_tasks  # noqa: E402,F401
