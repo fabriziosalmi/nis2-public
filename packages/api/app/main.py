@@ -29,7 +29,13 @@ API_VERSION = "2.5.9"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.
+#
+# CSP note: the API only serves JSON — no scripts, styles, or embedded
+# content ever. default-src 'none' is therefore maximally strict and
+# causes no functional regressions. frame-ancestors 'none' is belt-and-
+# suspenders alongside X-Frame-Options: DENY.
 SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
