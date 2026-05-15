@@ -14,16 +14,19 @@ export function SpotlightCard({
 }) {
   const divRef = useRef<HTMLDivElement>(null)
   const [isFocused, setIsFocused] = useState(false)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
   const [opacity, setOpacity] = useState(0)
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!divRef.current || isFocused) return
 
-    const div = divRef.current
-    const rect = div.getBoundingClientRect()
+    const rect = divRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
 
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    // Update CSS variables directly bypassing React's render cycle
+    // for 60FPS fluid VFX without main-thread blocking
+    divRef.current.style.setProperty("--mouse-x", `${x}px`)
+    divRef.current.style.setProperty("--mouse-y", `${y}px`)
   }
 
   const handleFocus = () => {
@@ -58,10 +61,10 @@ export function SpotlightCard({
       )}
     >
       <div
-        className="pointer-events-none absolute -inset-px opacity-0 transition duration-300 z-10"
+        className="pointer-events-none absolute -inset-px transition duration-300 z-10"
         style={{
           opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 40%)`,
+          background: `radial-gradient(600px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), ${spotlightColor}, transparent 40%)`,
         }}
       />
       <div className="relative z-20 h-full">{children}</div>

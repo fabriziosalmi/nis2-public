@@ -67,11 +67,31 @@ class ValidationResult:
     pinned_ip: Optional[str] = None
 
 
-def _resolve_first_public_ip(domain: str) -> Optional[str]:
+import asyncio
+
+def validate_domain(domain: str) -> str:
+    """Backwards-compatible wrapper. Returns just the cleaned domain.
+    
+    WARNING: Since validation is now async to prevent event loop blocking,
+    this synchronous wrapper does NOT pin the IP. Use `await validate_domain_pinned(domain)`
+    instead whenever possible.
+    """
+    domain = domain.strip().lower()
+    if "://" in domain:
+        domain = urlparse(domain).hostname or domain
+    domain = domain.rstrip("/").rstrip(".")
+    if domain in BLOCKED_HOSTNAMES:
+        raise TargetValidationError(f"Blocked hostname: {domain}")
+    if not DOMAIN_REGEX.match(domain):
+        raise TargetValidationError(f"Invalid domain format: {domain}")
+    return domain
+
+async def _resolve_first_public_ip(domain: str) -> Optional[str]:
     """Resolve `domain` and return the first public IP. Raise if any answer
     is private/blocked — the caller must reject the target outright."""
+    loop = asyncio.get_event_loop()
     try:
-        answers = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        answers = await loop.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
     except socket.gaierror:
         return None
     public: list[str] = []
@@ -84,17 +104,7 @@ def _resolve_first_public_ip(domain: str) -> Optional[str]:
         public.append(str(ip))
     return public[0] if public else None
 
-
-def validate_domain(domain: str) -> str:
-    """Backwards-compatible wrapper. Returns just the cleaned domain.
-
-    Most call sites should use `validate_domain_pinned` or `validate_target_pinned`
-    so they can persist the pinned IP and avoid re-resolving at scan time.
-    """
-    return validate_domain_pinned(domain).target_value
-
-
-def validate_domain_pinned(domain: str) -> ValidationResult:
+async def validate_domain_pinned(domain: str) -> ValidationResult:
     """Validate a domain and pin the resolved IP for scanner use."""
     domain = domain.strip().lower()
 
@@ -115,14 +125,11 @@ def validate_domain_pinned(domain: str) -> ValidationResult:
 
     pinned_ip: Optional[str] = None
     try:
-        pinned_ip = _resolve_first_public_ip(domain)
+        pinned_ip = await _resolve_first_public_ip(domain)
     except TargetValidationError:
         raise
     except Exception:
-        # Transient resolution failure — accept without a pin. The scanner
-        # will still validate the target type and re-resolve once at run
-        # time; a Phase 3 improvement is to require a pinned IP for all
-        # production scans.
+        # Transient resolution failure — accept without a pin.
         pinned_ip = None
 
     return ValidationResult(target_value=domain, target_type="domain", pinned_ip=pinned_ip)
@@ -178,21 +185,27 @@ def validate_cidr_pinned(cidr_str: str) -> ValidationResult:
 
 
 def validate_target(target_type: str, target_value: str) -> str:
-    """Backwards-compatible wrapper around validate_target_pinned."""
-    return validate_target_pinned(target_type, target_value).target_value
+    """Backwards-compatible wrapper. Returns just the cleaned value."""
+    # This is only safe for non-domain targets or if you don't care about the pin
+    if target_type == "domain":
+        return validate_domain(target_value)
+    elif target_type == "ip":
+        return validate_ip(target_value)
+    elif target_type == "cidr":
+        return validate_cidr(target_value)
+    raise TargetValidationError(f"Unknown target type: {target_type}")
 
 
-def validate_target_pinned(target_type: str, target_value: str) -> ValidationResult:
+async def validate_target_pinned(target_type: str, target_value: str) -> ValidationResult:
     """Validate any target type and return both the cleaned value and the pinned IP."""
-    validators = {
-        "domain": validate_domain_pinned,
-        "ip": validate_ip_pinned,
-        "cidr": validate_cidr_pinned,
-    }
-    validator = validators.get(target_type)
-    if not validator:
-        raise TargetValidationError(f"Unknown target type: {target_type}")
-    return validator(target_value)
+    if target_type == "domain":
+        return await validate_domain_pinned(target_value)
+    elif target_type == "ip":
+        return validate_ip_pinned(target_value)
+    elif target_type == "cidr":
+        return validate_cidr_pinned(target_value)
+    
+    raise TargetValidationError(f"Unknown target type: {target_type}")
 
 
 def _is_private_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

@@ -78,7 +78,7 @@ async def create_asset(
 
     # SSRF validation + pin the IP for the scanner to use later.
     try:
-        validation = validate_target_pinned(payload.target_type, payload.target_value)
+        validation = await validate_target_pinned(payload.target_type, payload.target_value)
     except TargetValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
@@ -190,10 +190,15 @@ async def import_assets_csv(
     skipped = 0
     errors_list: list[str] = []
 
+    # Load all existing assets into memory to avoid N+1 queries during import
+    existing_assets_result = await db.execute(
+        select(Asset.target_type, Asset.target_value).where(Asset.organization_id == org_id)
+    )
+    existing_assets = {(row[0], row[1]) for row in existing_assets_result.all()}
+
     # P1-05 audit fix: cap the number of rows processed. Each row
-    # triggers a SELECT (dedup) + DNS resolution (SSRF validation),
-    # so a 100k-row CSV is effectively 200k blocking queries. 10k
-    # rows covers any reasonable asset inventory import.
+    # triggers a DNS resolution (SSRF validation), so a large CSV
+    # will still be heavy, but it will no longer block the DB.
     MAX_ROWS = 10_000
 
     for row_num, row in enumerate(reader, start=2):
@@ -215,23 +220,17 @@ async def import_assets_csv(
             skipped += 1
             continue
 
-        # Check for duplicate
-        existing = await db.execute(
-            select(Asset).where(
-                Asset.organization_id == org_id,
-                Asset.target_type == target_type,
-                Asset.target_value == target_value,
-            )
-        )
-        if existing.scalar_one_or_none():
+        tags = [t.strip() for t in tags_str.split(";") if t.strip()] if tags_str else []
+
+        # Check for duplicate in the memory set instead of DB
+        asset_key = (target_type, target_value)
+        if asset_key in existing_assets:
             skipped += 1
             continue
 
-        tags = [t.strip() for t in tags_str.split(";") if t.strip()] if tags_str else []
-
         # SSRF validation + pin IP
         try:
-            validation = validate_target_pinned(target_type, target_value)
+            validation = await validate_target_pinned(target_type, target_value)
         except TargetValidationError as e:
             errors_list.append(f"Row {row_num}: {e}")
             skipped += 1
@@ -246,6 +245,7 @@ async def import_assets_csv(
             tags=tags,
         )
         db.add(asset)
+        existing_assets.add(asset_key)
         created += 1
 
     await db.flush()
