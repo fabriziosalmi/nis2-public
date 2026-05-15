@@ -56,6 +56,7 @@ import { Button } from "@/components/ui/button"
 import { StaggerContainer, StaggerItem } from "@/components/ui/fade-in"
 import { LegalDisclaimerModal } from "@/components/legal/legal-disclaimer-modal"
 import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
+import { cn } from "@/lib/utils"
 
 // Tech-stack pills for the trust strip — kept hardcoded because every
 // item is a product name that doesn't get translated.
