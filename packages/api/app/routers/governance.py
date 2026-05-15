@@ -11,7 +11,7 @@ Art. 21.2 (e.g. Art. 7 ACN registration, Art. 23 incident reporting,
 Art. 20 board/training) are tagged accordingly.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, get_db
 from app.dependencies import get_current_org
 from app.models.base import TimestampMixin
+from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User
 
@@ -351,3 +352,293 @@ async def list_subparagraphs():
     user-supplied filters before calling the list endpoint.
     """
     return {"subparagraphs": SUBPARAGRAPHS}
+
+
+# ---------------------------------------------------------------------------
+# Risk signal integration — Art. 21(a) scanner → governance bridge
+# ---------------------------------------------------------------------------
+
+# Maps scanner finding category prefixes (lowercase) to the NIS2 Art. 21.2
+# sub-paragraph most directly affected. Used by /risk-summary and /sync-risk
+# to route technical findings into the right governance items automatically.
+#
+# Matching is prefix-based (category.lower().startswith(prefix)) so that
+# scanner categories like "tls_weak_cipher", "ssl_expired_cert", and
+# "tls_no_hsts" all map to 21.2.h without needing an exhaustive list.
+#
+# The catch-all key "" maps every finding to 21.2.a (risk analysis) —
+# all technical evidence is relevant to the overall risk register.
+CATEGORY_SUBPARAGRAPH_MAP: list[tuple[str, str]] = [
+    # Cryptography / TLS / certificates
+    ("tls",            "21.2.h"),
+    ("ssl",            "21.2.h"),
+    ("certificate",    "21.2.h"),
+    ("crypto",         "21.2.h"),
+    ("encryption",     "21.2.h"),
+    # Access control / credentials
+    ("secret",         "21.2.i"),
+    ("credential",     "21.2.i"),
+    ("password",       "21.2.i"),
+    ("access",         "21.2.i"),
+    # Authentication / MFA
+    ("auth",           "21.2.j"),
+    ("mfa",            "21.2.j"),
+    # Network / acquisition / maintenance
+    ("port",           "21.2.e"),
+    ("network",        "21.2.e"),
+    ("firewall",       "21.2.e"),
+    ("http",           "21.2.e"),
+    ("web",            "21.2.e"),
+    ("dns",            "21.2.e"),
+    ("patch",          "21.2.e"),
+    # Effectiveness / monitoring
+    ("vulnerab",       "21.2.f"),
+    ("logging",        "21.2.f"),
+    ("monitor",        "21.2.f"),
+    # Supply chain
+    ("supply",         "21.2.d"),
+    ("vendor",         "21.2.d"),
+    # Business continuity / backup
+    ("backup",         "21.2.c"),
+    ("continuity",     "21.2.c"),
+    ("recovery",       "21.2.c"),
+    # Incident handling
+    ("incident",       "21.2.b"),
+    # Catch-all: every finding feeds Art. 21.2.a (risk analysis)
+    ("",               "21.2.a"),
+]
+
+# Findings with these statuses are considered "resolved" and do not
+# contribute to the active risk signal.
+_RESOLVED_STATUSES = frozenset({"resolved", "accepted_risk"})
+# Severity levels considered high-risk for the purpose of status escalation.
+_HIGH_RISK_SEVERITIES = frozenset({"CRITICAL", "HIGH"})
+
+
+def _category_to_subparagraphs(category: str) -> list[str]:
+    """Return all subparagraph codes that match a finding category.
+
+    A finding always lands in 21.2.a (catch-all) plus any more-specific
+    paragraph whose prefix matches the category. Deduplicates results.
+    """
+    cat = (category or "").lower()
+    matched: list[str] = []
+    for prefix, sp in CATEGORY_SUBPARAGRAPH_MAP:
+        if cat.startswith(prefix):  # "" always matches (startswith("") is True)
+            if sp not in matched:
+                matched.append(sp)
+    return matched
+
+
+@router.get("/risk-summary")
+async def risk_summary(
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    """Computed risk picture derived from scanner findings.
+
+    Aggregates open CRITICAL/HIGH/MEDIUM/LOW findings for the org,
+    maps each category to the relevant NIS2 Art. 21 sub-paragraph(s),
+    and returns which governance items are signalled — giving the CISO
+    an evidence-based starting point for the risk register (Art. 21.2.a)
+    without requiring manual data entry.
+
+    This endpoint is read-only: it never mutates governance state.
+    Call POST /governance/sync-risk to apply the signals automatically.
+    """
+    user, membership = current_org
+    org_id = membership.organization_id
+
+    result = await db.execute(
+        select(Finding).where(
+            Finding.organization_id == org_id,
+            Finding.status.notin_(_RESOLVED_STATUSES),
+        )
+    )
+    findings = result.scalars().all()
+
+    # Severity counts
+    counts: dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    for f in findings:
+        sev = f.severity.upper()
+        counts[sev] = counts.get(sev, 0) + 1
+
+    # Overall risk level
+    if counts["CRITICAL"] > 0:
+        risk_level = "CRITICAL"
+    elif counts["HIGH"] > 0:
+        risk_level = "HIGH"
+    elif counts["MEDIUM"] > 0:
+        risk_level = "MEDIUM"
+    elif counts["LOW"] > 0:
+        risk_level = "LOW"
+    else:
+        risk_level = "NONE"
+
+    # Group by category → subparagraph
+    sp_signals: dict[str, dict] = {}
+    for f in findings:
+        for sp in _category_to_subparagraphs(f.category):
+            if sp not in sp_signals:
+                sp_signals[sp] = {
+                    "subparagraph": sp,
+                    "label": SUBPARAGRAPHS.get(sp, sp),
+                    "finding_count": 0,
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "top_findings": [],
+                }
+            entry = sp_signals[sp]
+            entry["finding_count"] += 1
+            sev = f.severity.upper()
+            if sev == "CRITICAL":
+                entry["critical"] += 1
+            elif sev == "HIGH":
+                entry["high"] += 1
+            elif sev == "MEDIUM":
+                entry["medium"] += 1
+            # Collect up to 3 representative messages per subparagraph
+            if len(entry["top_findings"]) < 3:
+                entry["top_findings"].append({
+                    "severity": f.severity,
+                    "category": f.category,
+                    "message": f.message[:120],
+                    "target": f.target,
+                })
+
+    # Attach governance item IDs for each signalled subparagraph
+    gov_result = await db.execute(
+        select(GovernanceItem).where(GovernanceItem.organization_id == org_id)
+    )
+    gov_items = gov_result.scalars().all()
+    sp_to_item_ids: dict[str, list[str]] = {}
+    for gi in gov_items:
+        if gi.subparagraph and gi.subparagraph in sp_signals:
+            sp_to_item_ids.setdefault(gi.subparagraph, []).append(gi.item_id)
+    for sp, entry in sp_signals.items():
+        entry["governance_item_ids"] = sp_to_item_ids.get(sp, [])
+
+    return {
+        "risk_level": risk_level,
+        "open_finding_counts": counts,
+        "total_open_findings": len(findings),
+        "subparagraph_signals": sorted(
+            sp_signals.values(),
+            key=lambda x: (-(x["critical"]), -(x["high"]), -(x["medium"])),
+        ),
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.post("/sync-risk")
+async def sync_risk(
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply scanner findings as evidence to the governance checklist.
+
+    For each NIS2 sub-paragraph that has open findings, the corresponding
+    governance items receive an updated `evidence_notes` block with a
+    timestamped summary of current HIGH/CRITICAL findings.
+
+    Status escalation rules (conservative — human decisions are never
+    overridden):
+      - `not_started` + any HIGH/CRITICAL finding → escalated to `in_progress`
+      - `in_progress`, `done`, `not_applicable` → status left unchanged
+      - Items with zero matching findings → not touched
+
+    Returns a summary of every item that was updated.
+    """
+    user, membership = current_org
+    if membership.role not in ("admin", "auditor"):
+        raise HTTPException(status_code=403, detail="Only admins and auditors can sync risk signals")
+
+    org_id = membership.organization_id
+
+    # Load all open findings
+    finding_result = await db.execute(
+        select(Finding).where(
+            Finding.organization_id == org_id,
+            Finding.status.notin_(_RESOLVED_STATUSES),
+        )
+    )
+    findings = finding_result.scalars().all()
+
+    if not findings:
+        return {"updated": 0, "message": "No open findings — governance items unchanged.", "changes": []}
+
+    # Build per-subparagraph evidence maps
+    sp_evidence: dict[str, dict] = {}
+    for f in findings:
+        for sp in _category_to_subparagraphs(f.category):
+            if sp not in sp_evidence:
+                sp_evidence[sp] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "samples": []}
+            ev = sp_evidence[sp]
+            sev = f.severity.upper()
+            if sev == "CRITICAL":
+                ev["critical"] += 1
+            elif sev == "HIGH":
+                ev["high"] += 1
+            elif sev == "MEDIUM":
+                ev["medium"] += 1
+            else:
+                ev["low"] += 1
+            if len(ev["samples"]) < 3:
+                ev["samples"].append(f"[{f.severity}] {f.category}: {f.message[:100]}")
+
+    # Load governance items for this org that have a subparagraph signal
+    gov_result = await db.execute(
+        select(GovernanceItem).where(
+            GovernanceItem.organization_id == org_id,
+            GovernanceItem.subparagraph.in_(list(sp_evidence.keys())),
+        )
+    )
+    gov_items = gov_result.scalars().all()
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    changes: list[dict] = []
+
+    for item in gov_items:
+        sp = item.subparagraph
+        ev = sp_evidence.get(sp)
+        if not ev:
+            continue
+
+        # Build evidence note block
+        high_risk_count = ev["critical"] + ev["high"]
+        note_lines = [
+            f"[Auto-sync {now_str}] Scanner findings for {SUBPARAGRAPHS.get(sp, sp)}:",
+            f"  CRITICAL: {ev['critical']}  HIGH: {ev['high']}  MEDIUM: {ev['medium']}  LOW: {ev['low']}",
+        ]
+        for sample in ev["samples"]:
+            note_lines.append(f"  • {sample}")
+
+        new_note = "\n".join(note_lines)
+
+        # Prepend to existing notes (most recent first), cap at 4000 chars
+        existing = item.evidence_notes or ""
+        combined = (new_note + "\n\n" + existing).strip()
+        item.evidence_notes = combined[:4000]
+
+        # Status escalation: only promote not_started → in_progress
+        old_status = item.status
+        if item.status == "not_started" and high_risk_count > 0:
+            item.status = "in_progress"
+
+        changes.append({
+            "item_id": item.item_id,
+            "title": item.title,
+            "subparagraph": sp,
+            "status_before": old_status,
+            "status_after": item.status,
+            "evidence_added": f"CRITICAL:{ev['critical']} HIGH:{ev['high']} MEDIUM:{ev['medium']}",
+        })
+
+    await db.flush()
+
+    return {
+        "updated": len(changes),
+        "message": f"Risk signals applied to {len(changes)} governance items.",
+        "changes": changes,
+    }
