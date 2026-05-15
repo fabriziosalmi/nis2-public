@@ -128,7 +128,13 @@ class Scanner:
                             result['missing_headers'].append(h)
 
                     # Phase 5: Enhanced checks
-                    body = await resp.text()
+                    # Prevent OOM / memory exhaustion by capping the body read to 1MB.
+                    # Malicious or misconfigured servers could serve a 5GB ISO or continuous stream.
+                    body_bytes = await resp.content.read(1024 * 1024)
+                    try:
+                        body = body_bytes.decode('utf-8', errors='ignore')
+                    except Exception:
+                        body = ""
 
                     # WAF/CDN Detection
                     cookies_str = "; ".join([f"{k}={v}" for k, v in resp.cookies.items()])
