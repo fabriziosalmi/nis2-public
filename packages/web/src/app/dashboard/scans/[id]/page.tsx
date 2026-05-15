@@ -44,16 +44,22 @@ function ComplianceMatrixList({ matrix }: { matrix: Record<string, any> }) {
   return (
     <div className="grid gap-3">
       {Object.entries(matrix).map(([key, item]: [string, any]) => {
-        const letter = key.replace("art21_", "")
-        // Fall back to whatever the backend wrote if the key isn't one
-        // of the canonical letters (a–j) — keeps forward compat if we
-        // ever add a non-Art-21 entry to the matrix.
+        let rawLetter = key.replace("art21_", "")
+        let letter = rawLetter
+        
+        // Handle cases where the backend sends "b) Incident Handling" instead of "art21_b"
+        if (/^[a-z]\)/i.test(rawLetter)) {
+          letter = rawLetter.charAt(0).toLowerCase()
+        } else if (rawLetter.length > 1) {
+          letter = rawLetter.charAt(0).toLowerCase()
+        }
+
         const isCanonical = /^[a-j]$/.test(letter)
         const title = isCanonical ? tSec(`${letter}.title`) : (item.title || item.description || key)
         return (
           <div key={key} className="flex items-center justify-between rounded-lg border p-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold uppercase">
                 {letter}
               </div>
               <p className="text-sm font-medium">{title}</p>

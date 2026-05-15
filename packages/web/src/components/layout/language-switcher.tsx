@@ -23,11 +23,11 @@ import { Languages } from "lucide-react"
 // the negotiator in lockstep; add an entry here only when the
 // matching JSON file ships.
 const locales = [
-  { code: "en", flag: "🇬🇧" },
-  { code: "it", flag: "🇮🇹" },
-  { code: "fr", flag: "🇫🇷" },
-  { code: "de", flag: "🇩🇪" },
-  { code: "es", flag: "🇪🇸" },
+  { code: "en" },
+  { code: "it" },
+  { code: "fr" },
+  { code: "de" },
+  { code: "es" },
 ] as const
 
 export function LanguageSwitcher() {
@@ -74,8 +74,8 @@ export function LanguageSwitcher() {
             className="cursor-pointer gap-2"
             aria-current={locale.code === currentLocale ? "true" : undefined}
           >
-            <span aria-hidden="true">{locale.flag}</span>
-            <span>{t(locale.code)}</span>
+            <span aria-hidden="true" className="font-mono text-[10px] text-muted-foreground w-4">{locale.code.toUpperCase()}</span>
+            <span className="font-medium">{t(locale.code)}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
