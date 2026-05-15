@@ -52,7 +52,7 @@ The compliance matrix references all ten sub-paragraphs (a) through (j). Several
 | (g) Cyber hygiene and training | Awareness, phishing simulation | **Manual** | Governance checklist (human verification required by design) |
 | (h) Cryptography | Crypto policy, key management | **Partial** — automated for public-facing TLS | Technical validation (TLS version, cipher suites, cert expiry, HSTS) + checklist for key-management policy |
 | (i) Human resources security | Onboarding/offboarding, screening, PAM | **Manual** | Governance checklist (human verification required by design) |
-| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Partial** — RBAC + audit log implemented; TOTP MFA planned | Role-based access (owner/admin/auditor/viewer), API key scopes, dual-auth, per-request audit log; TOTP MFA tracked in [#86](https://github.com/fabriziosalmi/nis2-public/issues/86) |
+| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Implemented** — TOTP MFA, RBAC, audit log, API key scopes | TOTP MFA (`POST /auth/totp/setup\|verify\|disable`), MFA-gated login flow, role-based access (owner/admin/auditor/viewer), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` |
 
 **Legend**: *Implemented* = fully automated with no manual step required. *Partial* = automated checks cover the technically observable surface; organisational controls require human verification. *Manual* = the directive explicitly requires human judgement — automation cannot substitute.
 
@@ -201,7 +201,7 @@ These automated checks verify whether the security measures documented in your g
 
 | Router | Endpoints | Purpose |
 |--------|-----------|---------|
-| `/api/v1/auth` | 10 | JWT authentication, registration, change-password, forgot/reset password, **switch active organization** |
+| `/api/v1/auth` | 13 | JWT authentication, registration, change-password, forgot/reset password, **switch active organization**, TOTP setup/verify/disable |
 | `/api/v1/scans` | 8 | Scan management, results, comparison. Read endpoints accept API-key Bearer auth |
 | `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved). Read endpoints accept API-key Bearer auth |
 | `/api/v1/assets` | 6 | Asset inventory management. Read endpoints accept API-key Bearer auth |
@@ -218,6 +218,9 @@ These automated checks verify whether the security measures documented in your g
 | `/api/v1/deadlines` | 1 | Compliance deadline countdown |
 | `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload |
 | `/api/v1/mcp` | 2 | Model Context Protocol for AI assistants |
+| `/.well-known/jwks.json` | 1 | RS256 public key set for JWT verification |
+| `/.well-known/security.txt` | 1 | Responsible disclosure contact |
+| `/health`, `/health/live`, `/health/ready` | 3 | Three-tier liveness / readiness (DB + Redis + Celery) |
 
 ---
 
@@ -243,7 +246,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 | **Backend** | FastAPI, SQLAlchemy (async), Pydantic v2, Celery, Redis, slowapi |
 | **Database** | PostgreSQL 16 |
 | **Scanner** | Python asyncio, aiohttp, dnspython, Playwright, python-whois |
-| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting, SSRF prevention, API key auth |
+| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting (SlowAPI), SSRF prevention, API key auth, TOTP MFA, RS256 JWT + JWKS, RLS row-level isolation, audit log retention (90 days) |
 | **AI / MCP** | MCP Server (stdio + HTTP), Ollama/OpenAI |
 | **Infra** | Docker, Caddy 2 (auto-HTTPS), GitHub Actions CI |
 
