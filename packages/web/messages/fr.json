@@ -21,7 +21,8 @@
     "success": "Opération réussie",
     "settings": "Paramètres",
     "logout": "Déconnexion",
-    "user": "Utilisateur"
+    "user": "Utilisateur",
+    "support": "Support"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -44,7 +45,9 @@
     "criticalBadgeAria": "découvertes critiques",
     "primary": "Principal",
     "settings": "Paramètres",
-    "criticalCountAnnouncement": "{count, plural, one {# découverte critique nécessite} other {# découvertes critiques nécessitent}} votre attention"
+    "criticalCountAnnouncement": "{count, plural, one {# découverte critique nécessite} other {# découvertes critiques nécessitent}} votre attention",
+    "support": "Support",
+    "documentation": "Documentation"
   },
   "a11y": {
     "skipToContent": "Aller au contenu principal",

@@ -328,10 +328,10 @@ export function Sidebar() {
         <div className={cn("px-2", !collapsed && "px-4")}>
           {!collapsed && (
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('common.support', { defaultValue: 'Support' })}
+              {t('common.support')}
             </p>
           )}
-          <nav className="space-y-1" aria-label={t("nav.support", { defaultValue: 'Support Navigation' })}>
+          <nav className="space-y-1" aria-label={t("nav.support")}>
             {supportNavKeys.map((item) => {
               return (
               <a

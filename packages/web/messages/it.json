@@ -21,7 +21,8 @@
     "success": "Operazione riuscita",
     "settings": "Impostazioni",
     "logout": "Esci",
-    "user": "Utente"
+    "user": "Utente",
+    "support": "Supporto"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -44,7 +45,9 @@
     "criticalBadgeAria": "risultati critici",
     "primary": "Principale",
     "settings": "Impostazioni",
-    "criticalCountAnnouncement": "{count, plural, one {# risultato critico richiede} other {# risultati critici richiedono}} attenzione"
+    "criticalCountAnnouncement": "{count, plural, one {# risultato critico richiede} other {# risultati critici richiedono}} attenzione",
+    "support": "Supporto",
+    "documentation": "Documentazione"
   },
   "a11y": {
     "skipToContent": "Vai al contenuto principale",

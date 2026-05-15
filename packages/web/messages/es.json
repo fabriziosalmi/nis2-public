@@ -21,7 +21,8 @@
     "success": "Operación exitosa",
     "settings": "Configuración",
     "logout": "Cerrar sesión",
-    "user": "Usuario"
+    "user": "Usuario",
+    "support": "Soporte"
   },
   "nav": {
     "dashboard": "Panel",
@@ -44,7 +45,9 @@
     "criticalBadgeAria": "hallazgos críticos",
     "primary": "Principal",
     "settings": "Configuración",
-    "criticalCountAnnouncement": "{count, plural, one {# hallazgo crítico requiere} other {# hallazgos críticos requieren}} atención"
+    "criticalCountAnnouncement": "{count, plural, one {# hallazgo crítico requiere} other {# hallazgos críticos requieren}} atención",
+    "support": "Soporte",
+    "documentation": "Documentación"
   },
   "a11y": {
     "skipToContent": "Saltar al contenido principal",

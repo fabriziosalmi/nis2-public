@@ -21,7 +21,8 @@
     "success": "Vorgang erfolgreich",
     "settings": "Einstellungen",
     "logout": "Abmelden",
-    "user": "Benutzer"
+    "user": "Benutzer",
+    "support": "Support"
   },
   "nav": {
     "dashboard": "Übersicht",
@@ -44,7 +45,9 @@
     "criticalBadgeAria": "kritische Ergebnisse",
     "primary": "Primär",
     "settings": "Einstellungen",
-    "criticalCountAnnouncement": "{count, plural, one {# kritisches Ergebnis erfordert} other {# kritische Ergebnisse erfordern}} Aufmerksamkeit"
+    "criticalCountAnnouncement": "{count, plural, one {# kritisches Ergebnis erfordert} other {# kritische Ergebnisse erfordern}} Aufmerksamkeit",
+    "support": "Support",
+    "documentation": "Dokumentation"
   },
   "a11y": {
     "skipToContent": "Zum Hauptinhalt springen",

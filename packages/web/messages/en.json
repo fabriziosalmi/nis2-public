@@ -21,7 +21,8 @@
     "success": "Operation successful",
     "settings": "Settings",
     "logout": "Logout",
-    "user": "User"
+    "user": "User",
+    "support": "Support"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -44,7 +45,9 @@
     "criticalBadgeAria": "critical findings",
     "primary": "Primary",
     "settings": "Settings",
-    "criticalCountAnnouncement": "{count, plural, one {# critical finding} other {# critical findings}} require attention"
+    "criticalCountAnnouncement": "{count, plural, one {# critical finding} other {# critical findings}} require attention",
+    "support": "Support",
+    "documentation": "Documentation"
   },
   "a11y": {
     "skipToContent": "Skip to main content",
