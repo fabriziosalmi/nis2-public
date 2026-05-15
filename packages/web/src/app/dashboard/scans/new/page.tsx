@@ -16,8 +16,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select as UISelect, SelectContent, SelectItem, SelectTrigger as UISelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { useCreateScan } from "@/hooks/use-scans"
-import { useAssets } from "@/hooks/use-assets"
+import { useAssets, useCreateAsset } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 
 // Field names MUST match the backend schema (packages/api/app/schemas/scan.py:ScanCreate
@@ -65,10 +71,49 @@ export default function NewScanPage() {
   useDocumentTitle(t("title"))
   const router = useRouter()
   const createScan = useCreateScan()
+  const createAsset = useCreateAsset()
   const { data: assetsData } = useAssets()
   const assets = assetsData?.items || []
   const [selectedAssets, setSelectedAssets] = useState<string[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isAssetDialogOpen, setIsAssetDialogOpen] = useState(false)
+
+  const {
+    register: registerAsset,
+    handleSubmit: handleAssetSubmit,
+    reset: resetAsset,
+    setValue: setAssetValue,
+    formState: { errors: assetErrors },
+  } = useForm({
+    resolver: zodResolver(
+      z.object({
+        name: z.string().min(1, "Name is required"),
+        type: z.string().min(1, "Type is required"),
+        target: z.string().min(1, "Target is required"),
+      })
+    ),
+    defaultValues: { name: "", type: "domain", target: "" }
+  })
+
+  const onAssetSubmit = async (data: any) => {
+    try {
+      const newAsset = await createAsset.mutateAsync({
+        name: data.name,
+        target_type: data.type,
+        target_value: data.target,
+        tags: [],
+      } as any)
+      toast.success(tc("success"))
+      setIsAssetDialogOpen(false)
+      resetAsset()
+      // Automatically select the newly created asset
+      if (newAsset?.id) {
+        setSelectedAssets((prev) => [...prev, newAsset.id])
+      }
+    } catch (err: any) {
+      toast.error(tc("error"), { description: err.message })
+    }
+  }
 
   const {
     register,
@@ -179,19 +224,68 @@ export default function NewScanPage() {
 
         {/* Assets */}
         <Card>
-          <CardHeader>
-            <CardTitle>{t("assetsTitle")}</CardTitle>
-            <CardDescription>{t("assetsDescription")}</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>{t("assetsTitle")}</CardTitle>
+              <CardDescription>{t("assetsDescription")}</CardDescription>
+            </div>
+            <Dialog open={isAssetDialogOpen} onOpenChange={setIsAssetDialogOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" size="sm">
+                  {t("manageAssets", { defaultValue: "Add Asset" })}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("manageAssets", { defaultValue: "Add Asset" })}</DialogTitle>
+                  <DialogDescription>
+                    Create a new asset to scan without leaving this page.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input placeholder="E.g., Production API" {...registerAsset("name")} />
+                    {assetErrors.name && <p className="text-xs text-destructive">{assetErrors.name.message as string}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <UISelect onValueChange={(v) => setAssetValue("type", v)} defaultValue="domain">
+                      <UISelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </UISelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="domain">Domain</SelectItem>
+                        <SelectItem value="ip">IP Address</SelectItem>
+                        <SelectItem value="cidr">CIDR Block</SelectItem>
+                      </SelectContent>
+                    </UISelect>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Target</Label>
+                    <Input placeholder="api.example.com" {...registerAsset("target")} />
+                    {assetErrors.target && <p className="text-xs text-destructive">{assetErrors.target.message as string}</p>}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAssetDialogOpen(false)}>Cancel</Button>
+                  <Button type="button" onClick={handleAssetSubmit(onAssetSubmit)} disabled={createAsset.isPending}>
+                    {createAsset.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent>
             {assets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center bg-muted/30">
                 <p className="text-sm font-medium">{t("noAssetsTitle")}</p>
-                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                <p className="text-xs text-muted-foreground mt-1 mb-4">
                   {t("noAssetsDescription")}
                 </p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/dashboard/assets">{t("manageAssets")}</Link>
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsAssetDialogOpen(true)}>
+                  Create your first asset
                 </Button>
               </div>
             ) : (
