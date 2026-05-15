@@ -18,6 +18,8 @@ import { useAssets } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 import { StaggerContainer, StaggerItem, FadeIn } from "@/components/ui/fade-in"
+import { AnimatedCounter } from "@/components/ui/animated-counter"
+import { SpotlightCard } from "@/components/ui/spotlight-card"
 
 // Lazy load Recharts (400KB+) — only loads when charts are visible.
 // The `as any` + explicit ComponentType<any> cast is required because
@@ -39,16 +41,33 @@ import { useFormatDate } from "@/lib/dates"
 
 function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
-    pending: "border-yellow-500 text-yellow-600 bg-yellow-50",
-    running: "border-blue-500 text-blue-600 bg-blue-50 animate-pulse",
-    completed: "border-green-500 text-green-600 bg-green-50",
-    failed: "border-red-500 text-red-600 bg-red-50",
+    pending: "border-yellow-500 text-yellow-600 bg-yellow-50/50",
+    running: "border-blue-500 text-blue-600 bg-blue-50/50",
+    completed: "border-green-500 text-green-600 bg-green-50/50",
+    failed: "border-red-500 text-red-600 bg-red-50/50",
   }
   // Lookup is namespaced to `scans` because the same status enum drives
   // the /scans table — same labels, same colours, one source of truth.
   const ts = useTranslations("scans")
+  const needsPulse = status === "running" || status === "failed" || status === "pending"
+
   return (
-    <Badge variant="outline" className={variants[status] || ""}>
+    <Badge variant="outline" className={cn("relative", variants[status] || "")}>
+      {needsPulse && (
+        <span className={cn(
+          "absolute -right-1 -top-1 flex h-2.5 w-2.5",
+          status === "running" ? "text-blue-500" : status === "failed" ? "text-red-500" : "text-yellow-500"
+        )}>
+          <span className={cn(
+            "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
+            status === "running" ? "bg-blue-400" : status === "failed" ? "bg-red-400" : "bg-yellow-400"
+          )}></span>
+          <span className={cn(
+            "relative inline-flex rounded-full h-2.5 w-2.5",
+            status === "running" ? "bg-blue-500" : status === "failed" ? "bg-red-500" : "bg-yellow-500"
+          )}></span>
+        </span>
+      )}
       {ts(status as any)}
     </Badge>
   )
@@ -296,7 +315,7 @@ export default function DashboardPage() {
       <StaggerContainer className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <StaggerItem key={stat.title}>
-            <Card>
+            <SpotlightCard>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
                 <div className={cn("rounded-lg p-2", stat.bg)}>
@@ -304,10 +323,16 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-2xl font-bold">
+                  {!isNaN(Number(stat.value)) ? (
+                    <AnimatedCounter value={Number(stat.value)} />
+                  ) : (
+                    stat.value
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">{stat.change}</p>
               </CardContent>
-            </Card>
+            </SpotlightCard>
           </StaggerItem>
         ))}
       </StaggerContainer>
