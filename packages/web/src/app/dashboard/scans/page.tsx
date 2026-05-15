@@ -15,6 +15,7 @@ import { useScans } from "@/hooks/use-scans"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
+import { TableSkeleton } from "@/components/ui/skeleton"
 
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations("scans")
@@ -71,9 +72,7 @@ export default function ScansPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton columns={6} rows={5} />
           ) : scans.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
               <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>

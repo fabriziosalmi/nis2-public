@@ -15,4 +15,25 @@ function Skeleton({
   )
 }
 
-export { Skeleton }
+function TableSkeleton({ columns = 5, rows = 5 }: { columns?: number, rows?: number }) {
+  return (
+    <div className="w-full">
+      <div className="border-b">
+        <div className="flex w-full items-center h-12 px-4 gap-4">
+          {Array.from({ length: columns }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
+        </div>
+      </div>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="flex w-full items-center h-14 px-4 gap-4 border-b last:border-0">
+          {Array.from({ length: columns }).map((_, c) => (
+            <Skeleton key={c} className={`h-4 w-full ${c === 0 ? 'max-w-[150px]' : c === columns - 1 ? 'max-w-[80px]' : ''}`} />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export { Skeleton, TableSkeleton }

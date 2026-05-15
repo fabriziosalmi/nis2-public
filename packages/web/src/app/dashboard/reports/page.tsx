@@ -24,6 +24,8 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 import { api } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
+import { TableSkeleton } from "@/components/ui/skeleton"
+
 // Format keys map to entries under `reports.formatHints` in messages/*.json.
 // Labels (PDF, HTML, ...) stay as-is — they're proper nouns, not localised.
 const FORMATS = [
@@ -132,9 +134,7 @@ export default function ReportsPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton columns={6} rows={5} />
           ) : completed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
               <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>

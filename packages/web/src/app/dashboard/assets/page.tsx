@@ -24,6 +24,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAssets, useCreateAsset, useDeleteAsset, useUpdateAsset } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { TableSkeleton } from "@/components/ui/skeleton"
 
 const assetSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -206,9 +207,7 @@ export default function AssetsPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton columns={6} rows={5} />
           ) : assets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
               <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
