@@ -3,7 +3,7 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -121,6 +121,7 @@ export default function NewScanPage() {
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<ScanForm>({
     resolver: zodResolver(scanSchema),
@@ -132,6 +133,29 @@ export default function NewScanPage() {
       max_hosts: 100,
     },
   })
+
+  const DRAFT_KEY = "nis2-new-scan-draft-v1"
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.form) reset(parsed.form)
+        if (parsed.selectedAssets) setSelectedAssets(parsed.selectedAssets)
+      }
+    } catch { /* ignore */ }
+  }, [reset])
+
+  const currentValues = watch()
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        form: currentValues,
+        selectedAssets
+      }))
+    } catch { /* ignore */ }
+  }, [currentValues, selectedAssets])
 
   const features = watch("features")
   const scanType = watch("scan_type")
@@ -153,6 +177,7 @@ export default function NewScanPage() {
         asset_ids: selectedAssets,
       })
       toast.success(t("scanCreated"))
+      sessionStorage.removeItem(DRAFT_KEY)
       router.push(`/dashboard/scans/${result.id}`)
     } catch (err: any) {
       toast.error(t("scanCreateFailed"), { description: err.message })
