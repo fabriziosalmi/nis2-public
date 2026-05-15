@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { CopyToClipboard } from "@/components/ui/copy-to-clipboard"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useScan, useScanResults, useScanFindings } from "@/hooks/use-scans"
@@ -261,8 +262,18 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                   <TableBody>
                     {results.map((result: any) => (
                       <TableRow key={result.id}>
-                        <TableCell className="font-medium">{result.target}</TableCell>
-                        <TableCell className="font-mono text-sm">{result.ip}</TableCell>
+                        <TableCell className="font-medium group">
+                          <div className="flex items-center gap-2">
+                            <span>{result.target}</span>
+                            <CopyToClipboard value={result.target} className="-ml-1" />
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm group">
+                          <div className="flex items-center gap-2">
+                            <span>{result.ip}</span>
+                            <CopyToClipboard value={result.ip} className="-ml-1" />
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={result.is_alive ? "secondary" : "outline"} className={result.is_alive ? "bg-green-100 text-green-800" : ""}>
                             {result.is_alive ? t("hostAlive") : t("hostDead")}
@@ -313,7 +324,12 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         </TableCell>
                         <TableCell><Badge variant="outline">{finding.category}</Badge></TableCell>
                         <TableCell className="max-w-sm"><p className="text-sm">{finding.message}</p></TableCell>
-                        <TableCell className="font-mono text-sm">{finding.target}</TableCell>
+                        <TableCell className="font-mono text-sm group">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate max-w-[150px]">{finding.target}</span>
+                            <CopyToClipboard value={finding.target} className="-ml-1" />
+                          </div>
+                        </TableCell>
                         <TableCell className="max-w-xs"><p className="text-xs text-muted-foreground">{finding.remediation || "--"}</p></TableCell>
                       </TableRow>
                     ))}

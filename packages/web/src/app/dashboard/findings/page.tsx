@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { CopyToClipboard } from "@/components/ui/copy-to-clipboard"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Select,
@@ -432,7 +433,7 @@ export default function FindingsPage() {
                 {findings.map((finding: any) => (
                   <Fragment key={finding.id}>
                     <TableRow
-                      className="cursor-pointer"
+                      className="cursor-pointer group"
                       onClick={() => setExpandedId(expandedId === finding.id ? null : finding.id)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -503,7 +504,12 @@ export default function FindingsPage() {
                       <TableCell className="max-w-xs">
                         <p className="truncate text-sm">{finding.message}</p>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">{finding.target}</TableCell>
+                      <TableCell className="font-mono text-sm group">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate max-w-[150px]">{finding.target}</span>
+                          <CopyToClipboard value={finding.target} className="-ml-1" />
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="secondary"
