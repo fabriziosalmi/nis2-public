@@ -1308,6 +1308,7 @@ async def reset_password(
     user.password_changed_at = next_second
     token_row.used_at = now
     await db.flush()
+    await db.commit()
 
     # Audit log so an admin can see "password reset by token at T from IP".
     from app.middleware.audit import log_action
