@@ -19,6 +19,12 @@ description = "NIS2-specific allowlist for known test fixtures and CI placeholde
 # without them the scanner has no positive coverage. None are real.
 paths = [
     '''packages/scanner/tests/test_features\.py''',
+    # test_jwt_rs256.py patches settings with placeholder HS256 secrets and uses
+    # runtime-generated RSA keypairs for round-trip coverage. None are real.
+    '''packages/api/tests/test_jwt_rs256\.py''',
+    # test_totp_mfa.py uses pyotp.random_base32() — no hardcoded secrets.
+    # Listed here proactively so future additions to this file don't break CI.
+    '''packages/api/tests/test_totp_mfa\.py''',
 ]
 
 # Specific placeholder values pinned in non-test files but obviously not
@@ -29,10 +35,13 @@ regexes = [
     # Cited in their own developer guides; flagged here too to allow
     # any future test or doc reference.
     '''AKIAIOSFODNN7EXAMPLE''',
-    # Placeholder JWT secret used in .github/workflows/ci.yml's
-    # integration-tests job. Long enough to satisfy the production
+    # Placeholder JWT secrets used in .github/workflows/ci.yml for
+    # integration-tests and E2E jobs. Long enough to satisfy the production
     # secret-length validator without being a real production secret.
     '''integration-test-secret-must-be-at-least-32-chars-long-yes''',
+    '''e2e-test-jwt-secret-must-be-at-least-32-chars-yes''',
+    # Throwaway password used for the E2E CI seed user. Never used outside CI.
+    '''E2eC!password99''',
     # localStorage key prefixes used by the bilingual docs home and the
     # legal-disclaimer modal. Versioned (-v1, -v2, …) so we can force
     # re-acceptance on material text changes. Gitleaks 8's

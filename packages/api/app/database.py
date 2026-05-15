@@ -161,16 +161,24 @@ async def ensure_schema() -> None:
                 logger.warning("ensure_schema: %s.%s skipped: %s", table, column, exc)
 
 
+_RLS_PREDICATE = (
+    "(organization_id::text = current_setting('app.current_org_id', true) "
+    "OR current_setting('app.bypass_rls', true) = 'on')"
+)
+
+
 async def setup_row_level_security() -> None:
-    """Verify RLS policies are in place (created by migration 002_add_rls_policies).
+    """Ensure RLS policies are in place for all tenant-scoped tables.
 
-    Policies are created by Alembic migration 002_add_rls_policies. This
-    function only verifies they are present at startup. It does NOT create
-    or alter policies — that is the migration's responsibility.
+    Policies are canonically created by Alembic migration 002_add_rls_policies.
+    This function checks which tables are missing their policy and creates them
+    idempotently — the same logic as the migration. This allows the integration
+    test bootstrap (which uses Base.metadata.create_all rather than Alembic) to
+    set up RLS without requiring a full migration run.
 
-    Logs a WARNING for each tenant table missing its policy — this should
-    never happen on a properly migrated database. If warnings appear, run
-    `alembic upgrade head` to apply migration 002_add_rls_policies.
+    In a properly migrated production database all policies will already exist,
+    so the CREATE statements are skipped entirely. In tests or a bare create_all
+    bootstrap they are applied here.
 
     Also checks whether the app DB role is SUPERUSER or BYPASSRLS, which
     would make all RLS policies decorative. In production this causes the
@@ -194,10 +202,19 @@ async def setup_row_level_security() -> None:
     missing = [t for t in tenant_tables if t not in has_policy]
     if missing:
         logger.warning(
-            "RLS WARNING: tenant_isolation policy missing on %d table(s): %s. "
-            "Run `alembic upgrade head` to apply migration 002_add_rls_policies.",
+            "RLS: tenant_isolation policy missing on %d table(s): %s — applying now.",
             len(missing), ", ".join(missing),
         )
+        async with engine.begin() as conn:
+            for t in missing:
+                await conn.execute(text(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"))
+                await conn.execute(text(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY"))
+                await conn.execute(
+                    text(f"CREATE POLICY tenant_isolation ON {t} "
+                         f"USING {_RLS_PREDICATE} "
+                         f"WITH CHECK {_RLS_PREDICATE}")
+                )
+        logger.info("RLS: tenant_isolation policies applied on %d table(s).", len(missing))
     else:
         logger.info("RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables))
 
