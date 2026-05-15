@@ -4,14 +4,15 @@
 "use client"
 
 import Link from "next/link"
-import { Plus, Loader2, CalendarClock, Radar } from "lucide-react"
+import { Plus, Loader2, CalendarClock, Radar, Ban } from "lucide-react"
 import { useFormatDate } from "@/lib/dates"
 import { useTranslations } from "next-intl"
+import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useScans } from "@/hooks/use-scans"
+import { useScans, useCancelScan } from "@/hooks/use-scans"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -45,6 +46,18 @@ export default function ScansPage() {
   useDocumentTitle(t("title"))
   const scans = data?.items || []
   const total = data?.total || 0
+  const cancelScan = useCancelScan()
+
+  const handleCancel = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      await cancelScan.mutateAsync(id)
+      toast.success(t("scanCancelled", { defaultValue: "Scan cancelled successfully" }))
+    } catch (err: any) {
+      toast.error(t("cancelFailed", { defaultValue: "Failed to cancel scan" }), { description: err.message })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -104,6 +117,7 @@ export default function ScansPage() {
                   <TableHead>{t("hosts")}</TableHead>
                   <TableHead>{t("findings")}</TableHead>
                   <TableHead>{t("date")}</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -132,6 +146,13 @@ export default function ScansPage() {
                     <TableCell>{(scan.findings_critical || 0) + (scan.findings_high || 0) + (scan.findings_medium || 0) + (scan.findings_low || 0)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(scan.created_at, "Pp")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(scan.status === "running" || scan.status === "pending") && (
+                        <Button variant="ghost" size="sm" onClick={(e) => handleCancel(e, scan.id)} disabled={cancelScan.isPending}>
+                          <Ban className="h-4 w-4 text-muted-foreground" aria-label="Cancel Scan" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

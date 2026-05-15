@@ -8,11 +8,11 @@ import { useAuthStore } from '@/stores/auth-store'
 const STALE_30S = 30 * 1000
 const STALE_5M = 5 * 60 * 1000
 
-export function useScans(page = 1) {
+export function useScans(page = 1, status?: string) {
   const user = useAuthStore((s) => s.user)
   return useQuery({
-    queryKey: ['scans', page],
-    queryFn: () => api.listScans(page),
+    queryKey: ['scans', page, status],
+    queryFn: () => api.listScans(page, 20, status),
     enabled: !!user,
     staleTime: STALE_30S,
     refetchInterval: (query) => {
@@ -63,5 +63,16 @@ export function useCreateScan() {
   return useMutation({
     mutationFn: (data: any) => api.createScan(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scans'] }),
+  })
+}
+
+export function useCancelScan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.cancelScan(id),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['scans'] })
+      qc.invalidateQueries({ queryKey: ['scan', id] })
+    },
   })
 }

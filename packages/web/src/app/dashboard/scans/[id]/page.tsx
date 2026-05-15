@@ -3,9 +3,10 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
-import { use } from "react"
+import { use, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Clock, CheckCircle, AlertTriangle, GitCompareArrows, Radar } from "lucide-react"
+import { toast } from "sonner"
+import { ArrowLeft, Loader2, Clock, CheckCircle, AlertTriangle, GitCompareArrows, Radar, Ban } from "lucide-react"
 import { useFormatDate } from "@/lib/dates"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +15,9 @@ import { Badge } from "@/components/ui/badge"
 import { CopyToClipboard } from "@/components/ui/copy-to-clipboard"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useScan, useScanResults, useScanFindings } from "@/hooks/use-scans"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useScan, useScanResults, useScanFindings, useCancelScan } from "@/hooks/use-scans"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
@@ -110,6 +113,17 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
   const { data: scan, isLoading } = useScan(id)
   const { data: resultsData } = useScanResults(id)
   const { data: findingsData } = useScanFindings(id)
+  const cancelScan = useCancelScan()
+  const [selectedFinding, setSelectedFinding] = useState<any | null>(null)
+
+  const handleCancel = async () => {
+    try {
+      await cancelScan.mutateAsync(id)
+      toast.success(t("scanCancelled", { defaultValue: "Scan cancelled successfully" }))
+    } catch (err: any) {
+      toast.error(t("cancelFailed", { defaultValue: "Failed to cancel scan" }), { description: err.message })
+    }
+  }
 
   // v2.4.24 audit a11y-11: per-page <title>. Falls back to the
   // namespace name while the scan is loading; once the scan
@@ -174,6 +188,12 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                 </Link>
               </Button>
             )}
+            {(scan.status === "running" || scan.status === "pending") && (
+              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelScan.isPending}>
+                {cancelScan.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ban className="mr-2 h-4 w-4" />}
+                {t("cancelScan", { defaultValue: "Cancel Scan" })}
+              </Button>
+            )}
           </div>
           <p className="text-muted-foreground">
             {scan.created_at && formatDate(scan.created_at, "Pp")}
@@ -192,6 +212,16 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </div>
+
+        {scan.status === "failed" && scan.error_message && (
+          <Alert variant="destructive" className="mt-6 mb-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Scan Failed</AlertTitle>
+            <AlertDescription className="font-mono text-sm mt-1">
+              {scan.error_message}
+            </AlertDescription>
+          </Alert>
+        )}
 
       {/* Stats row */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
@@ -316,21 +346,21 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                   </TableHeader>
                   <TableBody>
                     {findings.map((finding: any) => (
-                      <TableRow key={finding.id}>
+                      <TableRow key={finding.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedFinding(finding)}>
                         <TableCell>
                           <Badge variant={severityVariant[finding.severity] || "secondary"}>
                             {tf((finding.severity || "").toLowerCase() as any)}
                           </Badge>
                         </TableCell>
                         <TableCell><Badge variant="outline">{finding.category}</Badge></TableCell>
-                        <TableCell className="max-w-sm"><p className="text-sm">{finding.message}</p></TableCell>
-                        <TableCell className="font-mono text-sm group">
+                        <TableCell className="max-w-sm"><p className="text-sm line-clamp-2">{finding.message}</p></TableCell>
+                        <TableCell className="font-mono text-sm group" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <span className="truncate max-w-[150px]">{finding.target}</span>
                             <CopyToClipboard value={finding.target} className="-ml-1" />
                           </div>
                         </TableCell>
-                        <TableCell className="max-w-xs"><p className="text-xs text-muted-foreground">{finding.remediation || "--"}</p></TableCell>
+                        <TableCell className="max-w-xs"><p className="text-xs text-muted-foreground truncate">{finding.remediation || "--"}</p></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -340,6 +370,51 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!selectedFinding} onOpenChange={(open) => !open && setSelectedFinding(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <Badge variant={selectedFinding?.severity ? (severityVariant[selectedFinding.severity] || "secondary") : "secondary"}>
+                {selectedFinding?.severity && tf(selectedFinding.severity.toLowerCase() as any)}
+              </Badge>
+              <Badge variant="outline">{selectedFinding?.category}</Badge>
+            </div>
+            <DialogTitle className="text-xl">{selectedFinding?.message}</DialogTitle>
+            <DialogDescription className="font-mono text-xs mt-1 break-all">
+              Target: {selectedFinding?.target}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {selectedFinding?.rationale && (
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold">{t("rationale", { defaultValue: "Rationale" })}</h4>
+                <p className="text-sm text-muted-foreground leading-relaxed">{selectedFinding.rationale}</p>
+              </div>
+            )}
+            {selectedFinding?.technical_detail && (
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold">{t("technicalDetail", { defaultValue: "Technical Detail" })}</h4>
+                <div className="bg-muted/50 p-3 rounded-md overflow-x-auto">
+                  <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">{selectedFinding.technical_detail}</pre>
+                </div>
+              </div>
+            )}
+            {selectedFinding?.remediation && (
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold text-green-700 dark:text-green-500">{t("remediation", { defaultValue: "Remediation" })}</h4>
+                <p className="text-sm text-muted-foreground leading-relaxed">{selectedFinding.remediation}</p>
+              </div>
+            )}
+            {selectedFinding?.compliance_article && (
+              <div className="space-y-1 pt-2 border-t">
+                <h4 className="text-sm font-semibold">{t("complianceArticle", { defaultValue: "NIS2 Article" })}</h4>
+                <Badge variant="secondary" className="mt-1">{selectedFinding.compliance_article}</Badge>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

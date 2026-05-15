@@ -231,8 +231,10 @@ class ApiClient {
   }
 
   // ------------------------------------------------------------------- Scans
-  async listScans(page = 1, limit = 20) {
-    return this.request<any>(`/api/v1/scans?page=${page}&limit=${limit}`)
+  async listScans(page = 1, limit = 20, status?: string) {
+    const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (status) qs.set("status", status)
+    return this.request<any>(`/api/v1/scans?${qs.toString()}`)
   }
 
   async createScan(data: any) {
@@ -249,6 +251,10 @@ class ApiClient {
 
   async getScanFindings(scanId: string) {
     return this.request<any>(`/api/v1/scans/${scanId}/findings`)
+  }
+
+  async cancelScan(scanId: string) {
+    return this.request<any>(`/api/v1/scans/${scanId}/cancel`, { method: 'POST' })
   }
 
   async compareScan(scanId: string, otherId: string) {

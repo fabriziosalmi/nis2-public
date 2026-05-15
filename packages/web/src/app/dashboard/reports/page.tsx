@@ -62,14 +62,13 @@ export default function ReportsPage() {
   const ts = useTranslations("scans")
   const formatDate = useFormatDate()
   const [page, setPage] = useState(1)
-  const { data, isLoading } = useScans(page)
+  const { data, isLoading } = useScans(page, "completed")
   const [rowState, setRowState] = useState<Record<string, RowState>>({})
 
   const scans = data?.items || []
-  // Reports are only generatable from completed scans (the API enforces it
-  // with a 400 — we filter client-side too so the UI doesn't hand the user
-  // a button that always errors).
-  const completed = scans.filter((s: any) => s.status === "completed")
+  // Reports are only generatable from completed scans.
+  // We now fetch only completed scans so pagination remains accurate.
+  const completed = scans
 
   const setRow = (scanId: string, patch: Partial<RowState>) =>
     setRowState((prev) => ({
