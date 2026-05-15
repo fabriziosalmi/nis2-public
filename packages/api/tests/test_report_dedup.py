@@ -35,6 +35,7 @@ class _FakeRedis:
 
     def __init__(self):
         self.store: dict[str, str] = {}
+        self.sets: dict[str, set] = {}
         self.set_calls: list[tuple[str, str, int | None]] = []
 
     def get(self, key: str):
@@ -44,8 +45,25 @@ class _FakeRedis:
         self.store[key] = value
         self.set_calls.append((key, value, ex))
 
-    def delete(self, key: str):
-        self.store.pop(key, None)
+    def delete(self, *keys):
+        for key in keys:
+            self.store.pop(key, None)
+
+    def sadd(self, key: str, *members):
+        self.sets.setdefault(key, set()).update(members)
+        return len(members)
+
+    def srem(self, key: str, *members):
+        s = self.sets.get(key, set())
+        removed = sum(1 for m in members if m in s)
+        s.difference_update(members)
+        return removed
+
+    def scard(self, key: str) -> int:
+        return len(self.sets.get(key, set()))
+
+    def expire(self, key: str, seconds: int):
+        pass  # TTL not modelled in the fake
 
 
 class _RaisingRedis:
@@ -58,17 +76,17 @@ class _RaisingRedis:
     # The helpers catch `redis.RedisError`; we use a subclass so
     # the test setup matches the real exception hierarchy without
     # needing a live Redis instance to import the type from.
-    def get(self, key):
+    def _boom(self, *a, **kw):
         import redis
         raise redis.RedisError("simulated connection refused")
 
-    def set(self, key, value, ex=None):
-        import redis
-        raise redis.RedisError("simulated connection refused")
-
-    def delete(self, key):
-        import redis
-        raise redis.RedisError("simulated connection refused")
+    get = _boom
+    set = _boom
+    delete = _boom
+    sadd = _boom
+    srem = _boom
+    scard = _boom
+    expire = _boom
 
 
 @pytest.fixture
