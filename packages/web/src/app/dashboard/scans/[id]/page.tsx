@@ -199,7 +199,10 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             <Card>
               <CardHeader><CardTitle>{t("executiveSummary")}</CardTitle></CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground leading-relaxed">{scan.executive_summary}</p>
+                <div 
+                  className="text-sm text-muted-foreground leading-relaxed space-y-4 [&>div]:mb-4" 
+                  dangerouslySetInnerHTML={{ __html: scan.executive_summary }} 
+                />
               </CardContent>
             </Card>
           )}
