@@ -467,7 +467,10 @@ class TestApiKeyAuth:
         """
         resp = client.post(
             "/api/v1/api-keys",
-            json={"name": f"e2e-dualauth-{uuid.uuid4().hex[:8]}"},
+            json={
+                "name": f"e2e-dualauth-{uuid.uuid4().hex[:8]}",
+                "scopes": ["scan:read", "finding:read", "asset:read"],
+            },
             headers=_csrf_headers(auth),
         )
         assert resp.status_code == 201, f"create key: {resp.status_code} {resp.text}"
