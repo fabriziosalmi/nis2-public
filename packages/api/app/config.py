@@ -63,6 +63,24 @@ class Settings(BaseSettings):
     # enough that the disk doesn't grow unbounded.
     report_ttl_days: int = 30
 
+    # GDPR Art. 5(1)(e) storage limitation for audit logs.
+    # The privacy notice (docs/privacy.md §7.2) advertises 90 days as the
+    # default. Set AUDIT_LOG_RETENTION_DAYS in .env to match your own
+    # jurisdiction's audit-trail obligation (NIS2 Art. 21 recommends ≥ 12
+    # months for incident evidence; raise this on instances that handle
+    # security incidents). The cleanup_tasks beat job prunes rows daily.
+    audit_log_retention_days: int = 90
+
+    # Maximum number of report-generation Celery tasks that a single
+    # organisation may have running concurrently. Each task consumes one
+    # Celery worker slot and can be CPU/disk intensive (a 50k-finding
+    # scan takes ~30 s). The 5/min/IP rate limit on POST /reports/generate
+    # already caps the burst rate; this cap prevents a single org from
+    # monopolising the entire worker pool across multiple scans and formats.
+    # Raise on instances with many workers and trusted users; lower on
+    # shared / multi-tenant setups. Default 3.
+    max_concurrent_reports_per_org: int = 3
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @model_validator(mode="after")

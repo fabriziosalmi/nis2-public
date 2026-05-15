@@ -76,6 +76,14 @@ INFLIGHT_TTL_SEC = 300
 # `celery-task-meta-*` / `_kombu.binding.*` keys.
 _KEY_PREFIX = "reports:inflight"
 
+# Org-level concurrency set: `reports:org_inflight:{org_id}` is a Redis
+# Set whose members are the task_ids currently in flight for that org.
+# SCARD gives the count; SADD/SREM maintain membership. TTL is refreshed
+# on every SADD so stale entries from crashed workers self-heal within
+# INFLIGHT_TTL_SEC. This is a separate namespace from the per-(org,scan,fmt)
+# dedup keys above — both are cleared by `clear_inflight_task`.
+_ORG_SET_PREFIX = "reports:org_inflight"
+
 # Lazy-initialised module-level client. The client is thread-safe
 # (per redis-py docs) so reusing it across requests is fine.
 _client: Optional[redis.Redis] = None
@@ -106,12 +114,34 @@ def _get_client() -> Optional[redis.Redis]:
     return _client
 
 
+def _org_set_key(org_id: str) -> str:
+    return f"{_ORG_SET_PREFIX}:{org_id}"
+
+
 def _key(org_id: str, scan_id: str, fmt: str) -> str:
     """Compose the lock key. Org_id is included even though
     scan_id alone is unique — defense-in-depth so a future
     `share scan across orgs` refactor doesn't accidentally let
     one org's dedup state leak into another's."""
     return f"{_KEY_PREFIX}:{org_id}:{scan_id}:{fmt}"
+
+
+def count_inflight_per_org(org_id: str) -> int:
+    """Return the number of report tasks currently in flight for *org_id*.
+
+    Uses SCARD on the org-level Set. Returns 0 on Redis failure so the
+    caller never blocks legitimate requests because of a Redis blip.
+    """
+    client = _get_client()
+    if client is None:
+        return 0
+    try:
+        return client.scard(_org_set_key(org_id)) or 0
+    except redis.RedisError as exc:
+        logger.warning(
+            "report-dedup: redis SCARD failed for org %s: %s", org_id, exc
+        )
+        return 0
 
 
 def lookup_inflight_task(org_id: str, scan_id: str, fmt: str) -> Optional[str]:
@@ -135,35 +165,43 @@ def lookup_inflight_task(org_id: str, scan_id: str, fmt: str) -> Optional[str]:
 def register_inflight_task(
     org_id: str, scan_id: str, fmt: str, task_id: str
 ) -> None:
-    """Store the task_id under the lock key with TTL. Best-effort:
-    failure is logged, not raised — same rationale as the lookup
-    failure path."""
+    """Store the task_id under the lock key with TTL and add it to the
+    org-level concurrency Set. Both are best-effort — failure is logged,
+    not raised. The org Set TTL is refreshed on every SADD so stale
+    entries from crashed workers self-heal within INFLIGHT_TTL_SEC."""
     client = _get_client()
     if client is None:
         return
     try:
         client.set(_key(org_id, scan_id, fmt), task_id, ex=INFLIGHT_TTL_SEC)
+        org_key = _org_set_key(org_id)
+        client.sadd(org_key, task_id)
+        client.expire(org_key, INFLIGHT_TTL_SEC)
     except redis.RedisError as exc:
         logger.warning(
-            "report-dedup: redis SET failed for (%s, %s, %s): %s",
+            "report-dedup: redis SET/SADD failed for (%s, %s, %s): %s",
             org_id, scan_id, fmt, exc,
         )
 
 
-def clear_inflight_task(org_id: str, scan_id: str, fmt: str) -> None:
-    """Drop the lock for a `(org_id, scan_id, fmt)` triple.
-    Called from a Celery `task_postrun` signal handler when the
-    report generation finishes (success or failure) so a follow-
-    up legitimate regeneration doesn't have to wait the full
-    INFLIGHT_TTL_SEC. Best-effort: a failure here is acceptable
-    because the TTL eventually cleans the key up anyway."""
+def clear_inflight_task(org_id: str, scan_id: str, fmt: str, task_id: str | None = None) -> None:
+    """Drop the lock for a `(org_id, scan_id, fmt)` triple and remove
+    *task_id* from the org-level concurrency Set (if provided).
+
+    Called from a Celery `task_postrun` signal handler when the report
+    generation finishes (success or failure). Best-effort: a failure here
+    is acceptable because TTL eventually evicts both the lock key and the
+    org Set.
+    """
     client = _get_client()
     if client is None:
         return
     try:
         client.delete(_key(org_id, scan_id, fmt))
+        if task_id:
+            client.srem(_org_set_key(org_id), task_id)
     except redis.RedisError as exc:
         logger.warning(
-            "report-dedup: redis DEL failed for (%s, %s, %s): %s",
+            "report-dedup: redis DEL/SREM failed for (%s, %s, %s): %s",
             org_id, scan_id, fmt, exc,
         )

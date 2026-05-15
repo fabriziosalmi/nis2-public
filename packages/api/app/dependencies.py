@@ -308,6 +308,56 @@ async def get_api_key_org(
     return api_key, api_key.organization_id
 
 
+async def _resolve_dual_auth(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+    db: AsyncSession,
+    required_scope: str | None,
+) -> uuid.UUID:
+    """Core logic shared by get_org_id_dual_auth and dual_auth_with_scope."""
+    raw = credentials.credentials if credentials else None
+    has_cookie = request.cookies.get("access_token") is not None
+
+    if raw and raw.startswith("nis2_") and not has_cookie:
+        api_key, org_id = await get_api_key_org(db=db, credentials=credentials)
+        if (
+            required_scope is not None
+            and api_key.scopes is not None
+            and required_scope not in api_key.scopes
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"API key missing required scope: {required_scope}",
+            )
+        return org_id
+
+    user = await get_current_user(request=request, credentials=credentials, db=db)
+    _, membership = await get_current_org(request=request, current_user=user)
+    return membership.organization_id
+
+
+def dual_auth_with_scope(required_scope: str):
+    """Dependency factory: authenticate via JWT session OR API key, enforcing a scope.
+
+    When the caller presents an API key (Bearer `nis2_*` with no cookie),
+    the key's scope list must contain `required_scope` — otherwise 403.
+    Keys with `scopes=None` (legacy, pre-2.4.26) pass through unrestricted.
+
+    JWT sessions are not scope-constrained (role-based access handles that).
+
+    Usage:
+        org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read"))
+    """
+    async def _dep(
+        request: Request,
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+        db: AsyncSession = Depends(get_db),
+    ) -> uuid.UUID:
+        return await _resolve_dual_auth(request, credentials, db, required_scope)
+
+    return _dep
+
+
 async def get_org_id_dual_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
@@ -334,14 +384,8 @@ async def get_org_id_dual_auth(
 
     Returns the organization_id only — read endpoints just need it for
     RLS scoping; they don't need the user's identity.
+
+    Prefer dual_auth_with_scope(required_scope) for new endpoints so
+    scope enforcement is explicit at the call site.
     """
-    raw = credentials.credentials if credentials else None
-    has_cookie = request.cookies.get("access_token") is not None
-
-    if raw and raw.startswith("nis2_") and not has_cookie:
-        _, org_id = await get_api_key_org(db=db, credentials=credentials)
-        return org_id
-
-    user = await get_current_user(request=request, credentials=credentials, db=db)
-    _, membership = await get_current_org(request=request, current_user=user)
-    return membership.organization_id
+    return await _resolve_dual_auth(request, credentials, db, required_scope=None)

@@ -4,12 +4,13 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org, get_org_id_dual_auth
+from app.dependencies import dual_auth_with_scope, get_current_org
+from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
 from app.models.finding import Finding
 from app.models.membership import Membership
@@ -33,7 +34,7 @@ async def list_scans(
     status_filter: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanListResponse:
     # Read endpoint — accept either a JWT cookie session or a `nis2_*`
@@ -65,7 +66,9 @@ async def list_scans(
 
 
 @router.post("", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_scan(
+    request: Request,
     payload: ScanCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
@@ -167,7 +170,7 @@ async def create_scan(
 @router.get("/{scan_id}", response_model=ScanResponse)
 async def get_scan(
     scan_id: uuid.UUID,
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanResponse:
     # Dual-auth read — see list_scans for the rationale.
@@ -184,7 +187,7 @@ async def get_scan_results(
     scan_id: uuid.UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanResultListResponse:
     # Dual-auth read — primary CI/CD use case (poll a scan's per-host
@@ -220,7 +223,7 @@ async def get_scan_findings(
     scan_id: uuid.UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
     db: AsyncSession = Depends(get_db),
 ) -> FindingListResponse:
     # Dual-auth read — see list_scans for the wiring note.
@@ -318,7 +321,7 @@ async def delete_scan(
 async def compare_scans(
     scan_id: uuid.UUID,
     other_id: uuid.UUID,
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
     db: AsyncSession = Depends(get_db),
 ):
     """Compare two scans: score delta, new/resolved/persistent findings.

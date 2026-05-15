@@ -34,7 +34,7 @@ class TestFeatures(unittest.TestCase):
         findings = detector.scan_content(content, "http://example.com")
         
         self.assertTrue(len(findings) > 0)
-        self.assertEqual(findings[0]['type'], 'aws_access_key')
+        self.assertEqual(findings[0]['type'], 'aws_access_key_id')
 
     def test_secrets_private_key(self):
         detector = SecretsDetector()
@@ -42,7 +42,7 @@ class TestFeatures(unittest.TestCase):
         findings = detector.scan_content(content, "http://example.com")
         
         self.assertTrue(len(findings) > 0)
-        self.assertEqual(findings[0]['type'], 'private_key')
+        self.assertEqual(findings[0]['type'], 'private_key_pem')
 
     # --- Resilience (WAF) Tests ---
     def test_waf_detection_headers(self):

@@ -26,6 +26,26 @@ Canonical: https://github.com/fabriziosalmi/nis2-public/blob/main/packages/web/p
 # Hiring? Currently no — left here per RFC 9116 §2.5.7.
 # Hiring:
 
+# Encrypted email (RFC 9116 §2.5.4 Encryption field).
+#
+# STATUS: not yet configured.
+#
+# A permanent PGP key for security disclosures has not been published.
+# While that is being provisioned, use the GitHub private-vulnerability
+# advisory flow listed above — it provides equivalent confidentiality
+# (TLS in transit, access-controlled at rest, scoped to the reporter
+# and the maintainer only). To request an end-to-end encrypted channel
+# before the key is published, reply to any routine maintainer email
+# first and we will arrange a Signal or Matrix handle.
+#
+# When a key is published, this block will be replaced with:
+#   Encryption: https://keys.openpgp.org/vks/v1/by-fingerprint/<FINGERPRINT>
+# and the fingerprint will also appear in SECURITY.md.
+#
+# Operators of self-hosted instances: if you publish your own PGP key
+# for your deployment, add the Encryption field pointing to your keyserver
+# URL and remove this comment block.
+
 # Optional but recommended by RFC 9116 §2.5.5: file expiry. Re-issue
 # with a refreshed Expires when the date below is reached so a stale
 # disclosure channel cannot be assumed live indefinitely.

@@ -666,13 +666,27 @@ async def delete_me(
             # Lone tenant — schedule the whole org for deletion.
             orgs_to_delete.append(m.organization_id)
 
-    # 4. Pseudonymise audit log: null user_id, scrub ip_address. The
-    #    `action` and `resource_type` columns stay so the trail still
-    #    tells the controller "someone deleted X on this date".
+    # 4. Pseudonymise audit log: null user_id, scrub ip_address, clear
+    #    details JSONB. The `action` and `resource_type` columns stay so
+    #    the audit chain still records "someone did X on this date" without
+    #    linking to the erased subject. The `details` column may contain
+    #    org UUIDs or role transitions that are indirectly linkable to the
+    #    user — nulling it removes that linkage while preserving the event
+    #    type for the controller's forensic purposes (Art. 89(1)).
+    #
+    # GDPR Art. 17 vs NIS2 Art. 21 — explicit resolution:
+    #   The controller has a legitimate interest (Art. 6(1)(f)) in retaining
+    #   pseudonymised audit events for the duration of AUDIT_LOG_RETENTION_DAYS
+    #   (default 90 days). This satisfies GDPR because the event is no longer
+    #   attributable to an identified or identifiable person after erasure.
+    #   The NIS2 audit-trail obligation is satisfied because the event type and
+    #   timestamp survive. Operators managing security incidents MUST raise
+    #   AUDIT_LOG_RETENTION_DAYS ≥ 365 to fulfil the NIS2 incident evidence
+    #   requirement — see docs/privacy.md §7.2 and config.py.
     await db.execute(
         text(
             "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
-            "user_agent = '[erased]' WHERE user_id = :uid"
+            "user_agent = '[erased]', details = NULL WHERE user_id = :uid"
         ),
         {"uid": str(user_id)},
     )

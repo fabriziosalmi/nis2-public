@@ -105,6 +105,142 @@ class TestInvalidScopes:
         assert exc_info.value.status_code == 400
 
 
+class TestScopeEnforcement:
+    """Pin the runtime enforcement logic in _resolve_dual_auth.
+
+    These tests exercise the scope-check branch directly, without
+    standing up a full FastAPI app or hitting a database. We build
+    the minimum objects needed (an ApiKey with a known scope list)
+    and call _resolve_dual_auth with a mocked DB and request.
+    """
+
+    def _make_api_key(self, scopes: list[str] | None):
+        from unittest.mock import MagicMock
+        import uuid as _uuid
+
+        key = MagicMock()
+        key.scopes = scopes
+        key.organization_id = _uuid.uuid4()
+        key.is_active = True
+        key.expires_at = None
+        return key
+
+    def _make_request(self, has_cookie: bool = False):
+        from unittest.mock import MagicMock
+
+        req = MagicMock()
+        req.cookies.get = MagicMock(return_value="tok" if has_cookie else None)
+        req.state = MagicMock()
+        return req
+
+    @pytest.mark.asyncio
+    async def test_matching_scope_allowed(self) -> None:
+        """API key with required scope must pass."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import uuid as _uuid
+
+        api_key = self._make_api_key(["scan:read", "report:read"])
+        org_id = api_key.organization_id
+
+        creds = MagicMock()
+        creds.credentials = "nis2_fakekey"
+
+        req = self._make_request(has_cookie=False)
+        db = AsyncMock()
+
+        with patch(
+            "app.dependencies.get_api_key_org",
+            new=AsyncMock(return_value=(api_key, org_id)),
+        ):
+            from app.dependencies import _resolve_dual_auth
+
+            result = await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
+
+        assert result == org_id
+
+    @pytest.mark.asyncio
+    async def test_missing_scope_raises_403(self) -> None:
+        """API key without required scope must be rejected."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import uuid as _uuid
+        from fastapi import HTTPException
+
+        api_key = self._make_api_key(["report:read"])
+        org_id = api_key.organization_id
+
+        creds = MagicMock()
+        creds.credentials = "nis2_fakekey"
+
+        req = self._make_request(has_cookie=False)
+        db = AsyncMock()
+
+        with patch(
+            "app.dependencies.get_api_key_org",
+            new=AsyncMock(return_value=(api_key, org_id)),
+        ):
+            from app.dependencies import _resolve_dual_auth
+
+            with pytest.raises(HTTPException) as exc_info:
+                await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
+
+        assert exc_info.value.status_code == 403
+        assert "scan:read" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_legacy_key_with_none_scopes_passes(self) -> None:
+        """Legacy API keys (scopes=None, pre-2.4.26) are unrestricted."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        api_key = self._make_api_key(None)
+        org_id = api_key.organization_id
+
+        creds = MagicMock()
+        creds.credentials = "nis2_fakekey"
+
+        req = self._make_request(has_cookie=False)
+        db = AsyncMock()
+
+        with patch(
+            "app.dependencies.get_api_key_org",
+            new=AsyncMock(return_value=(api_key, org_id)),
+        ):
+            from app.dependencies import _resolve_dual_auth
+
+            result = await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
+
+        assert result == org_id
+
+    @pytest.mark.asyncio
+    async def test_cookie_session_bypasses_scope_check(self) -> None:
+        """JWT cookie sessions are never scope-checked; they go through the JWT path."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import uuid as _uuid
+
+        org_id = _uuid.uuid4()
+        user = MagicMock()
+        membership = MagicMock()
+        membership.organization_id = org_id
+
+        creds = MagicMock()
+        creds.credentials = "jwt.token.here"
+
+        req = self._make_request(has_cookie=True)
+        db = AsyncMock()
+
+        with (
+            patch("app.dependencies.get_current_user", new=AsyncMock(return_value=user)),
+            patch(
+                "app.dependencies.get_current_org",
+                new=AsyncMock(return_value=(user, membership)),
+            ),
+        ):
+            from app.dependencies import _resolve_dual_auth
+
+            result = await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
+
+        assert result == org_id
+
+
 class TestVocabularyShape:
     """Pin the vocabulary itself so adding a scope is a deliberate
     one-line change to api_keys.py PLUS this test, never an accident."""

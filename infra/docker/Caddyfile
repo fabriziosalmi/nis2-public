@@ -1,18 +1,45 @@
 {$DOMAIN:localhost} {
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-
-    handle {
-        reverse_proxy web:3000
-    }
-
+    # Common security headers applied to every response regardless of handler.
+    # CSP is set per-handler below because the API (JSON) and the frontend
+    # (Next.js SPA) need different policies.
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        X-XSS-Protection "1; mode=block"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        X-XSS-Protection          "1; mode=block"
+        Permissions-Policy        "geolocation=(), camera=(), microphone=(), payment=()"
+        # Prevent the Caddy default Server header from leaking version info.
+        -Server
+    }
+
+    # API handler — strict CSP: the backend only returns JSON, so no
+    # scripts, styles, frames, or embedded resources are ever needed.
+    handle /api/* {
+        reverse_proxy api:8000
+
+        header {
+            # default-src 'none' blocks all resource loads. The API does not
+            # serve HTML, so this is safe and maximally restrictive.
+            Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+        }
+    }
+
+    # Frontend handler — Next.js App Router SPA.
+    #
+    # 'unsafe-inline' is required for:
+    #   - Script: Next.js injects inline chunks during hydration
+    #   - Style:  Tailwind CSS and shadcn/ui use inline style attributes
+    #
+    # TODO: migrate to nonce-based CSP via Next.js middleware once
+    # the frontend implements generateStaticParams / nonce injection,
+    # which would allow removing 'unsafe-inline' from script-src.
+    handle {
+        reverse_proxy web:3000
+
+        header {
+            Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        }
     }
 
     encode gzip zstd

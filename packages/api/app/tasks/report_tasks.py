@@ -82,7 +82,7 @@ def _clear_report_inflight_lock(
         return
     scan_id, org_id, fmt = str(args[0]), str(args[1]), str(args[2])
     try:
-        report_dedup.clear_inflight_task(org_id, scan_id, fmt)
+        report_dedup.clear_inflight_task(org_id, scan_id, fmt, task_id=task_id)
     except Exception as exc:
         # Belt-and-braces — the dedup helper already swallows
         # Redis failures, but if something further upstream
