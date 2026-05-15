@@ -438,21 +438,27 @@ export default function DashboardPage() {
 
       {/* Getting started - show when no data */}
       {!hasData && !scansLoading && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="rounded-full bg-primary/10 p-4 mb-4">
-              <ShieldCheck className="h-10 w-10 text-primary" />
+        <Card className="relative overflow-hidden border-dashed">
+          {/* SOTA Geometric/Wireframe Background */}
+          <div className="absolute inset-0 z-0 pointer-events-none opacity-20 dark:opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+          <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-t from-background to-transparent"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none z-0"></div>
+
+          <CardContent className="relative z-10 flex flex-col items-center justify-center py-16 text-center">
+            <div className="relative flex items-center justify-center w-20 h-20 mb-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 shadow-inner">
+              <div className="absolute inset-0 rounded-2xl bg-primary/10 animate-pulse"></div>
+              <ShieldCheck className="h-10 w-10 text-primary drop-shadow-sm" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">{t("welcome")}</h3>
-            <p className="text-muted-foreground mb-6 max-w-md">{t("welcomeDescription")}</p>
-            <div className="flex gap-3">
-              <Button variant="outline" asChild>
+            <h3 className="text-2xl font-bold tracking-tight mb-2">{t("welcome")}</h3>
+            <p className="text-muted-foreground mb-8 max-w-md leading-relaxed">{t("welcomeDescription")}</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" className="transition-all hover:bg-primary/5 hover:border-primary/30" asChild>
                 <Link href="/dashboard/assets">
-                  <Server className="mr-2 h-4 w-4" />
+                  <Server className="mr-2 h-4 w-4 text-primary" />
                   {t("addAssets")}
                 </Link>
               </Button>
-              <Button asChild>
+              <Button className="shadow-lg shadow-primary/20 transition-all hover:shadow-primary/40 hover:-translate-y-0.5" asChild>
                 <Link href="/dashboard/scans/new">
                   <Radar className="mr-2 h-4 w-4" />
                   {t("runFirstScan")}
