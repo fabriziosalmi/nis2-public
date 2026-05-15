@@ -118,18 +118,21 @@ export default function CompliancePage() {
       </div>
 
       {!hasData && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="rounded-full bg-muted p-4 mb-4">
-              <ShieldCheck className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-medium mb-1">{t("noData")}</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-md">{t("noDataDescription")}</p>
-            <Button asChild>
+        <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden rounded-xl border bg-card/30">
+          <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-card/80"></div>
+          
+          <div className="relative z-10 rounded-full border border-primary/20 bg-primary/5 p-6 mb-6 shadow-2xl">
+            <ShieldCheck className="h-10 w-10 text-primary opacity-80" />
+          </div>
+          <h3 className="relative z-10 text-2xl font-semibold mb-2 tracking-tight">{t("noData")}</h3>
+          <p className="relative z-10 text-sm text-muted-foreground mb-8 max-w-md">{t("noDataDescription")}</p>
+          <div className="relative z-10">
+            <Button asChild className="shadow-lg shadow-primary/20 transition-all hover:scale-105">
               <Link href="/dashboard/scans/new">{t("runFirstScan")}</Link>
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Summary cards */}

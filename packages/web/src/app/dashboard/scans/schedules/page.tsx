@@ -255,9 +255,14 @@ export default function SchedulesPage() {
         </CardHeader>
         <CardContent>
           {schedules.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>{t("noSchedulesYet")}</p>
+            <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-card/80"></div>
+              
+              <div className="relative z-10 rounded-full border border-primary/20 bg-primary/5 p-6 mb-6 shadow-2xl">
+                <Clock className="h-10 w-10 text-primary opacity-80" />
+              </div>
+              <h3 className="relative z-10 text-2xl font-semibold mb-2 tracking-tight">{t("noSchedulesYet")}</h3>
             </div>
           ) : (
             <Table>

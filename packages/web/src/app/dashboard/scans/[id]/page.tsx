@@ -129,11 +129,20 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
 
   if (!scan) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <Radar className="h-10 w-10 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium">{t("notFoundTitle")}</h3>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">{t("notFoundDescription")}</p>
-        <Button variant="outline" asChild><Link href="/dashboard/scans">{t("backToScans")}</Link></Button>
+      <div className="flex flex-col items-center justify-center py-32 text-center px-4 relative overflow-hidden bg-card/30 rounded-xl border">
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-card/80"></div>
+        
+        <div className="relative z-10 rounded-full border border-primary/20 bg-primary/5 p-6 mb-6 shadow-2xl">
+          <Radar className="h-10 w-10 text-primary opacity-80" />
+        </div>
+        <h3 className="relative z-10 text-2xl font-semibold mb-2 tracking-tight">{t("notFoundTitle")}</h3>
+        <p className="relative z-10 text-sm text-muted-foreground mb-8 max-w-md">{t("notFoundDescription")}</p>
+        <div className="relative z-10">
+          <Button variant="outline" asChild className="shadow-lg shadow-primary/10 transition-all hover:scale-105">
+            <Link href="/dashboard/scans">{t("backToScans")}</Link>
+          </Button>
+        </div>
       </div>
     )
   }

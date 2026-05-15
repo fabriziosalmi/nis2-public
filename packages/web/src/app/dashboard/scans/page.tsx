@@ -19,11 +19,11 @@ import { useState } from "react"
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations("scans")
   const variants: Record<string, string> = {
-    pending: "border-yellow-500 text-yellow-600 bg-yellow-50",
-    running: "border-blue-500 text-blue-600 bg-blue-50 animate-pulse",
-    completed: "border-green-500 text-green-600 bg-green-50",
-    failed: "border-red-500 text-red-600 bg-red-50",
-    cancelled: "border-gray-400 text-gray-500 bg-gray-50",
+    pending: "border-amber-500/30 text-amber-600 dark:text-amber-500 bg-amber-500/10",
+    running: "border-blue-500/30 text-blue-600 dark:text-blue-500 bg-blue-500/10 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.3)]",
+    completed: "border-emerald-500/30 text-emerald-600 dark:text-emerald-500 bg-emerald-500/10",
+    failed: "border-red-500/30 text-red-600 dark:text-red-500 bg-red-500/10",
+    cancelled: "border-slate-500/30 text-slate-600 dark:text-slate-400 bg-slate-500/10",
   }
   // Status string from the API matches a translation key; fall back to the
   // raw value if a future status appears that we haven't localised yet.
@@ -75,20 +75,25 @@ export default function ScansPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : scans.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-              <div className="rounded-full bg-muted p-4 mb-4">
-                <Radar className="h-8 w-8 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-card/80"></div>
+              
+              <div className="relative z-10 rounded-full border border-primary/20 bg-primary/5 p-6 mb-6 shadow-2xl">
+                <Radar className="h-10 w-10 text-primary opacity-80" />
               </div>
-              <h3 className="text-lg font-medium mb-1">{t("noScansYet")}</h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+              <h3 className="relative z-10 text-2xl font-semibold mb-2 tracking-tight">{t("noScansYet")}</h3>
+              <p className="relative z-10 text-muted-foreground max-w-md mb-8">
                 {t("noScansDescription")}
               </p>
-              <Button asChild>
-                <Link href="/dashboard/scans/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t("runFirstScan")}
-                </Link>
-              </Button>
+              <div className="relative z-10">
+                <Button asChild className="shadow-lg shadow-primary/20 transition-all hover:scale-105">
+                  <Link href="/dashboard/scans/new">
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t("runFirstScan")}
+                  </Link>
+                </Button>
+              </div>
             </div>
           ) : (
             <Table>
