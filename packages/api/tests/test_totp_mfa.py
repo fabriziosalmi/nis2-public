@@ -7,7 +7,6 @@ branch logic written into auth.py, keeping CI fast even without a
 running Postgres instance.
 """
 import pyotp
-import pytest
 
 from app.schemas.auth import LoginRequest, MFARequiredResponse
 

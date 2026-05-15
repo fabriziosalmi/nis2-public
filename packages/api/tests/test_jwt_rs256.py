@@ -62,7 +62,8 @@ def test_hs256_round_trip():
     """HS256 encode/decode round-trip produces identical payload."""
     with _patch_hs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
 
         token = jwt_util.create_access_token({"sub": "user-1"})
         payload = jwt_util.decode_token(token)
@@ -74,7 +75,8 @@ def test_rs256_round_trip():
     """RS256 encode/decode round-trip with generated keypair."""
     with _patch_rs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
 
         token = jwt_util.create_access_token({"sub": "user-rs256"})
         payload = jwt_util.decode_token(token)
@@ -90,7 +92,8 @@ def test_rs256_token_rejected_with_wrong_public_key():
     """RS256 token signed with key-1 must be rejected when verifying with key-2."""
     with _patch_rs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
 
         token = jwt_util.create_access_token({"sub": "user-rs256"})
 
@@ -102,7 +105,8 @@ def test_rs256_token_rejected_with_wrong_public_key():
         jwt_private_key=PRIVATE_PEM2,
         jwt_public_key=PUBLIC_PEM2,
     ):
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         with pytest.raises(JWTError):
             jwt_util.decode_token(token)
 
@@ -111,12 +115,14 @@ def test_hs256_token_rejected_by_rs256_decoder():
     """An HS256 token must be rejected when the decoder expects RS256."""
     with _patch_hs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         hs_token = jwt_util.create_access_token({"sub": "user-hs"})
 
     # Try to verify the HS256 token as RS256 — must fail
     with _patch_rs256():
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         with pytest.raises(JWTError):
             jwt_util.decode_token(hs_token)
 
@@ -125,7 +131,8 @@ def test_signing_key_returns_private_key_for_rs256():
     """_signing_key() must return the RSA private key in RS256 mode."""
     with _patch_rs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         assert jwt_util._signing_key() == PRIVATE_PEM
 
 
@@ -133,7 +140,8 @@ def test_verifying_key_returns_public_key_for_rs256():
     """_verifying_key() must return the RSA public key in RS256 mode."""
     with _patch_rs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         assert jwt_util._verifying_key() == PUBLIC_PEM
 
 
@@ -141,7 +149,8 @@ def test_signing_key_returns_secret_for_hs256():
     """_signing_key() must return jwt_secret in HS256 mode."""
     with _patch_hs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         from app.config import settings
         assert jwt_util._signing_key() == settings.jwt_secret
 
@@ -150,7 +159,8 @@ def test_verifying_key_returns_secret_for_hs256():
     """_verifying_key() must return jwt_secret in HS256 mode."""
     with _patch_hs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
         from app.config import settings
         assert jwt_util._verifying_key() == settings.jwt_secret
 
@@ -186,7 +196,8 @@ def test_rs256_refresh_token_round_trip():
     """RS256 refresh tokens also encode/decode correctly."""
     with _patch_rs256():
         from app.utils import jwt as jwt_util
-        import importlib; importlib.reload(jwt_util)
+        import importlib
+        importlib.reload(jwt_util)
 
         token = jwt_util.create_refresh_token({"sub": "user-refresh"})
         payload = jwt_util.decode_token(token)

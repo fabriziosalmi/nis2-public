@@ -1,7 +1,7 @@
 """Add TOTP fields to users table — NIS2 Art. 21(j) MFA.
 
-Revision ID: 002_add_totp_fields
-Revises: 001_initial
+Revision ID: 003_add_totp_fields
+Revises: 002_add_rls_policies
 Create Date: 2026-05-15
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "002_add_totp_fields"
-down_revision: Union[str, None] = "001_initial"
+revision: str = "003_add_totp_fields"
+down_revision: Union[str, None] = "002_add_rls_policies"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

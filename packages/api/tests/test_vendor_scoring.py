@@ -13,7 +13,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
-import pytest
 
 from app.routers.vendors import (
     SCORE_FACTORS,

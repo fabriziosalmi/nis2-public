@@ -2,8 +2,6 @@
 
 No live DB required — all DB interactions are mocked.
 """
-import importlib
-import inspect
 import os
 import pathlib
 import sys
@@ -70,7 +68,7 @@ class TestMigrationEnablesRLS:
     def test_enable_rls_for_all_tenant_tables(self):
         src = _migration_source()
         for t in EXPECTED_TENANT_TABLES:
-            assert f"ENABLE ROW LEVEL SECURITY" in src, "Missing ENABLE ROW LEVEL SECURITY"
+            assert "ENABLE ROW LEVEL SECURITY" in src, "Missing ENABLE ROW LEVEL SECURITY"
             assert t in src, f"Table {t!r} not mentioned in migration"
 
     def test_force_rls_present(self):

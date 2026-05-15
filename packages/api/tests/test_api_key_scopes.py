@@ -137,7 +137,6 @@ class TestScopeEnforcement:
     async def test_matching_scope_allowed(self) -> None:
         """API key with required scope must pass."""
         from unittest.mock import AsyncMock, MagicMock, patch
-        import uuid as _uuid
 
         api_key = self._make_api_key(["scan:read", "report:read"])
         org_id = api_key.organization_id
@@ -162,7 +161,6 @@ class TestScopeEnforcement:
     async def test_missing_scope_raises_403(self) -> None:
         """API key without required scope must be rejected."""
         from unittest.mock import AsyncMock, MagicMock, patch
-        import uuid as _uuid
         from fastapi import HTTPException
 
         api_key = self._make_api_key(["report:read"])

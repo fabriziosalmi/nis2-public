@@ -9,7 +9,6 @@ rules without standing up a database or FastAPI app.
 """
 from __future__ import annotations
 
-import pytest
 
 from app.routers.governance import (
     CATEGORY_SUBPARAGRAPH_MAP,
