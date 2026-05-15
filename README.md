@@ -41,18 +41,20 @@ The scanner is the technical probe. The governance framework is where the substa
 
 The compliance matrix references all ten sub-paragraphs (a) through (j). Several of them — by design of the directive itself — cannot be evaluated by an automated scanner and are tracked through the governance checklist (status: *manual verification required*). What the platform automates vs. what stays manual:
 
-| Sub-paragraph | Scope | How the platform supports it |
-|---------------|-------|------------------------------|
-| (a) Risk analysis policies | Methodology, periodic updates | Governance checklist (manual) |
-| (b) Incident handling | Detection, response, CSIRT notification | Incident module + Art. 23 lifecycle |
-| (c) Business continuity | BCP, DRP, backup, periodic testing | BIA module (RTO/RPO/MTPD) |
-| (d) Supply chain security | Vendor assessment, contracts, monitoring | Vendor Risk module (Art. 18) |
-| (e) Secure acquisition and development | SDLC, code review, vulnerability management | Governance checklist (manual) |
-| (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | Technical validation engine + checklist |
-| (g) Cyber hygiene and training | Awareness, phishing simulation | Governance checklist (manual) |
-| (h) Cryptography | Crypto policy, key management | Technical validation (TLS/cert) + checklist |
-| (i) Human resources security | Onboarding/offboarding, screening, PAM | Governance checklist (manual) |
-| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | Governance checklist (manual) |
+| Sub-paragraph | Scope | Implementation status | How the platform supports it |
+|---------------|-------|-----------------------|------------------------------|
+| (a) Risk analysis policies | Methodology, periodic updates | **Partial** — automated bridge from scanner findings | Governance checklist + `POST /governance/sync-risk` automatically escalates checklist items when HIGH/CRITICAL scanner findings are open; risk summary via `GET /governance/risk-summary` |
+| (b) Incident handling | Detection, response, CSIRT notification | **Implemented** — automated deadline enforcement | Incident module + Art. 23 lifecycle + Celery beat task checks every 15 min and dispatches alerts (email/webhook/Slack) at 24 h / 72 h / 1-month thresholds with Redis-backed dedup |
+| (c) Business continuity | BCP, DRP, backup, periodic testing | **Implemented** — manual verification | BIA module (RTO/RPO/MTPD), impact scoring, gap detection |
+| (d) Supply chain security | Vendor assessment, contracts, monitoring | **Implemented** — transparent scoring formula | Vendor Risk module (Art. 18) with documented 100-point scoring formula (certification, data access, audit recency, geography, security clauses); auditor-facing `GET /vendors/score-formula` |
+| (e) Secure acquisition and development | SDLC, code review, vulnerability management | **Partial** — scanner automates surface checks | Technical validation engine (TLS, headers, secrets, ports) + governance checklist for organisational controls |
+| (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | **Partial** — scan-driven | Technical validation engine + checklist |
+| (g) Cyber hygiene and training | Awareness, phishing simulation | **Manual** | Governance checklist (human verification required by design) |
+| (h) Cryptography | Crypto policy, key management | **Partial** — automated for public-facing TLS | Technical validation (TLS version, cipher suites, cert expiry, HSTS) + checklist for key-management policy |
+| (i) Human resources security | Onboarding/offboarding, screening, PAM | **Manual** | Governance checklist (human verification required by design) |
+| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Partial** — RBAC + audit log implemented; TOTP MFA planned | Role-based access (owner/admin/auditor/viewer), API key scopes, dual-auth, per-request audit log; TOTP MFA tracked in [#86](https://github.com/fabriziosalmi/nis2-public/issues/86) |
+
+**Legend**: *Implemented* = fully automated with no manual step required. *Partial* = automated checks cover the technically observable surface; organisational controls require human verification. *Manual* = the directive explicitly requires human judgement — automation cannot substitute.
 
 ### Art. 23 — Incident reporting (CSIRT)
 
@@ -60,11 +62,11 @@ Incident lifecycle aligned with the legal deadlines:
 
 | Phase | Deadline | Platform support |
 |-------|----------|------------------|
-| Early Warning | 24 hours | "Red Button" — generates a CSIRT-ready Early Warning JSON from 3 fields plus the latest asset inventory |
-| Incident Notification | 72 hours | Structured form with taxonomy, IOCs, timeline |
-| Final Report | 1 month | Aggregated data, impact assessment, lessons learned |
+| Early Warning | 24 hours | "Red Button" generates a CSIRT-ready Early Warning JSON + **automated alert 2 h before / on breach** via email, webhook (HMAC-SHA256 signed), or Slack |
+| Incident Notification | 72 hours | Structured form with taxonomy, IOCs, timeline + **automated alert 2 h before / on breach** |
+| Final Report | 1 month | Aggregated data, impact assessment, lessons learned + **automated alert 2 h before / on breach** |
 
-> Note: The platform produces the artefacts and tracks the deadlines. **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push.
+> Note: The platform produces the artefacts, tracks the deadlines, and dispatches alerts automatically via configured notification channels. **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push to the CSIRT portal.
 
 ### Art. 18 — Supply chain (Vendor Risk Management)
 

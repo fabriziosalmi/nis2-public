@@ -123,6 +123,115 @@ jobs:
         run: cd packages/api && python -m pytest tests/test_integration.py -v --tb=short
 
   # -----------------------------------------------------------------------
+  # E2E Live Tests — full API stack (Postgres + Redis) in CI
+  #
+  # test_e2e_live.py is skipped automatically when E2E_LIVE_BASE_URL is
+  # not set (plain `pytest` stays green). This job provides the
+  # environment the test file expects: a real API server reachable over
+  # HTTP, backed by real Postgres and Redis.
+  #
+  # Architecture: we start postgres and redis as GHA services, run
+  # Alembic migrations, then launch the FastAPI app with uvicorn in the
+  # background. A polling loop waits until GET /api/v1/health returns 200
+  # before running the test suite. No docker-compose is needed — GHA
+  # services and `run: uvicorn &` give us the same isolation more cheaply.
+  #
+  # A dedicated E2E user is created (not a real admin account) so the
+  # tests don't depend on pre-seeded data and can run against a clean DB.
+  # -----------------------------------------------------------------------
+  e2e-tests:
+    name: E2E Live Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nis2
+          POSTGRES_PASSWORD: nis2secret
+          POSTGRES_DB: nis2_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nis2"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://nis2:nis2secret@localhost:5432/nis2_e2e
+      DATABASE_URL_SYNC: postgresql://nis2:nis2secret@localhost:5432/nis2_e2e
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      CELERY_RESULT_BACKEND: redis://localhost:6379/2
+      JWT_SECRET: e2e-test-jwt-secret-must-be-at-least-32-chars-yes
+      CORS_ORIGINS: http://localhost:3000
+      # Credentials used both to register the E2E user and to run the suite.
+      E2E_LIVE_BASE_URL: http://localhost:8000
+      E2E_LIVE_EMAIL: e2e-ci@nis2.local
+      E2E_LIVE_PASSWORD: E2eC!password99
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e packages/scanner
+          pip install -e packages/api
+          pip install pytest pytest-asyncio httpx slowapi uvicorn[standard] alembic
+
+      - name: Run Alembic migrations
+        run: cd packages/api && alembic upgrade head
+
+      - name: Start API server (background)
+        run: |
+          cd packages/api
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+            --log-level warning &
+          echo "API PID: $!"
+
+      - name: Wait for API to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; then
+              echo "API is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: API did not start within 30 s"
+          exit 1
+
+      - name: Seed E2E user
+        run: |
+          # Register the E2E account via the public registration endpoint.
+          # Idempotent: a 409 (already exists) is also acceptable.
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8000/api/v1/auth/register \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${E2E_LIVE_EMAIL}\",\"password\":\"${E2E_LIVE_PASSWORD}\",\"full_name\":\"E2E CI User\"}")
+          if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "409" ]; then
+            echo "ERROR: Registration returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Seed user ready (HTTP $HTTP_CODE)"
+
+      - name: Run E2E tests
+        run: |
+          cd packages/api
+          python -m pytest tests/test_e2e_live.py -v --tb=short
+
+  # -----------------------------------------------------------------------
   # Web Build Check
   # -----------------------------------------------------------------------
   web-build:
