@@ -42,6 +42,7 @@ from app.dependencies import get_current_org
 from app.models.membership import Membership
 from app.models.scan import Scan
 from app.models.user import User
+from app.config import settings
 from app.routers.auth import limiter  # share the single Limiter instance
 from app.utils import report_dedup
 
@@ -97,14 +98,15 @@ async def generate_report(
     if scan.status != "completed":
         raise HTTPException(status_code=400, detail="Scan must be completed to generate reports")
 
+    org_id_str = str(membership.organization_id)
+    scan_id_str = str(scan_id)
+
     # v2.4.22 audit reports-009: dedup check. Look up an in-flight
     # task for this exact (org, scan, format) triple before queuing
     # a new one. If found, return its task_id — the caller's poll
     # loop will see the same result either way. Best-effort: a
     # Redis blip returns `None` here and we proceed with a fresh
     # task, which is the safe fallback.
-    org_id_str = str(membership.organization_id)
-    scan_id_str = str(scan_id)
     existing = report_dedup.lookup_inflight_task(org_id_str, scan_id_str, format)
     if existing:
         return {
@@ -114,6 +116,23 @@ async def generate_report(
             "scan_id": scan_id_str,
             "deduplicated": True,
         }
+
+    # Org-level concurrency cap. The per-(org,scan,fmt) dedup above handles
+    # the "same report twice" case; this check covers the orthogonal case
+    # where one org queues many different reports simultaneously (different
+    # scans or formats) and monopolises the Celery worker pool.
+    # Failure-open: if Redis is down, count_inflight_per_org returns 0 so
+    # we never block legitimate requests due to a Redis blip.
+    inflight = report_dedup.count_inflight_per_org(org_id_str)
+    if inflight >= settings.max_concurrent_reports_per_org:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Too many reports in progress for this organisation "
+                f"({inflight}/{settings.max_concurrent_reports_per_org}). "
+                "Wait for a running report to complete before queuing another."
+            ),
+        )
 
     # v2.4.21 audit reports-006/007: pass the requesting user's
     # locale to the worker so the rendered report (PDF/HTML/MD/CSV
