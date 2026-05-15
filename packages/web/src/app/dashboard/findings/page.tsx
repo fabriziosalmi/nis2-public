@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect, useState, Fragment } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle, Download, ShieldAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
@@ -105,19 +106,45 @@ function FindingsPiiNotice() {
 }
 
 export default function FindingsPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const t = useTranslations("findings")
   // v2.4.23 audit a11y namespace for accessibility-only strings
   // (filter Select labels, checkbox labels, expand/collapse buttons).
   const ta = useTranslations("a11y")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
-  const [severityFilter, setSeverityFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
+
+  const [severityFilter, setSeverityFilter] = useState(searchParams.get("severity") || "all")
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all")
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") || "all")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkStatus, setBulkStatus] = useState("")
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(parseInt(searchParams.get("page") || "1", 10))
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (severityFilter !== "all") params.set("severity", severityFilter)
+    if (statusFilter !== "all") params.set("status", statusFilter)
+    if (categoryFilter !== "all") params.set("category", categoryFilter)
+    if (page !== 1) params.set("page", page.toString())
+    
+    // Construct new URL string and only replace if it actually changed
+    const newQueryString = params.toString()
+    const currentQueryString = searchParams.toString()
+    
+    if (newQueryString !== currentQueryString) {
+      const url = newQueryString ? `${pathname}?${newQueryString}` : pathname
+      router.replace(url, { scroll: false })
+    }
+  }, [severityFilter, statusFilter, categoryFilter, page, pathname, router, searchParams])
+
+  const setSeverityAndResetPage = (val: string) => { setSeverityFilter(val); setPage(1) }
+  const setStatusAndResetPage = (val: string) => { setStatusFilter(val); setPage(1) }
+  const setCategoryAndResetPage = (val: string) => { setCategoryFilter(val); setPage(1) }
 
   // v2.4.17 audit S-DRA-02: debounce filter changes before they hit
   // useFindings. Without this, a user clicking through three Select
@@ -281,7 +308,7 @@ export default function FindingsPage() {
               its current value. */}
           <div className="flex flex-wrap gap-3">
             <div className="w-40">
-              <Select value={severityFilter} onValueChange={setSeverityFilter}>
+              <Select value={severityFilter} onValueChange={setSeverityAndResetPage}>
                 <SelectTrigger aria-label={t("severity")}>
                   <SelectValue placeholder={t("severity")} />
                 </SelectTrigger>
@@ -293,7 +320,7 @@ export default function FindingsPage() {
               </Select>
             </div>
             <div className="w-40">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={setStatusAndResetPage}>
                 <SelectTrigger aria-label={t("status")}>
                   <SelectValue placeholder={t("status")} />
                 </SelectTrigger>
@@ -305,7 +332,7 @@ export default function FindingsPage() {
               </Select>
             </div>
             <div className="w-40">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <Select value={categoryFilter} onValueChange={setCategoryAndResetPage}>
                 <SelectTrigger aria-label={t("category")}>
                   <SelectValue placeholder={t("category")} />
                 </SelectTrigger>
