@@ -15,6 +15,12 @@ export function useScans(page = 1) {
     queryFn: () => api.listScans(page),
     enabled: !!user,
     staleTime: STALE_30S,
+    refetchInterval: (query) => {
+      const data = query.state.data as { items?: any[] } | undefined
+      // If any scan on the current page is running or pending, poll every 5s
+      const hasActive = data?.items?.some((s: any) => s.status === 'running' || s.status === 'pending')
+      return hasActive ? 5000 : false
+    },
   })
 }
 
@@ -26,8 +32,8 @@ export function useScan(id: string) {
     enabled: !!user && !!id,
     staleTime: STALE_30S,
     refetchInterval: (query) => {
-      const data = query.state.data
-      return data?.status === 'running' ? 3000 : false
+      const data = query.state.data as { status?: string } | undefined
+      return (data?.status === 'running' || data?.status === 'pending') ? 3000 : false
     },
   })
 }
