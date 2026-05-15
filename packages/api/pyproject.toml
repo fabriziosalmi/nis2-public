@@ -24,6 +24,7 @@ dependencies = [
     "httpx>=0.26.0",
     "weasyprint>=61.0",
     "slowapi>=0.1.9",  # was missing — main.py imports it for rate-limit middleware
+    "pyotp>=2.9",
     "nis2scan",
 ]
 

@@ -27,6 +27,25 @@ class AcceptInviteRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    totp_code: Optional[str] = None
+
+
+class TOTPSetupResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class TOTPVerifyRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class TOTPVerifyResponse(BaseModel):
+    mfa_enabled: bool
+
+
+class MFARequiredResponse(BaseModel):
+    mfa_required: bool
+    partial: bool
 
 
 class UserResponse(BaseModel):

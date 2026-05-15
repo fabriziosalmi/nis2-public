@@ -27,15 +27,21 @@ from app.models.password_reset_token import PasswordResetToken
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.utils.email import get_dev_outbox, send_email
+import pyotp
+
 from app.schemas.auth import (
     AcceptInviteRequest,
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    MFARequiredResponse,
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
     SwitchOrgRequest,
+    TOTPSetupResponse,
+    TOTPVerifyRequest,
+    TOTPVerifyResponse,
     TokenResponse,
     UserResponse,
     UserUpdate,
@@ -364,6 +370,17 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated",
         )
+
+    # TOTP / MFA check
+    if user.totp_enabled:
+        if not payload.totp_code:
+            # Signal the client to collect the TOTP code — no cookies set yet.
+            return MFARequiredResponse(mfa_required=True, partial=True)  # type: ignore[return-value]
+        if not pyotp.TOTP(user.totp_secret).verify(payload.totp_code, valid_window=1):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid MFA code",
+            )
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.flush()
@@ -1309,6 +1326,86 @@ async def reset_password(
         )
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# TOTP / MFA endpoints — NIS2 Art. 21(j)
+# ---------------------------------------------------------------------------
+
+@router.post("/totp/setup", response_model=TOTPSetupResponse)
+async def totp_setup(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TOTPSetupResponse:
+    """Generate a TOTP secret and provisioning URI (step 1 of MFA setup).
+
+    The secret is stored on the user but `totp_enabled` is NOT set yet —
+    the caller must confirm possession by calling /totp/verify first.
+    """
+    if current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="MFA already enabled",
+        )
+    secret = pyotp.random_base32()
+    current_user.totp_secret = secret
+    await db.flush()
+    provisioning_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        current_user.email, issuer_name="NIS2 Platform"
+    )
+    return TOTPSetupResponse(secret=secret, provisioning_uri=provisioning_uri)
+
+
+@router.post("/totp/verify", response_model=TOTPVerifyResponse)
+async def totp_verify(
+    payload: TOTPVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TOTPVerifyResponse:
+    """Verify a TOTP code and enable MFA on the account (step 2 of MFA setup)."""
+    if current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="MFA already enabled",
+        )
+    if not current_user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Call /totp/setup first",
+        )
+    if not pyotp.TOTP(current_user.totp_secret).verify(payload.code, valid_window=1):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid TOTP code",
+        )
+    current_user.totp_enabled = True
+    await db.flush()
+    return TOTPVerifyResponse(mfa_enabled=True)
+
+
+@router.post("/totp/disable", response_model=TOTPVerifyResponse)
+async def totp_disable(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TOTPVerifyResponse:
+    """Disable MFA. Requires re-authentication via current password."""
+    if not current_user.password_hash or not pwd_context.verify(
+        payload.current_password, current_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    if not current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled",
+        )
+    current_user.totp_enabled = False
+    current_user.totp_secret = None
+    await db.flush()
+    return TOTPVerifyResponse(mfa_enabled=False)
 
 
 # ---------------------------------------------------------------------------
