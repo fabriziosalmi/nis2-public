@@ -13,6 +13,7 @@ import { Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -289,28 +290,43 @@ export default function NewScanPage() {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {assets.map((asset: any) => (
-                  <label
-                    key={asset.id}
-                    className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                      selectedAssets.includes(asset.id)
-                        ? "border-primary bg-primary/5"
-                        : "border-input hover:border-primary/50"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAssets.includes(asset.id)}
-                      onChange={() => toggleAsset(asset.id)}
-                      className="h-4 w-4 rounded border-input"
-                    />
-                    <div>
-                      <p className="text-sm font-medium">{asset.name}</p>
-                      <p className="text-xs text-muted-foreground">{asset.target_value}</p>
-                    </div>
-                  </label>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {assets.map((asset: any) => {
+                  const isSelected = selectedAssets.includes(asset.id);
+                  return (
+                    <label
+                      key={asset.id}
+                      className={`relative flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                          : "border-input bg-card hover:border-primary/40 hover:bg-muted/50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleAsset(asset.id)}
+                        className="sr-only"
+                      />
+                      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                        isSelected ? "bg-primary border-primary" : "border-muted-foreground/30 bg-transparent"
+                      }`}>
+                        {isSelected && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{asset.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{asset.target_value}</p>
+                      </div>
+                      <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0 text-[10px] px-1.5 h-5">
+                        {asset.target_type.toUpperCase()}
+                      </Badge>
+                    </label>
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -324,23 +340,39 @@ export default function NewScanPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              {featureRows.map(({ key, label, hint }) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={features[key]}
-                    onChange={(e) => setValue(`features.${key}`, e.target.checked)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">{hint}</p>
-                  </div>
-                </label>
-              ))}
+              {featureRows.map(({ key, label, hint }) => {
+                const isSelected = features[key];
+                return (
+                  <label
+                    key={key}
+                    className={`relative flex items-start gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
+                      isSelected
+                        ? "border-primary bg-primary/5 shadow-md shadow-primary/10 scale-[1.02]"
+                        : "border-input bg-card hover:border-primary/40 hover:bg-muted/50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => setValue(`features.${key}`, e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                      isSelected ? "bg-primary border-primary" : "border-muted-foreground/30 bg-transparent"
+                    }`}>
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground" />
+                        </svg>
+                      )}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${isSelected ? "text-primary" : "text-foreground"}`}>{label}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+                    </div>
+                  </label>
+                )
+              })}
             </div>
           </CardContent>
         </Card>
