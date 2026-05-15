@@ -37,10 +37,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
+from app.config import settings
 from app.database import async_session_factory
 from app.tasks.celery_app import celery_app
 
@@ -75,15 +76,37 @@ async def _cleanup():
         )
         await db.commit()
 
+        # GDPR Art. 5(1)(e) — prune audit_log rows older than the configured
+        # retention ceiling (default 90 days; see settings.audit_log_retention_days).
+        #
+        # Conflict note: NIS2 Art. 21 recommends retaining security-incident
+        # evidence for at least 12 months. Operators running the platform as a
+        # security-incident management tool should raise AUDIT_LOG_RETENTION_DAYS
+        # to ≥ 365 in their .env. The 90-day default satisfies GDPR storage
+        # limitation for typical deployments while remaining auditable.
+        #
+        # Pseudonymised rows (user_id IS NULL) are pruned on the same schedule —
+        # the event type still provides forensic value after erasure, but once
+        # the retention ceiling passes, even the anonymised record has no further
+        # legitimate purpose for the controller.
+        cutoff = now - timedelta(days=settings.audit_log_retention_days)
+        audit_result = await db.execute(
+            text("DELETE FROM audit_logs WHERE created_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        audit_n = audit_result.rowcount or 0
+
         revoked_n = revoked_result.rowcount or 0
         reset_n = reset_result.rowcount or 0
-        if revoked_n or reset_n:
+        if revoked_n or reset_n or audit_n:
             logger.info(
-                "cleanup_expired_auth_records: pruned %d revoked_tokens, %d password_reset_tokens",
+                "cleanup_expired_auth_records: pruned %d revoked_tokens, "
+                "%d password_reset_tokens, %d audit_logs",
                 revoked_n,
                 reset_n,
+                audit_n,
             )
         else:
             logger.debug("cleanup_expired_auth_records: nothing to prune")
 
-        return {"revoked_tokens": revoked_n, "password_reset_tokens": reset_n}
+        return {"revoked_tokens": revoked_n, "password_reset_tokens": reset_n, "audit_logs": audit_n}
