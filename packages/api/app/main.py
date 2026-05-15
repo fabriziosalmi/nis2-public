@@ -16,6 +16,7 @@ from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
 from app.routers import acn, api_keys, assets, audit, auth, bia, certificates, findings, governance, health, incidents, organizations, remediation, reports, scans, schedules, vendors
+from app.routers import jwks as jwks_router
 from app.mcp_server import router as mcp_router
 from app.routers.auth import limiter
 
@@ -131,6 +132,9 @@ def create_app() -> FastAPI:
     application.include_router(bia.router, prefix="/api/v1")
     application.include_router(acn.router, prefix="/api/v1")
     application.include_router(mcp_router, prefix="/api/v1")
+    # JWKS at /.well-known/jwks.json — no /api/v1 prefix so external
+    # verifiers can discover the public key at the standard well-known path.
+    application.include_router(jwks_router.router, prefix="")
 
     return application
 

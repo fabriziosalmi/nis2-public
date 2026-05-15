@@ -162,111 +162,48 @@ async def ensure_schema() -> None:
 
 
 async def setup_row_level_security() -> None:
-    """Idempotently apply tenant-isolation RLS on every tenant-scoped table.
+    """Verify RLS policies are in place (created by migration 002_add_rls_policies).
 
-    Runs at API startup (lifespan). It is safe to run repeatedly; each
-    iteration drops and recreates the policy. We use FORCE ROW LEVEL
-    SECURITY so even the table owner cannot bypass the policy — that is
-    the actual failsafe value.
+    Policies are created by Alembic migration 002_add_rls_policies. This
+    function only verifies they are present at startup. It does NOT create
+    or alter policies — that is the migration's responsibility.
 
-    The fallback `current_setting('app.bypass_rls', true) = 'on'` lets
-    Alembic migrations and admin scripts opt out by setting that GUC at
-    the start of their transaction. See alembic/env.py.
+    Logs a WARNING for each tenant table missing its policy — this should
+    never happen on a properly migrated database. If warnings appear, run
+    `alembic upgrade head` to apply migration 002_add_rls_policies.
 
-    Each table is wrapped in its own transaction (engine.begin per
-    iteration) so that a single failing ALTER (e.g. a table that doesn't
-    exist on this deployment) does NOT poison the whole batch with
-    InFailedSQLTransactionError.
+    Also checks whether the app DB role is SUPERUSER or BYPASSRLS, which
+    would make all RLS policies decorative. In production this causes the
+    API to refuse startup unless RLS_SUPERUSER_OK=1 is set.
     """
     if not IS_POSTGRES:
         logger.debug("setup_row_level_security: skipping (not Postgres)")
         return
 
-    # Discover tenant-scoped tables from SQLAlchemy metadata.
     tenant_tables = sorted(
         t.name for t in Base.metadata.tables.values()
         if "organization_id" in t.columns
     )
-    if not tenant_tables:
-        logger.warning("setup_row_level_security: no tenant tables found")
-        return
 
-    # Pre-2.4.27 the policy only specified USING. Postgres treats a
-    # missing WITH CHECK as "same as USING" for INSERT/UPDATE — which
-    # *happens* to be safe here, but it is implicit and brittle. Making
-    # WITH CHECK explicit pins the contract: every INSERT and UPDATE
-    # must also match the current org, so a misconfigured Celery task
-    # cannot smuggle a row with a foreign organization_id even if the
-    # SELECT side were ever loosened.
-    rls_predicate = (
-        "(organization_id::text = current_setting('app.current_org_id', true) "
-        "OR current_setting('app.bypass_rls', true) = 'on')"
-    )
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'")
+        )
+        has_policy = {row[0] for row in result}
 
-    applied: list[str] = []
-    skipped: list[str] = []
-    # P2-03 audit fix: defensive table-name validation. `tname` comes
-    # from Base.metadata.tables (defined in Python models, not user
-    # input), but f-string SQL with unvalidated identifiers is fragile:
-    # if a table name were ever derived from external input, it would be
-    # direct SQL injection. The regex whitelist ensures only sane
-    # Postgres identifier characters survive.
-    import re
-    _SAFE_TABLE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
-    for tname in tenant_tables:
-        if not _SAFE_TABLE_NAME.match(tname):
-            logger.error("RLS: refusing to operate on unsafe table name: %r", tname)
-            skipped.append(tname)
-            continue
-        # Per-table transaction. The previous single-transaction version
-        # aborted on the first failure and `InFailedSQLTransactionError`
-        # silently disabled RLS on every table after that — exactly the
-        # silent failure mode RLS is supposed to prevent.
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text(f"ALTER TABLE {tname} ENABLE ROW LEVEL SECURITY"))
-                await conn.execute(text(f"ALTER TABLE {tname} FORCE ROW LEVEL SECURITY"))
-                await conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation ON {tname}"))
-                await conn.execute(text(
-                    f"CREATE POLICY tenant_isolation ON {tname} "
-                    f"USING {rls_predicate} "
-                    f"WITH CHECK {rls_predicate}"
-                ))
-            applied.append(tname)
-        except Exception as exc:
-            logger.warning("RLS setup skipped for %s: %s", tname, exc)
-            skipped.append(tname)
-
-    logger.info(
-        "RLS policies applied to %d/%d tenant tables (skipped: %s)",
-        len(applied),
-        len(tenant_tables),
-        ", ".join(skipped) if skipped else "none",
-    )
+    missing = [t for t in tenant_tables if t not in has_policy]
+    if missing:
+        logger.warning(
+            "RLS WARNING: tenant_isolation policy missing on %d table(s): %s. "
+            "Run `alembic upgrade head` to apply migration 002_add_rls_policies.",
+            len(missing), ", ".join(missing),
+        )
+    else:
+        logger.info("RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables))
 
     # Defence-in-depth check: if the application's Postgres role is a
-    # SUPERUSER (or has BYPASSRLS), the FORCE ROW LEVEL SECURITY above
-    # is decorative — the role bypasses every RLS policy regardless.
-    # The default `postgres:16-alpine` image creates POSTGRES_USER with
-    # SUPERUSER, which is the typical state of a vanilla `make prod`
-    # deploy.
-    #
-    # Pre-2.5.1 we logged at WARNING and continued. v2.5.1 raises the
-    # response in production: in dev the warning is enough (tenant
-    # isolation matters less when there's one developer and one
-    # tenant); in production, refusing to start is correct — silent
-    # decorative-RLS in a multi-tenant deploy is the kind of failure
-    # mode that only shows up the day a bug elsewhere drops the
-    # `WHERE organization_id` filter and exfiltrates everyone.
-    #
-    # The escape hatch for first-run UX is `RLS_SUPERUSER_OK=1` in the
-    # environment, intended for the brief window between docker-compose
-    # creating the volume and the operator running
-    #   ALTER ROLE nis2 NOSUPERUSER NOBYPASSRLS;
-    # If the operator wants the warning to stay loud but boot to
-    # proceed, that flag is the documented exit. The Makefile's
-    # `prod-preflight` target greps for it and, if present, prints a
-    # red banner so it can't be set-and-forgotten.
+    # SUPERUSER (or has BYPASSRLS), RLS policies are bypassed for this role.
+    # In production the API refuses to start unless RLS_SUPERUSER_OK=1 is set.
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text(
