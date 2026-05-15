@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org, get_org_id_dual_auth
+from app.dependencies import dual_auth_with_scope, get_current_org
 from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User
@@ -33,7 +33,7 @@ async def list_findings(
     category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
     db: AsyncSession = Depends(get_db),
 ) -> FindingListResponse:
     # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
@@ -72,7 +72,7 @@ async def list_findings(
 
 @router.get("/stats", response_model=FindingStats)
 async def findings_stats(
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
     db: AsyncSession = Depends(get_db),
 ) -> FindingStats:
     # Dual-auth read — see list_findings for the wiring note.
@@ -120,7 +120,7 @@ async def findings_stats(
 @router.get("/{finding_id}", response_model=FindingResponse)
 async def get_finding(
     finding_id: uuid.UUID,
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
     db: AsyncSession = Depends(get_db),
 ) -> FindingResponse:
     # Dual-auth read — see list_findings for the wiring note.

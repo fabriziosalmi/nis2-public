@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org, get_org_id_dual_auth
+from app.dependencies import dual_auth_with_scope, get_current_org
 from app.models.asset import Asset
 from app.models.membership import Membership
 from app.models.user import User
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 async def list_assets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("asset:read")),
     db: AsyncSession = Depends(get_db),
 ) -> AssetListResponse:
     # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
@@ -110,7 +110,7 @@ async def create_asset(
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: uuid.UUID,
-    org_id: uuid.UUID = Depends(get_org_id_dual_auth),
+    org_id: uuid.UUID = Depends(dual_auth_with_scope("asset:read")),
     db: AsyncSession = Depends(get_db),
 ) -> AssetResponse:
     # Dual-auth read — see list_assets for the wiring note.
