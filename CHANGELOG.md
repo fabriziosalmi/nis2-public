@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.5.9] - 2026-05-15
+
+Dependency bump and UI build stabilization.
+
+### 🔴 Security & Stability
+- **Dependabot Batch Update**: Upgraded 11 core dependencies across the stack including `react`, `react-dom`, `next`, `tailwindcss`, `zod`, and `lucide-react` to their latest stable releases, resolving multiple backend and frontend vulnerabilities.
+- **CI/CD Pipeline Fix**: Resolved Ruff static analysis errors (E402, W293) in `target_validator.py` to unblock the GitHub Actions test runner and enforce strict PEP8 compliance.
+
+### 🟢 UI/UX & Localization
+- **UI Build Stabilization**: Mitigated a breaking change introduced by `lucide-react` v1.0.0 (which removed third-party brand icons) by migrating the `Github` icon to a native inline SVG, restoring a 100% stable static build pipeline.
+
 ## [2.5.8] - 2026-05-15
 
 Finalized high-fidelity security and usability hardening.
