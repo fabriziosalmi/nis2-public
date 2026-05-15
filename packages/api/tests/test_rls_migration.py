@@ -104,20 +104,26 @@ class TestMigrationDowngrade:
 # ---------------------------------------------------------------------------
 
 class TestSetupRLSVerifyMode:
-    def test_does_not_contain_create_policy(self):
-        """setup_row_level_security() must no longer issue CREATE POLICY."""
-        # Extract just the function source to avoid false positives elsewhere
+    def test_applies_missing_policies_idempotently(self):
+        """setup_row_level_security() must create policies for missing tables.
+
+        The canonical source is migration 002_add_rls_policies, but the
+        function also applies them as a fallback (e.g. integration tests use
+        Base.metadata.create_all instead of Alembic). It must be idempotent —
+        the migration uses DROP POLICY IF EXISTS; the function only creates for
+        tables that are missing their policy.
+        """
         src = _database_source()
         fn_start = src.index("async def setup_row_level_security")
-        # Find next top-level async def after the function
         next_fn = src.find("\nasync def ", fn_start + 1)
         if next_fn == -1:
             next_fn = src.find("\ndef ", fn_start + 1)
         fn_src = src[fn_start:next_fn] if next_fn != -1 else src[fn_start:]
-        assert "CREATE POLICY" not in fn_src, (
-            "setup_row_level_security() must not create policies — "
-            "that belongs in migration 002_add_rls_policies"
-        )
+        # Must create policies for missing tables
+        assert "CREATE POLICY" in fn_src
+        # Must only do so for tables that are missing (reads pg_policies first)
+        assert "pg_policies" in fn_src
+        assert "missing" in fn_src
 
     def test_reads_pg_policies(self):
         src = _database_source()

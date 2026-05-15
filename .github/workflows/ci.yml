@@ -219,7 +219,7 @@ jobs:
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST http://localhost:8000/api/v1/auth/register \
             -H "Content-Type: application/json" \
-            -d "{\"email\":\"${E2E_LIVE_EMAIL}\",\"password\":\"${E2E_LIVE_PASSWORD}\",\"full_name\":\"E2E CI User\"}")
+            -d "{\"email\":\"${E2E_LIVE_EMAIL}\",\"password\":\"${E2E_LIVE_PASSWORD}\",\"full_name\":\"E2E CI User\",\"org_name\":\"E2E CI Org\"}")
           if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "409" ]; then
             echo "ERROR: Registration returned HTTP $HTTP_CODE"
             exit 1
