@@ -10,6 +10,7 @@ import { useAuthStore, useAuthHydrated } from "@/stores/auth-store"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
+import { ErrorBoundary } from "@/components/ui/error-boundary"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -67,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-6 lg:p-8">
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
       {/* v2.4.17 audit O-DRA-01: Cmd+K palette. Mounted at the
