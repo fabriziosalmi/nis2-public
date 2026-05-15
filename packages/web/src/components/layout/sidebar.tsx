@@ -25,6 +25,9 @@ import {
   Menu,
   X,
   ChevronLeft,
+  LifeBuoy,
+  BookOpen,
+  ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Logo } from "@/components/brand/logo"
@@ -53,6 +56,11 @@ const settingsNavKeys = [
   { key: "apiKeys", href: "/dashboard/settings/api-keys", icon: Key },
   { key: "notifications", href: "/dashboard/settings/notifications", icon: Bell },
   { key: "auditLog", href: "/dashboard/settings/audit-log", icon: ScrollText },
+]
+
+const supportNavKeys = [
+  { key: "documentation", href: "https://github.com/fabriziosalmi/nis2-public/wiki", icon: BookOpen, external: true },
+  { key: "support", href: "mailto:fabrizio.salmi@gmail.com", icon: LifeBuoy, external: true },
 ]
 
 export function Sidebar() {
@@ -310,6 +318,37 @@ export function Sidebar() {
                 <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {!collapsed && <span>{t(`nav.${item.key}`)}</span>}
               </Link>
+              )
+            })}
+          </nav>
+        </div>
+
+        <Separator className="my-4 mx-2" />
+
+        <div className={cn("px-2", !collapsed && "px-4")}>
+          {!collapsed && (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('common.support', { defaultValue: 'Support' })}
+            </p>
+          )}
+          <nav className="space-y-1" aria-label={t("nav.support", { defaultValue: 'Support Navigation' })}>
+            {supportNavKeys.map((item) => {
+              return (
+              <a
+                key={item.href}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noopener noreferrer" : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                  collapsed && "justify-center px-2"
+                )}
+                title={collapsed ? t(`nav.${item.key}`, { defaultValue: item.key }) : undefined}
+              >
+                <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {!collapsed && <span className="flex-1">{t(`nav.${item.key}`, { defaultValue: item.key.charAt(0).toUpperCase() + item.key.slice(1) })}</span>}
+                {!collapsed && item.external && <ExternalLink className="h-3 w-3 text-muted-foreground" aria-hidden="true" />}
+              </a>
               )
             })}
           </nav>

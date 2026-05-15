@@ -16,6 +16,7 @@ from app.models.membership import Membership
 from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetListResponse, AssetResponse, AssetUpdate
 from app.utils.target_validator import TargetValidationError, validate_target_pinned
+from app.middleware.audit import log_action
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -93,6 +94,16 @@ async def create_asset(
     db.add(asset)
     await db.flush()
 
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=user.id,
+        action="asset.created",
+        resource_type="asset",
+        resource_id=str(asset.id),
+        details={"name": asset.name, "target": asset.target_value, "type": asset.target_type},
+    )
+
     return AssetResponse.model_validate(asset)
 
 
@@ -128,6 +139,16 @@ async def update_asset(
         setattr(asset, field, value)
     await db.flush()
 
+    await log_action(
+        db,
+        org_id=membership.organization_id,
+        user_id=user.id,
+        action="asset.updated",
+        resource_type="asset",
+        resource_id=str(asset.id),
+        details={"name": asset.name, "target": asset.target_value, "updated_fields": list(update_data.keys())},
+    )
+
     return AssetResponse.model_validate(asset)
 
 
@@ -142,6 +163,16 @@ async def delete_asset(
     asset = await db.get(Asset, asset_id)
     if not asset or asset.organization_id != membership.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    await log_action(
+        db,
+        org_id=membership.organization_id,
+        user_id=user.id,
+        action="asset.deleted",
+        resource_type="asset",
+        resource_id=str(asset.id),
+        details={"name": asset.name, "target": asset.target_value, "type": asset.target_type},
+    )
 
     await db.delete(asset)
     await db.flush()
@@ -249,5 +280,14 @@ async def import_assets_csv(
         created += 1
 
     await db.flush()
+
+    await log_action(
+        db,
+        org_id=org_id,
+        user_id=user.id,
+        action="asset.imported",
+        resource_type="asset_import",
+        details={"created": created, "skipped": skipped, "errors_count": len(errors_list)},
+    )
 
     return {"created": created, "skipped": skipped, "errors": errors_list}
