@@ -117,6 +117,7 @@ export default function FindingsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkStatus, setBulkStatus] = useState("")
+  const [page, setPage] = useState(1)
 
   // v2.4.17 audit S-DRA-02: debounce filter changes before they hit
   // useFindings. Without this, a user clicking through three Select
@@ -128,7 +129,7 @@ export default function FindingsPage() {
   const debouncedStatus = useDebounce(statusFilter)
   const debouncedCategory = useDebounce(categoryFilter)
 
-  const params: Record<string, string> = {}
+  const params: Record<string, any> = { page, page_size: 20 }
   if (debouncedSeverity !== "all") params.severity = debouncedSeverity
   if (debouncedStatus !== "all") params.status = debouncedStatus
   if (debouncedCategory !== "all") params.category = debouncedCategory
@@ -247,7 +248,19 @@ export default function FindingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
+        </div>
+        <div className="hidden md:flex items-center gap-2">
+          {/* Animated Counter for total findings, premium UX element */}
+          <div className="flex flex-col items-end">
+            <span className="text-sm text-muted-foreground uppercase tracking-widest font-semibold">{t("total", { defaultValue: "Total Findings" })}</span>
+            <span className="text-2xl font-mono tabular-nums font-bold text-primary">{data?.total || 0}</span>
+          </div>
+        </div>
+      </div>
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
@@ -349,12 +362,15 @@ export default function FindingsPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : findings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-              <div className="rounded-full bg-green-500/10 p-4 mb-4">
-                <AlertTriangle className="h-8 w-8 text-green-600" />
+            <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden bg-card/30">
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(150,150,150,0.1) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-card/80"></div>
+              
+              <div className="relative z-10 rounded-full border border-primary/20 bg-primary/5 p-6 mb-6 shadow-2xl">
+                <ShieldAlert className="h-10 w-10 text-primary opacity-80" />
               </div>
-              <h3 className="text-lg font-medium mb-1">{t("noFindings")}</h3>
-              <p className="text-sm text-muted-foreground max-w-sm">
+              <h3 className="relative z-10 text-2xl font-semibold mb-2 tracking-tight">{t("noFindings")}</h3>
+              <p className="relative z-10 text-muted-foreground max-w-md">
                 {severityFilter !== "all" || statusFilter !== "all" || categoryFilter !== "all"
                   ? t("noFindingsFiltered")
                   : t("noFindingsDescription")}
@@ -443,7 +459,13 @@ export default function FindingsPage() {
                         </button>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={severityVariant[finding.severity] || "info"}>
+                        <Badge 
+                          variant={severityVariant[finding.severity?.toLowerCase() || "info"]}
+                          className={cn(
+                            "transition-all duration-300",
+                            finding.severity?.toLowerCase() === "critical" && "animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.5)] ring-1 ring-red-500/50"
+                          )}
+                        >
                           {/* v2.4.17 audit S-DRA-05: severity values
                               come back lowercase from the API
                               ("critical" / "high" / "medium" / "low"
@@ -492,17 +514,72 @@ export default function FindingsPage() {
                     </TableRow>
                     {expandedId === finding.id && (
                       <TableRow key={`${finding.id}-expanded`}>
-                        <TableCell colSpan={8} className="bg-muted/30 p-4">
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">{t("fullDetails")}</p>
-                            <p className="text-sm text-muted-foreground">{finding.message}</p>
-                            <div className="flex gap-4 text-sm">
-                              <span>
-                                <strong>{t("source")}:</strong> {finding.scan_name}
-                              </span>
-                              <span>
-                                <strong>{t("target")}:</strong> {finding.target}
-                              </span>
+                        <TableCell colSpan={8} className="bg-muted/10 p-0 border-b-0">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 shadow-inner bg-gradient-to-br from-card/50 to-muted/30">
+                            {/* Technical Detail & Rationale */}
+                            <div className="md:col-span-2 space-y-5">
+                              <div>
+                                <h4 className="text-xs font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
+                                  {t("technicalDetail", { defaultValue: "Technical Details" })}
+                                </h4>
+                                <div className="text-sm text-foreground/90 leading-relaxed bg-background/50 p-4 rounded-lg border border-border/50 shadow-sm font-mono whitespace-pre-wrap">
+                                  {finding.technical_detail || finding.message}
+                                </div>
+                              </div>
+                              {finding.rationale && (
+                                <div>
+                                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
+                                    {t("rationale", { defaultValue: "Impact & Rationale" })}
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground bg-background/30 p-3 rounded-lg border border-border/50">
+                                    {finding.rationale}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="bg-background/40 p-3 rounded-lg border border-border/50">
+                                  <span className="block text-xs font-medium text-muted-foreground mb-1">{t("source")}</span>
+                                  <span className="text-sm font-mono">{finding.scan_name}</span>
+                                </div>
+                                <div className="bg-background/40 p-3 rounded-lg border border-border/50 overflow-hidden">
+                                  <span className="block text-xs font-medium text-muted-foreground mb-1">{t("target")}</span>
+                                  <span className="text-sm font-mono truncate block" title={finding.target}>{finding.target}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Remediation Bento Box */}
+                            <div className="space-y-4 bg-background/60 p-5 rounded-xl border border-primary/10 shadow-sm relative overflow-hidden">
+                              <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <ShieldAlert className="w-24 h-24 text-primary" />
+                              </div>
+                              <h4 className="relative z-10 text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4" /> 
+                                {t("remediation", { defaultValue: "Remediation Guide" })}
+                              </h4>
+                              <p className="relative z-10 text-sm text-foreground/80 leading-relaxed">
+                                {finding.remediation || t("noRemediationProvided", { defaultValue: "No recommended solution provided for this finding." })}
+                              </p>
+                              
+                              {(finding.remediation_cost || finding.remediation_effort || finding.cvss_base_score) && (
+                                <div className="relative z-10 flex flex-wrap gap-2 pt-4 border-t mt-4">
+                                  {finding.cvss_base_score !== null && finding.cvss_base_score !== undefined && (
+                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-200">
+                                      CVSS: {finding.cvss_base_score}
+                                    </Badge>
+                                  )}
+                                  {finding.remediation_effort && (
+                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">
+                                      {t("effort", { defaultValue: "Effort" })}: {finding.remediation_effort}
+                                    </Badge>
+                                  )}
+                                  {finding.remediation_cost && (
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-200">
+                                      {t("cost", { defaultValue: "Cost" })}: {finding.remediation_cost}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -512,6 +589,34 @@ export default function FindingsPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {/* Pagination Controls */}
+          {!isLoading && findings.length > 0 && data && (
+            <div className="flex items-center justify-between border-t px-4 py-3 bg-muted/20">
+              <p className="text-sm text-muted-foreground">
+                {t("showing", { defaultValue: "Showing" })} <span className="font-medium text-foreground">{(page - 1) * 20 + 1}</span> {t("to", { defaultValue: "to" })} <span className="font-medium text-foreground">{Math.min(page * 20, data.total)}</span> {t("of", { defaultValue: "of" })} <span className="font-medium text-foreground">{data.total}</span> {t("results", { defaultValue: "results" })}
+              </p>
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))} 
+                  disabled={page === 1}
+                  className="h-8"
+                >
+                  {t("previous", { defaultValue: "Previous" })}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => p + 1)} 
+                  disabled={page * 20 >= data.total}
+                  className="h-8"
+                >
+                  {t("next", { defaultValue: "Next" })}
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
