@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.finding import (
     BulkFindingUpdate,
     FindingListResponse,
+    FindingResponse,
     FindingStats,
     FindingUpdate,
 )
