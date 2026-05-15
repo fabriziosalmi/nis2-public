@@ -113,11 +113,16 @@ export default function SchedulesPage() {
   }
 
   const toggleSchedule = async (id: string, isActive: boolean) => {
+    // Optimistic update: instantly flip the toggle
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, is_active: !isActive } : s)))
     try {
       await api.updateSchedule(id, { is_active: !isActive })
       toast.success(isActive ? t("pausedToast") : t("activatedToast"))
+      // Reload silently in background to sync dates/other info
       loadSchedules()
     } catch (err: any) {
+      // Revert if the API call failed
+      setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, is_active: isActive } : s)))
       toast.error(t("updateFailed"), { description: err.message })
     }
   }
