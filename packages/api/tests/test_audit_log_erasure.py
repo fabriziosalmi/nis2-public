@@ -59,8 +59,6 @@ class TestAuditLogRetentionSetting:
 
 class TestCleanupTasksReturnShape:
     def test_return_dict_has_audit_logs_key(self) -> None:
-        import inspect
-        import ast
         import pathlib
 
         src = pathlib.Path(

@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/2"
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
+
+    # RS256 support. When jwt_private_key is set, the platform uses RS256
+    # instead of HS256. jwt_algorithm is overridden automatically.
+    # Generate with: openssl genrsa -out private.pem 2048
+    #                openssl rsa -in private.pem -pubout -out public.pem
+    # Set JWT_PRIVATE_KEY and JWT_PUBLIC_KEY env vars to the PEM content
+    # (with literal \n or as multi-line).
+    jwt_private_key: str = ""  # PEM-encoded RSA private key (RS256 signing)
+    jwt_public_key: str = ""   # PEM-encoded RSA public key (RS256 verification)
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     cors_origins: str = ""
@@ -85,6 +94,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_runtime_config(self) -> "Settings":
+        # RS256: auto-select algorithm when a private key is provided
+        if self.jwt_private_key:
+            self.jwt_algorithm = "RS256"
+
         if self.environment != "production":
             # Dev convenience: generate an ephemeral secret so `make dev` boots
             # cleanly. Tokens won't survive a restart — that's intentional, so
@@ -98,13 +111,19 @@ class Settings(BaseSettings):
                 )
             return self
 
+        # RS256 in production: require public key too
+        if self.jwt_algorithm == "RS256" and not self.jwt_private_key:
+            raise RuntimeError(
+                "Refusing to start: JWT_ALGORITHM is RS256 but JWT_PRIVATE_KEY is not set."
+            )
+
         problems: list[str] = []
-        if self.jwt_secret in _INSECURE_JWT_DEFAULTS:
+        if self.jwt_algorithm != "RS256" and self.jwt_secret in _INSECURE_JWT_DEFAULTS:
             problems.append(
                 "JWT_SECRET is unset or uses an insecure placeholder. "
                 "Generate one with `openssl rand -base64 32`."
             )
-        elif len(self.jwt_secret) < 32:
+        elif self.jwt_algorithm != "RS256" and len(self.jwt_secret) < 32:
             problems.append("JWT_SECRET must be at least 32 characters in production.")
         if not self.cors_origins.strip():
             problems.append(

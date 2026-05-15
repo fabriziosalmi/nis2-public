@@ -15,6 +15,7 @@ without infrastructure.
 from __future__ import annotations
 
 import pathlib
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +65,6 @@ class TestHealthSourceContracts:
 # ---------------------------------------------------------------------------
 # Unit tests for the readiness logic using direct function calls
 # ---------------------------------------------------------------------------
-
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestReadinessLogic:

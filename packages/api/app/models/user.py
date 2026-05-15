@@ -33,6 +33,9 @@ class User(TimestampMixin, Base):
     oauth_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     oauth_provider_id: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
 
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     last_login_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

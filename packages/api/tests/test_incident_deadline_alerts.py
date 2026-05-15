@@ -12,7 +12,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
-import pytest
 
 from app.tasks.incident_tasks import (
     WARN_HOURS_BEFORE,
