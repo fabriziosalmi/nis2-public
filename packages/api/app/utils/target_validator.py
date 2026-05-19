@@ -129,7 +129,13 @@ async def validate_domain_pinned(domain: str) -> ValidationResult:
     except TargetValidationError:
         raise
     except Exception:
-        # Transient resolution failure — accept without a pin.
+        # Transient resolution failure — accept without a pin but log it
+        # so operators can detect systematic DNS issues or rebinding attempts.
+        import logging
+        logging.getLogger(__name__).warning(
+            "DNS resolution failed for %s — proceeding without IP pin (SSRF pin-drop)",
+            domain, exc_info=True,
+        )
         pinned_ip = None
 
     return ValidationResult(target_value=domain, target_type="domain", pinned_ip=pinned_ip)
