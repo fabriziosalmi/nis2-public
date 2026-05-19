@@ -4,7 +4,8 @@
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 from unittest.mock import patch
 
 

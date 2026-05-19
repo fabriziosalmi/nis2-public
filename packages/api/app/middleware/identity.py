@@ -24,7 +24,7 @@ from contextvars import ContextVar
 from typing import Optional
 
 from fastapi import Request
-from jose import JWTError
+from jwt import InvalidTokenError as JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.utils.jwt import decode_token

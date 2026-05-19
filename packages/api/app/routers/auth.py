@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from jose import JWTError
+from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address

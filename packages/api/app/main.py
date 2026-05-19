@@ -22,11 +22,14 @@ from app.routers.auth import limiter
 
 logger = logging.getLogger(__name__)
 
-# Keep in lockstep with packages/api/pyproject.toml `version`. The
-# Round-2 audit caught this hardcoded literal lagging behind the
-# pyproject by three patch releases (2.4.26 vs 2.5.0), which made the
-# audit log claim a wrong release was running.
-API_VERSION = "2.5.9"
+# Derive API_VERSION from the installed package metadata so it can never
+# drift behind pyproject.toml again. The Round-2 audit caught the
+# previous hardcoded literal lagging by three patch releases.
+try:
+    from importlib.metadata import version as _pkg_version
+    API_VERSION = _pkg_version("nis2-api")
+except Exception:
+    API_VERSION = "0.0.0-dev"
 
 # Defence in depth: applied unconditionally at the API.
 # Caddy adds equivalent headers at the edge in production deployments.

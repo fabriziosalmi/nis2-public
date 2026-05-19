@@ -4,7 +4,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError as JWTError  # noqa: F401 — re-exported for callers
 
 from app.config import settings
 
