@@ -299,11 +299,12 @@ def run_mcp_stdio():
                             },
                         }
                     except Exception as e:
+                        logger.error("MCP tool %r failed in stdio: %s", tool_name, e, exc_info=True)
                         response = {
                             "jsonrpc": "2.0",
                             "id": request.get("id"),
                             "result": {
-                                "content": [{"type": "text", "text": f"Error: {e}"}],
+                                "content": [{"type": "text", "text": "Error: Internal error processing MCP tool call"}],
                                 "isError": True,
                             },
                         }
