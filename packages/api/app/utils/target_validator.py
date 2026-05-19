@@ -89,7 +89,7 @@ def validate_domain(domain: str) -> str:
 async def _resolve_first_public_ip(domain: str) -> Optional[str]:
     """Resolve `domain` and return the first public IP. Raise if any answer
     is private/blocked — the caller must reject the target outright."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         answers = await loop.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
     except socket.gaierror:

@@ -100,7 +100,7 @@ async def readiness(
         # directly). Run in a thread to avoid blocking the event loop.
         import asyncio
 
-        replies = await asyncio.get_event_loop().run_in_executor(
+        replies = await asyncio.get_running_loop().run_in_executor(
             None, inspector.ping
         )
         if replies:

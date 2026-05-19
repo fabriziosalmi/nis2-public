@@ -27,6 +27,15 @@ from app.models.user import User
 
 logger = logging.getLogger("nis2.mcp")
 
+
+def _mcp_version() -> str:
+    """Return the installed package version, matching main.py's logic."""
+    try:
+        from importlib.metadata import version as _pkg_version
+        return _pkg_version("nis2-api")
+    except Exception:
+        return "0.0.0-dev"
+
 # MCP tool definitions (JSON-Schema format for MCP protocol)
 MCP_TOOLS = [
     {
@@ -247,7 +256,7 @@ def run_mcp_stdio():
         # Read JSON-RPC messages from stdin, write responses to stdout
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-        await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
+        await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, sys.stdin)
 
         while True:
             try:
@@ -266,7 +275,7 @@ def run_mcp_stdio():
                             "capabilities": {"tools": {}},
                             "serverInfo": {
                                 "name": "nis2-compliance",
-                                "version": "2.5.6",
+                                "version": _mcp_version(),
                             },
                         },
                     }
