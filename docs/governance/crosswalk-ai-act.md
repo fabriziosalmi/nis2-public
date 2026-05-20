@@ -89,13 +89,13 @@ Italian fintech entities are simultaneously regulated by:
 
 For the AI Act dimension specifically, until the Italian competent authority is designated, dual-subject organizations should default to the **AI Office** central coordination route and flag the open designation in their incident response procedure.
 
-### 4.3 Article 26(6) deployer monitoring — Italian fintech case
+### 4.3 Article 26(4) deployer monitoring — Italian fintech case
 
 A practical example clarifies the dual-subject burden. An Italian fintech (50-person Series A, deploys AI credit decisioning, NIS2 essential entity Annex I.1.h):
 
 - **AI system in scope of Annex III §5.b** — creditworthiness assessment of natural persons.
 - **NIS2 essential entity** — Art. 21.2 obligations apply, ACN notification under Art. 23 / D.Lgs 138/2024 Art. 7-8.
-- **Article 26(6) deployer monitoring** — must monitor system operation, suspend if risk identified, keep logs.
+- **Article 26(4) deployer monitoring** — must monitor system operation, suspend if risk identified, keep logs.
 
 Single incident scenario: the credit model exhibits drift causing systematic discrimination against a protected group. Discovery on a Tuesday morning.
 
