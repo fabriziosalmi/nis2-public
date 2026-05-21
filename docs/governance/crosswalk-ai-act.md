@@ -46,7 +46,7 @@ Three areas where dual-subject organizations cannot collapse the two regimes int
 ### 3.1 Incident reporting timelines and routes
 
 - **NIS2 Art. 23:** Early warning to CSIRT/competent authority within **24 hours** of becoming aware; incident notification within **72 hours**; final report within **one month**.
-- **EU AI Act Art. 73 (serious incidents):** Notification to the market surveillance authority **immediately** (and in any event no later than **15 days** after awareness; **immediately and not later than 2 days** for incidents resulting in death of a person or serious harm).
+- **EU AI Act Art. 73 (serious incidents):** Notification to the market surveillance authority **without undue delay** and in any event no later than **15 days** after awareness (Art. 73(2)); no later than **2 days** for a widespread infringement or serious and irreversible disruption of critical infrastructure (Art. 73(3)); no later than **10 days** where the incident resulted in a person's death (Art. 73(4)).
 
 A single incident affecting both regimes (e.g., a security breach that exposes AI training data and triggers an algorithmic discrimination event) requires **two notifications on two timelines to two different authorities**. The platform's G-30 anchor should route both, with separate timers.
 
