@@ -21,6 +21,18 @@ Designed for self-hosted, on-premise deployment. Your scan data, asset inventory
 
 ---
 
+## Ecosystem
+
+Part of the [CertMate](https://github.com/fabriziosalmi/certmate) ecosystem for TLS / certificate operations and EU compliance:
+
+- **[CertMate](https://github.com/fabriziosalmi/certmate)** — open-source SSL certificate management (API + UI).
+- **[certmate-tools](https://github.com/fabriziosalmi/certmate-tools)** — free, privacy-first, client-side TLS / certificate / ACME diagnostics.
+- **[certmate-agent](https://github.com/fabriziosalmi/certmate-agent)** — conversational assistant for CertMate (local LLM + REST API + RAG).
+
+**Enterprise / high-scale** — multi-tenant, mTLS, white-label and NIS2-aligned TLS deployments are available through *CertMate-ng* (source-available, BSL 1.1, EU-built). Contact **fabrizio.salmi@gmail.com**.
+
+---
+
 ## What this platform is (and is not)
 
 This is **not** a scanner that calls itself a compliance platform. It's a GRC layer with an integrated technical validation engine. It does **not** replace a CISO, an internal audit programme, or a real legal review of your D.Lgs 138/2024 obligations.
