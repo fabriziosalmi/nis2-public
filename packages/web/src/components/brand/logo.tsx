@@ -39,6 +39,7 @@ export function Logo({
   // too. `useId` produces a stable, SSR-safe, per-instance id.
   const reactId = useId()
   const gradientId = `nis2-logo-grad-${reactId.replace(/[:]/g, "")}`
+  const titleId = `nis2-logo-title-${reactId.replace(/[:]/g, "")}`
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -52,12 +53,13 @@ export function Logo({
       className={cn("shrink-0", className)}
       // role + aria-label make this an image for screen readers; without
       // them the SVG is announced as a meaningless decorative blob.
-      aria-label="NIS2 Platform"
+      aria-labelledby={titleId}
       role="img"
       // Prevents the SVG from becoming a tab stop in legacy IE/Edge
       // engines — harmless on every modern browser.
       focusable="false"
     >
+      <title id={titleId}>NIS2 Platform</title>
       <defs>
         <linearGradient
           id={gradientId}
