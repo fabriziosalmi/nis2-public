@@ -38,8 +38,11 @@ export function Logo({
   // -translate-x-full), the gradient disappears on the desktop instance
   // too. `useId` produces a stable, SSR-safe, per-instance id.
   const reactId = useId()
-  const gradientId = `nis2-logo-grad-${reactId.replace(/[:]/g, "")}`
-  const titleId = `nis2-logo-title-${reactId.replace(/[:]/g, "")}`
+  // Escape any characters that could break CSS selector or SVG fragment syntax.
+  // We replace all non-alphanumeric characters to ensure a safe ID.
+  const safeId = reactId.replace(/[^a-zA-Z0-9]/g, "")
+  const gradientId = `nis2-logo-grad-${safeId}`
+  const titleId = `nis2-logo-title-${safeId}`
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
