@@ -1,7 +1,7 @@
 # Pinned to the immutable manifest digest of python:3.12.7-slim-bookworm.
 # Refresh with: docker pull python:3.12.7-slim-bookworm && \
 #               docker inspect --format='{{index .RepoDigests 0}}' python:3.12.7-slim-bookworm
-FROM python:3.14.5-slim-bookworm@sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec
+FROM python:3.15.0b2-slim-bookworm@sha256:5e946dab0224498220fff2f032782e0a87c8ec7d2cbf94d7dad884e9ffd0a274
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
