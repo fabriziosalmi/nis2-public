@@ -176,9 +176,7 @@ class TestAssetsCRUD:
     def test_create_domain_asset(
         self, client: httpx.Client, auth: dict, created_ids: list[str]
     ):
-        # Use a unique target value so re-running the suite never trips
-        # the duplicate check.
-        target = f"e2e-{uuid.uuid4().hex[:8]}.example.com"
+        target = f"203.0.113.{uuid.uuid4().int % 254 + 1}.nip.io"
         resp = client.post(
             "/api/v1/assets",
             json={"name": "e2e domain", "target_type": "domain", "target_value": target},

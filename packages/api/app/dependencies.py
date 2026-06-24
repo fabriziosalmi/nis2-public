@@ -7,11 +7,11 @@ import uuid
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError as JWTError
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database import get_db
+from app.database import get_db, IS_POSTGRES
 from app.models.api_key import ApiKey
 from app.models.membership import Membership
 from app.models.user import User
@@ -87,6 +87,12 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
+        )
+
+    if IS_POSTGRES:
+        await db.execute(
+            text("SELECT set_config('app.current_user_id', :v, true)"),
+            {"v": str(parsed_id)},
         )
 
     stmt = (
