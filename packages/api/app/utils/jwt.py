@@ -66,7 +66,7 @@ def decode_token(token: str) -> dict:
     """Decode and validate a JWT token. Raises JWTError on invalid tokens."""
     try:
         payload = jwt.decode(
-            token, _verifying_key(), algorithms=[settings.jwt_algorithm]
+            token, _verifying_key(), algorithms=[settings.jwt_algorithm], leeway=10
         )
         return payload
     except JWTError:
