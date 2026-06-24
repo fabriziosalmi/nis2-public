@@ -82,7 +82,7 @@ class TestMigrationEnablesRLS:
     def test_policy_predicate_contains_org_id_check(self):
         src = _migration_source()
         assert "app.current_org_id" in src
-        assert "app.bypass_rls" in src
+        assert "app.current_user_id" in src
 
     def test_policy_has_with_check(self):
         src = _migration_source()

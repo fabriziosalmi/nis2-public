@@ -325,6 +325,18 @@ async def seed():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    import os
+    import secrets
+    env = os.environ.get("ENVIRONMENT", "development")
+    demo_password = os.environ.get("DEMO_PASSWORD")
+    if not demo_password:
+        if env == "production":
+            raise RuntimeError(
+                "Refusing to seed demo data in production without a custom DEMO_PASSWORD environment variable set."
+            )
+        demo_password = secrets.token_urlsafe(16)
+        print(f"[WARNING] No DEMO_PASSWORD env var set. Generated a secure random demo password: {demo_password}")
+
     async with async_session_factory() as db:
         for i, company in enumerate(COMPANIES):
             print(f"\n[{i+1}/10] {company['name']} ({company['sector']})...")
@@ -332,7 +344,7 @@ async def seed():
             # Create admin user
             user = User(
                 email=company["admin"]["email"],
-                password_hash=pwd_context.hash("demo-only-do-not-deploy"),
+                password_hash=pwd_context.hash(demo_password),
                 full_name=company["admin"]["name"],
                 email_verified=True,
                 is_active=True,
@@ -340,6 +352,7 @@ async def seed():
             )
             db.add(user)
             await db.flush()
+
 
             # Create organization
             org = Organization(
@@ -472,7 +485,7 @@ async def seed():
     print("\n" + "=" * 60)
     print("DEMO SEED COMPLETATO! (all data fictitious — RFC 2606 / 5737)")
     print("=" * 60)
-    print(f"\n10 demo organisations created. Common password: demo-only-do-not-deploy\n")
+    print(f"\n10 demo organisations created. Common password: {demo_password}\n")
     print(f"{'Organisation':<35} {'Sector':<20} {'Score':>5} {'Email'}")
     print("-" * 110)
     for c in COMPANIES:

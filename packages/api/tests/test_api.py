@@ -84,6 +84,26 @@ class TestAuth:
         resp = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid"})
         assert resp.status_code == 401
 
+    def test_user_update_avatar_url_validation(self):
+        from app.schemas.auth import UserUpdate
+        from pydantic import ValidationError
+        
+        # Valid URLs
+        UserUpdate(avatar_url="https://example.com/avatar.png")
+        UserUpdate(avatar_url="http://example.com/avatar.png")
+        UserUpdate(avatar_url="/avatars/user.png")
+        UserUpdate(avatar_url=None)
+        
+        # Invalid URLs
+        with pytest.raises(ValidationError):
+            UserUpdate(avatar_url="javascript:alert(1)")
+            
+        with pytest.raises(ValidationError):
+            UserUpdate(avatar_url="data:image/png;base64,abc")
+            
+        with pytest.raises(ValidationError):
+            UserUpdate(avatar_url="ftp://example.com/avatar.png")
+
 
 # ---------------------------------------------------------------------------
 # Protected Endpoints — Auth Required
@@ -286,3 +306,34 @@ class TestOpenAPI:
         assert "/api/v1/governance" in paths
         assert "/api/v1/api-keys" in paths
         assert "/api/v1/reports/generate" in paths
+
+
+# ---------------------------------------------------------------------------
+# MCP Rate Limiting
+# ---------------------------------------------------------------------------
+
+class TestMcpRateLimit:
+    def test_mcp_call_rate_limit(self, client, app):
+        from app.dependencies import get_current_user_org
+        from app.routers.auth import limiter
+        import uuid
+
+        # Override auth dependency to bypass DB lookup and return a fake user & org UUID
+        app.dependency_overrides[get_current_user_org] = lambda: (None, uuid.uuid4())
+
+        limiter.enabled = True
+        try:
+            # We are allowed 20 calls per minute.
+            # Make 20 successful calls.
+            for _ in range(20):
+                resp = client.post("/api/v1/mcp/call", json={"name": "list_governance_items"})
+                assert resp.status_code == 200, resp.text
+
+            # The 21st call should trigger 429 Too Many Requests
+            resp = client.post("/api/v1/mcp/call", json={"name": "list_governance_items"})
+            assert resp.status_code == 429
+        finally:
+            limiter.enabled = False
+            if get_current_user_org in app.dependency_overrides:
+                del app.dependency_overrides[get_current_user_org]
+

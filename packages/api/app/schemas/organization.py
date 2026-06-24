@@ -48,6 +48,10 @@ class MemberResponse(BaseModel):
     accepted_at: Optional[datetime] = None
     user: Optional[UserResponse] = None
     created_at: datetime
+    # v2.5.6: only populated in the POST /members (invite) response.
+    # The raw invite token that the admin must share with the invitee.
+    # Never returned on GET /members or other member endpoints.
+    invite_token: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

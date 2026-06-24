@@ -115,8 +115,18 @@ export default function TeamPage() {
 
   const onSubmit = async (data: InviteForm) => {
     try {
-      await inviteMember.mutateAsync(data)
-      toast.success(t("invitationSent", { email: data.email }))
+      const result = await inviteMember.mutateAsync(data)
+      // v2.5.6: the API now returns an invite_token that the admin
+      // must share with the invitee.  Show it in a persistent toast.
+      const token = result?.invite_token
+      if (token) {
+        toast.success(t("invitationSent", { email: data.email }), {
+          description: `${t("inviteToken")}: ${token}`,
+          duration: Infinity,
+        })
+      } else {
+        toast.success(t("invitationSent", { email: data.email }))
+      }
       reset()
       setDialogOpen(false)
     } catch (err: any) {

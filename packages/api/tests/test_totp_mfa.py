@@ -107,3 +107,46 @@ def test_mfa_required_response_schema():
     resp = MFARequiredResponse(mfa_required=True, partial=True)
     assert resp.mfa_required is True
     assert resp.partial is True
+
+
+# ---------------------------------------------------------------------------
+# TOTP Encryption / Decryption
+# ---------------------------------------------------------------------------
+
+def test_totp_encryption_and_decryption():
+    from app.utils.crypto import encrypt_totp_secret, decrypt_totp_secret
+    secret = "JBSWY3DPEHPK3PXP"
+    encrypted = encrypt_totp_secret(secret)
+    
+    # Verify it is encrypted (not equal to original secret)
+    assert encrypted != secret
+    # Verify we can decrypt it back
+    decrypted = decrypt_totp_secret(encrypted)
+    assert decrypted == secret
+
+def test_totp_backward_compatibility_with_cleartext():
+    from app.utils.crypto import decrypt_totp_secret
+    # A cleartext secret should be returned as-is
+    legacy_secret = "JBSWY3DPEHPK3PXP"
+    decrypted = decrypt_totp_secret(legacy_secret)
+    assert decrypted == legacy_secret
+
+def test_user_model_encryption_integration():
+    from app.models.user import User
+    
+    user = User(email="test@example.com")
+    secret = "JBSWY3DPEHPK3PXP"
+    
+    # Assign cleartext secret
+    user.totp_secret = secret
+    
+    # Verify property getter decrypts it correctly
+    assert user.totp_secret == secret
+    # Verify underlying mapped field stores it in encrypted format
+    assert user.totp_secret_encrypted != secret
+    
+    # Verify we can load a user with a legacy cleartext secret
+    legacy_user = User(email="legacy@example.com")
+    legacy_user.totp_secret_encrypted = secret  # set raw DB column directly
+    assert legacy_user.totp_secret == secret  # should decrypt as legacy cleartext
+

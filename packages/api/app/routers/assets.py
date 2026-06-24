@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import dual_auth_with_scope, get_current_org
+from app.dependencies import dual_auth_with_scope, get_current_org, require_role
 from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
 from app.models.membership import Membership
@@ -55,7 +55,7 @@ async def list_assets(
     )
 
 
-@router.post("", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AssetResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin", "auditor"))])
 @limiter.limit("20/minute")
 async def create_asset(
     request: Request,
@@ -124,7 +124,7 @@ async def get_asset(
     return AssetResponse.model_validate(asset)
 
 
-@router.patch("/{asset_id}", response_model=AssetResponse)
+@router.patch("/{asset_id}", response_model=AssetResponse, dependencies=[Depends(require_role("admin", "auditor"))])
 async def update_asset(
     asset_id: uuid.UUID,
     payload: AssetUpdate,
@@ -138,8 +138,44 @@ async def update_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    if "target_type" in update_data or "target_value" in update_data:
+        new_type = update_data.get("target_type") or asset.target_type
+        new_val = update_data.get("target_value") or asset.target_value
+
+        if new_type != asset.target_type or new_val != asset.target_value:
+            existing = await db.execute(
+                select(Asset).where(
+                    Asset.organization_id == membership.organization_id,
+                    Asset.target_type == new_type,
+                    Asset.target_value == new_val,
+                    Asset.id != asset.id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Asset with this target already exists in your organization",
+                )
+
+        try:
+            validation = await validate_target_pinned(new_type, new_val)
+            asset.target_type = new_type
+            asset.target_value = validation.target_value
+            asset.pinned_ip = validation.pinned_ip
+        except TargetValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e),
+            )
+
+        update_data.pop("target_type", None)
+        update_data.pop("target_value", None)
+
+    allowed_fields = {"name", "target_type", "target_value", "tags", "is_active"}
     for field, value in update_data.items():
-        setattr(asset, field, value)
+        if field in allowed_fields:
+            setattr(asset, field, value)
     await db.flush()
 
     await log_action(
@@ -155,7 +191,7 @@ async def update_asset(
     return AssetResponse.model_validate(asset)
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("admin"))])
 async def delete_asset(
     asset_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -181,7 +217,7 @@ async def delete_asset(
     await db.flush()
 
 
-@router.post("/import", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/import", response_model=dict, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin"))])
 @limiter.limit("5/minute")
 async def import_assets_csv(
     request: Request,

@@ -27,6 +27,7 @@ class Config:
     # CLI users without pre-resolution leave this empty and the scanner
     # falls back to live DNS lookup.
     pinned_ips: dict = field(default_factory=dict)
+    allow_private_ips: bool = False
 
     @classmethod
     def load(cls, path: str, max_hosts: int = 0, dry_run: bool = False) -> "Config":
@@ -54,5 +55,8 @@ class Config:
             compliance_profile=data.get('compliance_profile', 'default'),
             max_hosts=final_max_hosts,
             dry_run=dry_run,
-            features=data.get('features', {})
+            features=data.get('features', {}),
+            pinned_ips=data.get('pinned_ips', {}),
+            allow_private_ips=data.get('allow_private_ips', False),
         )
+

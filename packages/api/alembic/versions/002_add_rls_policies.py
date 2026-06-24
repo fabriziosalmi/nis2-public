@@ -41,7 +41,8 @@ TENANT_TABLES: list[str] = [
 
 RLS_PREDICATE = (
     "(organization_id::text = current_setting('app.current_org_id', true) "
-    "OR current_setting('app.bypass_rls', true) = 'on')"
+    "OR (current_setting('app.current_user_id', true) IS NOT NULL AND "
+    "organization_id::text IN (SELECT organization_id::text FROM memberships WHERE user_id::text = current_setting('app.current_user_id', true))))"
 )
 
 

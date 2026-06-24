@@ -39,6 +39,7 @@ import redis as redis_sync
 
 from app.config import settings
 from app.tasks.celery_app import celery_app
+from app.utils.target_validator import validate_url_against_ssrf
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,13 @@ async def _dispatch_webhook(client: httpx.AsyncClient, channel, payload: dict) -
         logger.warning("incident_tasks: webhook channel %r has no 'url' in config", channel.name)
         return False
 
+    # Validate against SSRF
+    try:
+        await validate_url_against_ssrf(url)
+    except Exception as exc:
+        logger.warning("incident_tasks: webhook %r blocked by SSRF: %s", channel.name, exc)
+        return False
+
     body_bytes = json.dumps(payload).encode()
 
     headers = {"Content-Type": "application/json", "X-NIS2-Event": "incident.deadline"}
@@ -337,6 +345,13 @@ async def _dispatch_slack(client: httpx.AsyncClient, channel, payload: dict) -> 
     webhook_url = cfg.get("webhook_url")
     if not webhook_url:
         logger.warning("incident_tasks: slack channel %r has no 'webhook_url' in config", channel.name)
+        return False
+
+    # Validate against SSRF
+    try:
+        await validate_url_against_ssrf(webhook_url)
+    except Exception as exc:
+        logger.warning("incident_tasks: slack channel %r blocked by SSRF: %s", channel.name, exc)
         return False
 
     alert_type = payload["alert_type"]

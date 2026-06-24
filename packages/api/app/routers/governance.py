@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, require_role
 from app.models.base import TimestampMixin
 from app.models.finding import Finding
 from app.models.membership import Membership
@@ -90,6 +90,20 @@ class GovernanceItemUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern="^(not_started|in_progress|done|not_applicable)$")
     assigned_to_name: Optional[str] = None
     evidence_notes: Optional[str] = None
+
+
+class GovernanceBulkUpdateItem(BaseModel):
+    """v2.5.6 security fix: typed schema replacing raw list[dict].
+    Validates UUID, constrains status to valid values, limits field lengths."""
+    id: uuid.UUID
+    status: Optional[str] = Field(None, pattern="^(not_started|in_progress|done|not_applicable)$")
+    assigned_to_name: Optional[str] = Field(None, max_length=256)
+    evidence_notes: Optional[str] = Field(None, max_length=10000)
+
+
+class GovernanceBulkUpdateRequest(BaseModel):
+    """Wrapper with max batch size to prevent abuse."""
+    items: list[GovernanceBulkUpdateItem] = Field(..., max_length=100)
 
 class GovernanceListResponse(BaseModel):
     items: list[GovernanceItemResponse]
@@ -197,15 +211,13 @@ async def list_governance_items(
         total=total, stats=stats,
     )
 
-@router.post("/seed", response_model=GovernanceSeedResponse)
+@router.post("/seed", response_model=GovernanceSeedResponse, dependencies=[Depends(require_role("admin"))])
 async def seed_governance(
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ) -> GovernanceSeedResponse:
     """Initialize the 30-item governance checklist for this organization."""
     user, membership = current_org
-    if membership.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can seed governance checklist")
     org_id = membership.organization_id
 
     # Check if already seeded
@@ -231,7 +243,7 @@ async def seed_governance(
     await db.flush()
     return GovernanceSeedResponse(created=len(CHECKLIST_TEMPLATE), message="30 governance items created")
 
-@router.patch("/{item_id}", response_model=GovernanceItemResponse)
+@router.patch("/{item_id}", response_model=GovernanceItemResponse, dependencies=[Depends(require_role("admin", "auditor"))])
 async def update_governance_item(
     item_id: uuid.UUID,
     payload: GovernanceItemUpdate,
@@ -248,26 +260,29 @@ async def update_governance_item(
     await db.flush()
     return GovernanceItemResponse.model_validate(item)
 
-@router.post("/bulk-update")
+@router.post("/bulk-update", dependencies=[Depends(require_role("admin", "auditor"))])
 async def bulk_update_governance(
-    updates: list[dict],
+    payload: GovernanceBulkUpdateRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ):
-    """Bulk update multiple governance items at once."""
+    """Bulk update multiple governance items at once.
+
+    v2.5.6: accepts a typed GovernanceBulkUpdateRequest instead of raw
+    list[dict].  Each item's id is validated as UUID, status is
+    constrained to the 4 valid values, and string fields have length
+    limits.  Max 100 items per request.
+    """
     user, membership = current_org
     org_id = membership.organization_id
     updated = 0
-    for upd in updates:
-        gid = upd.get("id")
-        if not gid:
-            continue
-        item = await db.get(GovernanceItem, uuid.UUID(gid))
+    for upd in payload.items:
+        item = await db.get(GovernanceItem, upd.id)
         if not item or item.organization_id != org_id:
             continue
-        for field in ("status", "assigned_to_name", "evidence_notes"):
-            if field in upd:
-                setattr(item, field, upd[field])
+        update_data = upd.model_dump(exclude={"id"}, exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(item, field, value)
         updated += 1
     await db.flush()
     return {"updated": updated}
@@ -531,7 +546,7 @@ async def risk_summary(
     }
 
 
-@router.post("/sync-risk")
+@router.post("/sync-risk", dependencies=[Depends(require_role("admin", "auditor"))])
 async def sync_risk(
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
@@ -551,8 +566,6 @@ async def sync_risk(
     Returns a summary of every item that was updated.
     """
     user, membership = current_org
-    if membership.role not in ("admin", "auditor"):
-        raise HTTPException(status_code=403, detail="Only admins and auditors can sync risk signals")
 
     org_id = membership.organization_id
 

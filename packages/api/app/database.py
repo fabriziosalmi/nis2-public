@@ -84,7 +84,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     # Imported lazily to avoid a circular import (middleware/identity ->
     # app.utils.jwt -> app.config -> app.database -> ...).
-    from app.middleware.identity import current_org_id
+    from app.middleware.identity import current_org_id, current_user_id
 
     async with async_session_factory() as session:
         try:
@@ -97,6 +97,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
                     await session.execute(
                         text("SELECT set_config('app.current_org_id', :v, true)"),
                         {"v": str(org)},
+                    )
+                uid = current_user_id.get()
+                if uid is not None:
+                    await session.execute(
+                        text("SELECT set_config('app.current_user_id', :v, true)"),
+                        {"v": str(uid)},
                     )
             yield session
             await session.commit()
@@ -163,7 +169,8 @@ async def ensure_schema() -> None:
 
 _RLS_PREDICATE = (
     "(organization_id::text = current_setting('app.current_org_id', true) "
-    "OR current_setting('app.bypass_rls', true) = 'on')"
+    "OR (current_setting('app.current_user_id', true) IS NOT NULL AND "
+    "organization_id::text IN (SELECT organization_id::text FROM memberships WHERE user_id::text = current_setting('app.current_user_id', true))))"
 )
 
 

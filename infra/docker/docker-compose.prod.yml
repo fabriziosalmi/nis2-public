@@ -78,6 +78,8 @@ services:
       context: ../..
       dockerfile: packages/api/Dockerfile
     command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    volumes:
+      - reports-data:/tmp/nis2-reports
     env_file: ../../.env
     depends_on:
       postgres: { condition: service_healthy }
@@ -99,6 +101,8 @@ services:
       context: ../..
       dockerfile: packages/api/Dockerfile
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - reports-data:/tmp/nis2-reports
     env_file: ../../.env
     depends_on:
       postgres: { condition: service_healthy }
@@ -177,7 +181,15 @@ services:
     volumes:
       - ../../prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports: ["9099:9090"]
+    # v2.5.6 security fix: removed `ports: ["9099:9090"]`.  Prometheus
+    # has NO built-in authentication — exposing it on a host port let
+    # anyone on the network read internal service names, Docker DNS
+    # topology, and operational metrics (request rates, error counts,
+    # latency distributions).  Prometheus is now reachable ONLY within
+    # the Docker network (nis2-net) — Grafana or alertmanager connect
+    # via `http://prometheus:9090`.  If external access is needed,
+    # route through Caddy with basic_auth.
+    expose: ["9090"]
     restart: unless-stopped
     networks: [nis2-net]
 
@@ -187,6 +199,7 @@ volumes:
   caddy_config:
   prometheus_data:
   celerybeat_data:
+  reports-data:
 
 networks:
   nis2-net:

@@ -231,6 +231,7 @@ async def download_report(
         raise HTTPException(status_code=404, detail="Report file not found")
 
     import os
+    from fastapi.responses import StreamingResponse
 
     # P0-06 audit fix: path traversal guard. `file_path` comes from
     # the Celery result backend (Redis). If an attacker poisons a
@@ -240,20 +241,38 @@ async def download_report(
     # FileResponse serve it. We resolve to an absolute, symlink-free
     # path and verify it lives under the expected REPORTS_DIR.
     from app.tasks.report_tasks import REPORTS_DIR
+    real_base_dir = os.path.realpath(REPORTS_DIR)
+    expected_org_dir = os.path.join(real_base_dir, str(membership.organization_id))
     real_path = os.path.realpath(file_path)
-    real_reports_dir = os.path.realpath(REPORTS_DIR)
-    if not real_path.startswith(real_reports_dir + os.sep) and real_path != real_reports_dir:
+    if not real_path.startswith(expected_org_dir + os.sep) and real_path != expected_org_dir:
         logger.warning(
             "Path traversal blocked: file_path=%r resolved to %r (outside %r)",
-            file_path, real_path, real_reports_dir,
+            file_path, real_path, expected_org_dir,
         )
         raise HTTPException(status_code=404, detail="Report file not found")
 
-    if not os.path.exists(real_path):
-        raise HTTPException(status_code=404, detail="Report file no longer available")
+    try:
+        # P0-06 + race condition / symlink fix: open with O_NOFOLLOW to block symlinks at open time
+        fd = os.open(real_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as exc:
+        logger.warning("Failed to open report file %r: %s", real_path, exc)
+        raise HTTPException(status_code=404, detail="Report file not found")
 
-    return FileResponse(
-        path=real_path,
-        filename=filename,
+    try:
+        stat_result = os.fstat(fd)
+        file_size = stat_result.st_size
+    except OSError as exc:
+        os.close(fd)
+        logger.warning("Failed to stat fd for %r: %s", real_path, exc)
+        raise HTTPException(status_code=404, detail="Report file not found")
+
+    file_like = os.fdopen(fd, "rb")
+
+    return StreamingResponse(
+        file_like,
         media_type=content_type,
+        headers={
+            "Content-Length": str(file_size),
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        }
     )

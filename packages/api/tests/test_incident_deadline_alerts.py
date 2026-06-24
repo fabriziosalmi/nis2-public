@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
+import pytest
 
 
 from app.tasks.incident_tasks import (
@@ -188,3 +189,66 @@ class TestSyntheticEmailChannel:
     def test_name_contains_email(self) -> None:
         ch = _synthetic_email_channel("admin@example.com")
         assert "admin@example.com" in ch.name
+
+
+# ---------------------------------------------------------------------------
+# SSRF webhook protection
+# ---------------------------------------------------------------------------
+
+class TestWebhookSsrfProtection:
+    @pytest.mark.asyncio
+    async def test_validate_url_against_ssrf_helper(self) -> None:
+        from app.utils.target_validator import validate_url_against_ssrf, TargetValidationError
+        
+        # Valid public URLs should pass
+        await validate_url_against_ssrf("https://google.com/webhook")
+        
+        # Invalid / private hostnames should raise TargetValidationError
+        with pytest.raises(TargetValidationError):
+            await validate_url_against_ssrf("http://localhost/webhook")
+            
+        with pytest.raises(TargetValidationError):
+            await validate_url_against_ssrf("http://127.0.0.1/webhook")
+            
+        with pytest.raises(TargetValidationError):
+            await validate_url_against_ssrf("http://169.254.169.254/latest/meta-data/")
+
+    @pytest.mark.asyncio
+    async def test_dispatch_webhook_blocks_ssrf(self) -> None:
+        from app.tasks.incident_tasks import _dispatch_webhook
+        import httpx
+        
+        # Create a mock channel with a private URL
+        class FakeChannel:
+            name = "Private Webhook"
+            channel_type = "webhook"
+            config = {"url": "http://localhost/webhook"}
+            
+        client = MagicMock(spec=httpx.AsyncClient)
+        # Should return False and not make any HTTP calls
+        ok = await _dispatch_webhook(client, FakeChannel(), {})
+        assert ok is False
+        client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_slack_blocks_ssrf(self) -> None:
+        from app.tasks.incident_tasks import _dispatch_slack
+        import httpx
+        
+        # Create a mock channel with a private Slack webhook URL
+        class FakeChannel:
+            name = "Private Slack"
+            channel_type = "slack"
+            config = {"webhook_url": "http://127.0.0.1/slack"}
+            
+        client = MagicMock(spec=httpx.AsyncClient)
+        # Should return False and not make any HTTP calls
+        ok = await _dispatch_slack(client, FakeChannel(), {
+            "alert_type": "approaching",
+            "subject": "Alert",
+            "body": "Body",
+            "article_ref": "Ref"
+        })
+        assert ok is False
+        client.post.assert_not_called()
+

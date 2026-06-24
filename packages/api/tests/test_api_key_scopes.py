@@ -185,9 +185,10 @@ class TestScopeEnforcement:
         assert "scan:read" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_legacy_key_with_none_scopes_passes(self) -> None:
-        """Legacy API keys (scopes=None, pre-2.4.26) are unrestricted."""
+    async def test_legacy_key_with_none_scopes_fails(self) -> None:
+        """Legacy API keys (scopes=None, pre-2.4.26) are treated as empty list and fail."""
         from unittest.mock import AsyncMock, MagicMock, patch
+        from fastapi import HTTPException
 
         api_key = self._make_api_key(None)
         org_id = api_key.organization_id
@@ -204,9 +205,10 @@ class TestScopeEnforcement:
         ):
             from app.dependencies import _resolve_dual_auth
 
-            result = await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
+            with pytest.raises(HTTPException) as exc_info:
+                await _resolve_dual_auth(req, creds, db, required_scope="scan:read")
 
-        assert result == org_id
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_cookie_session_bypasses_scope_check(self) -> None:

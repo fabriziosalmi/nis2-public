@@ -174,8 +174,10 @@ async def update_organization(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    allowed_fields = {"name", "settings"}
     for field, value in update_data.items():
-        setattr(org, field, value)
+        if field in allowed_fields:
+            setattr(org, field, value)
     await db.flush()
 
     return OrgResponse.model_validate(org)
@@ -220,6 +222,18 @@ async def invite_member(
     result = await db.execute(select(User).where(User.email == payload.email))
     target_user = result.scalar_one_or_none()
 
+    # ── Generate invite token ───────────────────────────────────────
+    # 32 bytes → 64-char hex string.  Cryptographically random.
+    # Only the SHA-256 hash is stored in the DB; the raw token goes
+    # to the admin for sharing with the invitee.
+    import hashlib
+    import secrets
+    from datetime import timedelta
+
+    raw_token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_expires = datetime.now(timezone.utc) + timedelta(hours=48)
+
     if not target_user:
         # P0-02 audit fix: create with is_active=False. The invited user
         # must complete registration (set a password) before they can
@@ -233,8 +247,16 @@ async def invite_member(
             email=payload.email,
             full_name=payload.email.split("@")[0],  # placeholder name
             is_active=False,
+            invite_token_hash=token_hash,
+            invite_token_expires_at=token_expires,
         )
         db.add(target_user)
+        await db.flush()
+    else:
+        # Existing user being re-invited (e.g. to a different org) or
+        # an expired invite being refreshed — update the token.
+        target_user.invite_token_hash = token_hash
+        target_user.invite_token_expires_at = token_expires
         await db.flush()
 
     # Check if already a member
@@ -276,7 +298,12 @@ async def invite_member(
     )
     new_membership = result.scalar_one()
 
-    return MemberResponse.model_validate(new_membership)
+    resp = MemberResponse.model_validate(new_membership)
+    # Attach the raw invite token so the admin can share it with the
+    # invitee.  This is the ONLY time the raw token is ever exposed;
+    # subsequent GET /members calls will not include it.
+    resp.invite_token = raw_token
+    return resp
 
 
 @router.patch("/{org_id}/members/{member_id}", response_model=MemberResponse)

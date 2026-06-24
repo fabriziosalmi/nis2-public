@@ -28,11 +28,23 @@ async def seed():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    import os
+    import secrets
+    env = os.environ.get("ENVIRONMENT", "development")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if not admin_password:
+        if env == "production":
+            raise RuntimeError(
+                "Refusing to seed in production without a custom ADMIN_PASSWORD environment variable set."
+            )
+        admin_password = secrets.token_urlsafe(16)
+        print(f"[WARNING] No ADMIN_PASSWORD env var set. Generated a secure random admin password: {admin_password}")
+
     async with async_session_factory() as db:
         # Demo user
         user = User(
             email="admin@nis2.local",
-            password_hash=pwd_context.hash("admin123"),
+            password_hash=pwd_context.hash(admin_password),
             full_name="NIS2 Admin",
             email_verified=True,
             is_active=True,
@@ -167,7 +179,7 @@ async def seed():
 
         await db.commit()
         print("Seed data created successfully!")
-        print(f"  User: admin@nis2.local / admin123")
+        print(f"  User: admin@nis2.local / {admin_password}")
         print(f"  Org: NIS2 Demo Corp ({org.id})")
         print(f"  Assets: {len(assets)}")
         print(f"  Scans: 1")

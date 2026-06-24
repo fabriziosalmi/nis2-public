@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import dual_auth_with_scope, get_current_org
+from app.dependencies import dual_auth_with_scope, get_current_org, require_role
 from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User
@@ -131,7 +131,7 @@ async def get_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.patch("/{finding_id}", response_model=FindingResponse)
+@router.patch("/{finding_id}", response_model=FindingResponse, dependencies=[Depends(require_role("admin", "auditor"))])
 async def update_finding(
     finding_id: uuid.UUID,
     payload: FindingUpdate,
@@ -166,7 +166,7 @@ async def update_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/bulk-update", response_model=dict)
+@router.post("/bulk-update", response_model=dict, dependencies=[Depends(require_role("admin", "auditor"))])
 async def bulk_update_findings(
     payload: BulkFindingUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),

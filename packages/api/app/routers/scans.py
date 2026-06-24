@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import dual_auth_with_scope, get_current_org
+from app.dependencies import dual_auth_with_scope, get_current_org, require_role
 from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
 from app.models.finding import Finding
@@ -65,7 +65,7 @@ async def list_scans(
     )
 
 
-@router.post("", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ScanResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin", "auditor"))])
 @limiter.limit("10/minute")
 async def create_scan(
     request: Request,
@@ -253,7 +253,7 @@ async def get_scan_findings(
     )
 
 
-@router.post("/{scan_id}/cancel", response_model=ScanResponse)
+@router.post("/{scan_id}/cancel", response_model=ScanResponse, dependencies=[Depends(require_role("admin", "auditor"))])
 async def cancel_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -295,19 +295,13 @@ async def cancel_scan(
     return ScanResponse.model_validate(scan)
 
 
-@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("admin"))])
 async def delete_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     user, membership = current_org
-
-    if membership.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can delete scans",
-        )
 
     scan = await db.get(Scan, scan_id)
     if not scan or scan.organization_id != membership.organization_id:

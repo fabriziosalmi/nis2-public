@@ -65,8 +65,6 @@ pytestmark = pytest.mark.skipif(
 async def _bootstrap_async() -> None:
     """Drop and recreate the schema, then apply RLS policies."""
     async with engine.begin() as conn:
-        # We must bypass RLS to drop tables that have policies.
-        await conn.execute(text("SET LOCAL app.bypass_rls = 'on'"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     await setup_row_level_security()
@@ -134,7 +132,10 @@ def _async_run(coro):
 
 async def _select_audit_rows(org_id: uuid.UUID) -> list[AuditLog]:
     async with async_session_factory() as session:
-        await session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :v, true)"),
+            {"v": str(org_id)},
+        )
         result = await session.execute(
             select(AuditLog).where(AuditLog.organization_id == org_id)
         )
@@ -143,7 +144,6 @@ async def _select_audit_rows(org_id: uuid.UUID) -> list[AuditLog]:
 
 async def _count_revoked_tokens() -> int:
     async with async_session_factory() as session:
-        await session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
         result = await session.execute(select(RevokedToken))
         return len(list(result.scalars().all()))
 
@@ -215,23 +215,29 @@ class TestRowLevelSecurity:
             "disabled."
         )
 
-    def test_bypass_rls_admin_path_works(self, fresh_client):
-        """Admin / migration path must still see all rows when
-        app.bypass_rls = 'on' is explicitly set."""
-        _register_org(fresh_client, "bypass-rls")
+    def test_user_id_membership_access_path_works(self, fresh_client):
+        """A user must still see all rows belonging to their organizations when
+        app.current_user_id is set to their user ID."""
+        from app.models.user import User
+        _register_org(fresh_client, "user-access")
         fresh_client.post(
             "/api/v1/assets",
             json={
                 "name": "x",
                 "target_type": "domain",
-                "target_value": "bypass-rls-example.com",
+                "target_value": "user-access-example.com",
             },
             headers=_csrf_headers(fresh_client),
         )
 
         async def _query():
             async with async_session_factory() as session:
-                await session.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+                user_res = await session.execute(select(User).limit(1))
+                user = user_res.scalar_one()
+                await session.execute(
+                    text("SELECT set_config('app.current_user_id', :v, true)"),
+                    {"v": str(user.id)},
+                )
                 result = await session.execute(text("SELECT COUNT(*) FROM assets"))
                 return result.scalar()
 

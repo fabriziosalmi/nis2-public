@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CopyToClipboard } from "@/components/ui/copy-to-clipboard"
+import { SafeHtml } from "@/components/ui/safe-html"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -245,9 +246,9 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             <Card>
               <CardHeader><CardTitle>{t("executiveSummary")}</CardTitle></CardHeader>
               <CardContent>
-                <div 
+                <SafeHtml 
+                  html={scan.executive_summary}
                   className="text-sm text-muted-foreground leading-relaxed space-y-4 [&>div]:mb-4" 
-                  dangerouslySetInnerHTML={{ __html: scan.executive_summary }} 
                 />
               </CardContent>
             </Card>

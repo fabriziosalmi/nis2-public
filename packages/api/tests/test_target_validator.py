@@ -137,3 +137,19 @@ class TestValidateTarget:
     def test_unknown_type(self):
         with pytest.raises(TargetValidationError, match="Unknown target type"):
             validate_target("unknown", "value")
+
+
+class TestValidateDomainPinned:
+    @pytest.mark.asyncio
+    async def test_validate_domain_pinned_resolves(self):
+        from app.utils.target_validator import validate_domain_pinned
+        res = await validate_domain_pinned("example.com")
+        assert res.target_value == "example.com"
+        assert res.pinned_ip is not None
+
+    @pytest.mark.asyncio
+    async def test_validate_domain_pinned_fails_unresolvable(self):
+        from app.utils.target_validator import validate_domain_pinned
+        with pytest.raises(TargetValidationError, match="Could not resolve domain|DNS resolution failed"):
+            await validate_domain_pinned("this-domain-does-not-exist-at-all-xyz.com")
+

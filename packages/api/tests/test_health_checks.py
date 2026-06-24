@@ -105,7 +105,7 @@ class TestReadinessLogic:
 
     def test_all_ok_returns_200_and_ok_status(self) -> None:
         import asyncio
-        result, status = asyncio.get_event_loop().run_until_complete(
+        result, status = asyncio.run(
             self._call_ready(db_ok=True, redis_ok=True, celery_workers=1)
         )
         assert result["status"] == "ok"
@@ -113,7 +113,7 @@ class TestReadinessLogic:
 
     def test_db_error_returns_503(self) -> None:
         import asyncio
-        result, status = asyncio.get_event_loop().run_until_complete(
+        result, status = asyncio.run(
             self._call_ready(db_ok=False, redis_ok=True, celery_workers=1)
         )
         assert result["status"] == "degraded"
@@ -121,7 +121,7 @@ class TestReadinessLogic:
 
     def test_redis_error_returns_503(self) -> None:
         import asyncio
-        result, status = asyncio.get_event_loop().run_until_complete(
+        result, status = asyncio.run(
             self._call_ready(db_ok=True, redis_ok=False, celery_workers=1)
         )
         assert result["status"] == "degraded"
@@ -129,7 +129,7 @@ class TestReadinessLogic:
 
     def test_no_celery_workers_is_degraded_not_error(self) -> None:
         import asyncio
-        result, status = asyncio.get_event_loop().run_until_complete(
+        result, status = asyncio.run(
             self._call_ready(db_ok=True, redis_ok=True, celery_workers=0)
         )
         # No workers → degraded, but NOT a hard 503 (workers may be idle)
@@ -138,7 +138,7 @@ class TestReadinessLogic:
 
     def test_checks_dict_has_all_three_keys(self) -> None:
         import asyncio
-        result, _ = asyncio.get_event_loop().run_until_complete(
+        result, _ = asyncio.run(
             self._call_ready(db_ok=True, redis_ok=True, celery_workers=1)
         )
         assert "database" in result["checks"]

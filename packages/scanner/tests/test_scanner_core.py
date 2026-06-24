@@ -57,5 +57,49 @@ class TestScannerCore(unittest.TestCase):
         self.assertIn(80, result.open_ports)
         self.assertTrue(result.is_alive)
 
+class TestScannerSsrf(unittest.TestCase):
+    def test_private_ips_blocked_by_default(self):
+        config = Config(
+            targets=Targets(ip_ranges=["127.0.0.1", "192.168.1.1"]),
+            features={}
+        )
+        # allow_private_ips should be False by default
+        self.assertFalse(config.allow_private_ips)
+        
+        scanner = Scanner(config)
+        
+        # Test CIDR/IP resolution filtering
+        loop = asyncio.new_event_loop()
+        try:
+            res_ip = loop.run_until_complete(scanner.resolve_target("127.0.0.1"))
+            self.assertEqual(res_ip, [])
+            
+            res_cidr = loop.run_until_complete(scanner.resolve_target("192.168.1.0/24"))
+            self.assertEqual(res_cidr, [])
+        finally:
+            loop.close()
+
+    def test_private_ips_allowed_when_configured(self):
+        config = Config(
+            targets=Targets(ip_ranges=["127.0.0.1", "192.168.1.1"]),
+            features={},
+            allow_private_ips=True
+        )
+        self.assertTrue(config.allow_private_ips)
+        
+        scanner = Scanner(config)
+        
+        loop = asyncio.new_event_loop()
+        try:
+            res_ip = loop.run_until_complete(scanner.resolve_target("127.0.0.1"))
+            self.assertEqual(res_ip, ["127.0.0.1"])
+            
+            res_cidr = loop.run_until_complete(scanner.resolve_target("192.168.1.1"))
+            self.assertEqual(res_cidr, ["192.168.1.1"])
+        finally:
+            loop.close()
+
+
 if __name__ == '__main__':
     unittest.main()
+

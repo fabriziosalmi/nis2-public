@@ -91,7 +91,7 @@ async def _resolve_first_public_ip(domain: str) -> Optional[str]:
     is private/blocked — the caller must reject the target outright."""
     loop = asyncio.get_running_loop()
     try:
-        answers = await loop.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        answers = await loop.getaddrinfo(domain, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
     except socket.gaierror:
         return None
     public: list[str] = []
@@ -123,22 +123,22 @@ async def validate_domain_pinned(domain: str) -> ValidationResult:
             f"Invalid domain format: {domain}. Expected format: example.com"
         )
 
-    pinned_ip: Optional[str] = None
     try:
         pinned_ip = await _resolve_first_public_ip(domain)
     except TargetValidationError:
         raise
-    except Exception:
-        # Transient resolution failure — accept without a pin but log it
-        # so operators can detect systematic DNS issues or rebinding attempts.
-        import logging
-        logging.getLogger(__name__).warning(
-            "DNS resolution failed for %s — proceeding without IP pin (SSRF pin-drop)",
-            domain, exc_info=True,
+    except Exception as exc:
+        raise TargetValidationError(
+            f"DNS resolution failed for {domain}: {exc}"
         )
-        pinned_ip = None
+
+    if not pinned_ip:
+        raise TargetValidationError(
+            f"Could not resolve domain to a valid public IP: {domain}"
+        )
 
     return ValidationResult(target_value=domain, target_type="domain", pinned_ip=pinned_ip)
+
 
 
 def validate_ip(ip_str: str) -> str:
@@ -220,3 +220,21 @@ def _is_private_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         if ip in net:
             return True
     return False
+
+
+async def validate_url_against_ssrf(url_str: str) -> None:
+    """Validate a URL's host against private IP ranges and blocked domains to prevent SSRF."""
+    if not url_str:
+        raise TargetValidationError("Empty URL")
+    
+    parsed = urlparse(url_str)
+    hostname = parsed.hostname
+    if not hostname:
+        raise TargetValidationError(f"Invalid URL (no hostname): {url_str}")
+        
+    try:
+        ipaddress.ip_address(hostname)
+        validate_ip_pinned(hostname)
+    except ValueError:
+        await validate_domain_pinned(hostname)
+

@@ -134,10 +134,14 @@ def clean(force):
 @click.option('--limit', default=0, help='Max hosts to scan (0=unlimited).')
 @click.option('--dry-run', is_flag=True, help='List targets without scanning.')
 @click.option('--profile', default='default', help='Profile name for metrics (e.g. prod, dev).')
-def scan(config, output, limit, dry_run, profile):
+@click.option('--allow-private', is_flag=True, help='Allow scanning private IP addresses.')
+def scan(config, output, limit, dry_run, profile, allow_private):
     """Run the compliance scan."""
     try:
         cfg = Config.load(config, max_hosts=limit, dry_run=dry_run)
+        if allow_private:
+            cfg.allow_private_ips = True
+
         logger.info(f"Loaded configuration: {cfg.project_name}")
         logger.info(f"Targets: {len(cfg.targets.ip_ranges)} ranges, {len(cfg.targets.domains)} domains")
         if limit > 0:
@@ -252,7 +256,8 @@ def scan(config, output, limit, dry_run, profile):
 
 @cli.command()
 @click.option('--port', '-p', default=8000, help='Port to bind to.')
-def serve(port):
+@click.option('--host', '-h', default='127.0.0.1', help='Host to bind to.')
+def serve(port, host):
     """Serve the reports directory via HTTP with enhanced index page."""
     directory = "reports"
     if not os.path.exists(directory):
@@ -273,8 +278,9 @@ def serve(port):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=directory, **kwargs)
 
-    with socketserver.TCPServer(("", port), Handler) as httpd:
-        logger.info(f"Serving reports at http://0.0.0.0:{port}")
+    with socketserver.TCPServer((host, port), Handler) as httpd:
+        logger.info(f"Serving reports at http://{host}:{port}")
+
         logger.info("Press Ctrl+C to stop.")
         try:
             httpd.serve_forever()
@@ -289,6 +295,7 @@ def generate_index_page(directory):
     """Generate an enhanced index.html with report cards."""
     import json
     import glob
+    import html
     from datetime import datetime
 
     # Find all JSON reports
@@ -627,6 +634,12 @@ def generate_index_page(directory):
     for report in reports:
         score_class = 'good' if report['score'] >= 80 else 'warning' if report['score'] >= 50 else 'critical'
 
+        # Escape variables for safe HTML insertion
+        safe_html_file = html.escape(report['html_file'], quote=True)
+        safe_project_name = html.escape(report['project_name'])
+        safe_formatted_date = html.escape(report['formatted_date'])
+        safe_scan_id = html.escape(report['scan_id'])
+
         # Build severity badges
         severity_html = ''
         for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
@@ -635,13 +648,13 @@ def generate_index_page(directory):
                 severity_html += f'<span class="severity-badge {sev.lower()}">{count} {sev}</span>'
 
         html_content += f"""
-            <a href="{report['html_file']}" class="report-card">
+            <a href="{safe_html_file}" class="report-card">
                 <div class="card-header">
-                    <div class="project-name">{report['project_name']}</div>
+                    <div class="project-name">{safe_project_name}</div>
                     <div class="score-badge {score_class}">{report['score']}/100</div>
                 </div>
-                <div class="scan-date">📅 {report['formatted_date']}</div>
-                <div class="scan-id">ID: {report['scan_id']}</div>
+                <div class="scan-date">📅 {safe_formatted_date}</div>
+                <div class="scan-id">ID: {safe_scan_id}</div>
                 <div class="severity-badges">{severity_html if severity_html else '<span class="severity-badge low">0 ISSUES</span>'}</div>
                 <div class="card-stats">
                     <div class="card-stat">

@@ -17,9 +17,17 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    # v2.5.6 security fix: require a password even in dev.  Pre-fix,
+    # Redis was exposed on the host (0.0.0.0:6379) with NO auth — any
+    # local process could read/write Celery tasks, poison report
+    # results, or extract cached session data.  Now:
+    #   1. --requirepass is set (same REDIS_PASSWORD from .env)
+    #   2. Host port mapping is REMOVED — services talk via Docker DNS
+    # If you need a redis-cli session for debugging, use:
+    #   docker compose exec redis redis-cli -a "${REDIS_PASSWORD:-changeme}"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 5s
       retries: 5
 
@@ -29,8 +37,9 @@ services:
       dockerfile: packages/api/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ../../packages/api:/app/packages/api
-      - ../../packages/scanner:/app/packages/scanner
+      - ../../packages/api/app:/app/packages/api/app:ro
+      - ../../packages/api/alembic:/app/packages/api/alembic
+      - ../../packages/scanner/nis2scan:/app/packages/scanner/nis2scan:ro
       # v2.4.19: shared volume for generated reports. The Celery
       # worker writes the rendered file under /tmp/nis2-reports;
       # the API's GET /reports/download/{task_id} reads from the
@@ -71,8 +80,9 @@ services:
       dockerfile: packages/api/Dockerfile
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     volumes:
-      - ../../packages/api:/app/packages/api
-      - ../../packages/scanner:/app/packages/scanner
+      - ../../packages/api/app:/app/packages/api/app:ro
+      - ../../packages/api/alembic:/app/packages/api/alembic
+      - ../../packages/scanner/nis2scan:/app/packages/scanner/nis2scan:ro
       # Mirrors the api service so the worker's report writes are
       # visible to the api's download endpoint. See the api block.
       - reports-data:/tmp/nis2-reports

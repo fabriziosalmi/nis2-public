@@ -38,7 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user_org
+from app.dependencies import get_current_user_org, require_role
 from app.models.vendor import Vendor
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
@@ -376,7 +376,7 @@ async def get_vendor_score(
     )
 
 
-@router.post("/{vendor_id}/score/apply")
+@router.post("/{vendor_id}/score/apply", dependencies=[Depends(require_role("admin", "auditor"))])
 async def apply_vendor_score(
     vendor_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -440,7 +440,7 @@ async def list_vendors(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))])
 async def create_vendor(
     data: VendorCreate,
     db: AsyncSession = Depends(get_db),
@@ -531,7 +531,7 @@ async def get_vendor(
     return VendorOut.model_validate(vendor)
 
 
-@router.patch("/{vendor_id}")
+@router.patch("/{vendor_id}", dependencies=[Depends(require_role("admin", "auditor"))])
 async def update_vendor(
     vendor_id: uuid.UUID,
     data: VendorUpdate,
@@ -556,7 +556,7 @@ async def update_vendor(
     return VendorOut.model_validate(vendor)
 
 
-@router.delete("/{vendor_id}", status_code=204)
+@router.delete("/{vendor_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 async def delete_vendor(
     vendor_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

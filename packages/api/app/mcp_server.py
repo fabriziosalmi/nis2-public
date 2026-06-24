@@ -134,7 +134,7 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
         from app.utils.target_validator import validate_domain_pinned, TargetValidationError
         domain = arguments.get("domain", "")
         try:
-            validate_domain_pinned(domain)
+            await validate_domain_pinned(domain)
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
 
@@ -170,7 +170,7 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
                 _ipaddress.ip_address(target)
                 validate_ip_pinned(target)
             except ValueError:
-                validate_domain_pinned(target)
+                await validate_domain_pinned(target)
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
 
@@ -335,6 +335,9 @@ def run_mcp_stdio():
 # target. Without limits a single client could saturate every Celery
 # worker.
 
+from fastapi import APIRouter, Depends, Request
+from app.routers.auth import limiter
+
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
@@ -347,8 +350,10 @@ async def list_tools(
 
 
 @router.post("/call")
+@limiter.limit("20/minute")
 async def call_tool(
-    request: dict,
+    request: Request,
+    payload: dict,
     auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
 ):
     """Execute an MCP tool call via HTTP.
@@ -357,8 +362,8 @@ async def call_tool(
     client receives a generic error string. Pre-fix, ``str(e)`` leaked
     filesystem paths, connection-string fragments, and table names.
     """
-    name = request.get("name", "")
-    arguments = request.get("arguments", {})
+    name = payload.get("name", "")
+    arguments = payload.get("arguments", {})
     if not name:
         return {"error": "Missing tool name"}
     try:

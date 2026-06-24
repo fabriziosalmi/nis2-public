@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user_org
+from app.dependencies import get_current_user_org, require_role
 from app.models.bia import BusinessProcess
 
 router = APIRouter(prefix="/bia", tags=["bia"])
@@ -96,7 +96,7 @@ async def list_processes(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))])
 async def create_process(
     data: ProcessCreate,
     db: AsyncSession = Depends(get_db),
@@ -185,7 +185,7 @@ async def get_process(
     return ProcessOut.model_validate(process)
 
 
-@router.delete("/{process_id}", status_code=204)
+@router.delete("/{process_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 async def delete_process(
     process_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

@@ -17,6 +17,8 @@ class AssetCreate(BaseModel):
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=256)
+    target_type: Optional[str] = Field(None, pattern="^(domain|ip|cidr)$")
+    target_value: Optional[str] = Field(None, min_length=1, max_length=512)
     tags: Optional[list[str]] = None
     is_active: Optional[bool] = None
 

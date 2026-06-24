@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
 from slowapi import Limiter
@@ -86,7 +86,7 @@ def _set_auth_cookies(
     csrf_token: str,
 ) -> None:
     secure = _cookie_secure()
-    samesite = "lax"
+    samesite = "strict"
     access_max_age = settings.access_token_expire_minutes * 60
     refresh_max_age = settings.refresh_token_expire_days * 86400
 
@@ -145,21 +145,20 @@ async def _revoke_jti(
     await db.flush()
 
 
-async def _bypass_rls_for_bootstrap(db: AsyncSession | None) -> None:
-    """Auth bootstrap routes (register/login/refresh) run before the user has
-    a session, so IdentityMiddleware has not set `app.current_org_id`. The
-    tenant_isolation policy's `WITH CHECK` would then block writes to
-    `memberships` (and any other tenant-scoped table touched here) and the
-    `USING` clause would silently filter SELECTs to zero rows. We bypass
-    RLS for these specific routes — the application-layer logic is fully
-    in control of which user/org is being touched.
+async def _set_session_user_id(db: AsyncSession | None, user_id: uuid.UUID) -> None:
+    if IS_POSTGRES and db is not None:
+        await db.execute(
+            text("SELECT set_config('app.current_user_id', :v, true)"),
+            {"v": str(user_id)},
+        )
 
-    No-ops on SQLite (RLS is Postgres-only) and on unit-test sessions
-    where `db` is overridden to None.
-    """
-    if not IS_POSTGRES or db is None:
-        return
-    await db.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+
+async def _set_session_org_id(db: AsyncSession | None, org_id: uuid.UUID) -> None:
+    if IS_POSTGRES and db is not None:
+        await db.execute(
+            text("SELECT set_config('app.current_org_id', :v, true)"),
+            {"v": str(org_id)},
+        )
 
 
 # v2.4.18: `_slugify` moved to `app/utils/slug.py` (now `slugify`)
@@ -174,6 +173,7 @@ def _build_token_response(
     organization_id: uuid.UUID | None,
     role: str | None,
     iat_override: datetime | None = None,
+    slim: bool = False,
 ) -> TokenResponse:
     """Issue tokens, set cookies, build the JSON body.
 
@@ -204,8 +204,8 @@ def _build_token_response(
     _set_auth_cookies(response, access_token, refresh_token, csrf_token)
 
     return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token=None if slim else access_token,
+        refresh_token=None if slim else refresh_token,
         csrf_token=csrf_token,
         user=UserResponse.model_validate(user),
         org_id=str(organization_id) if organization_id else None,
@@ -222,9 +222,9 @@ async def register(
     request: Request,
     response: Response,
     payload: RegisterRequest,
+    slim: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _bypass_rls_for_bootstrap(db)
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -256,6 +256,9 @@ async def register(
     db.add(org)
     await db.flush()
 
+    # Set the session org_id so that inserting into the RLS-protected memberships table is allowed
+    await _set_session_org_id(db, org.id)
+
     membership = Membership(
         user_id=user.id,
         organization_id=org.id,
@@ -271,7 +274,7 @@ async def register(
     user.email_verified = True
     await db.flush()
 
-    return _build_token_response(response, user, org.id, "admin")
+    return _build_token_response(response, user, org.id, "admin", slim=slim)
 
 
 # ---------------------------------------------------------------------------
@@ -290,33 +293,70 @@ async def accept_invite(
 
     P0-02 audit fix: the invite_member flow now creates users with
     is_active=False and no password_hash. This endpoint is the only way
-    for those users to activate their account. It:
-      1. Verifies the email matches an existing inactive user
-      2. Sets the password_hash and full_name
-      3. Marks is_active=True and email_verified=True
-      4. Returns a token response so the user is immediately logged in
+    for those users to activate their account.
 
-    The endpoint is rate-limited to prevent brute-force email enumeration.
+    v2.5.6 security hardening: a cryptographically random invite token
+    is now REQUIRED.  The raw token is supplied by the invitee (from
+    the invitation link / email).  We hash it with SHA-256 and compare
+    (timing-safe) against the stored hash.  This prevents:
+      - Account takeover by an attacker who merely knows the email
+      - Email enumeration (same error for all failure modes)
+
+    The token is single-use and time-boxed (48 h by default).
     """
-    await _bypass_rls_for_bootstrap(db)
+    import hashlib
+    import hmac
+
+    _generic_error = "Invalid invitation or account already active"
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
-
+ 
     if not user:
-        # Don't reveal whether the email exists
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid invitation or account already active",
+            detail=_generic_error,
         )
-
+ 
     if user.is_active and user.password_hash:
         # Already activated — don't allow re-activation
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid invitation or account already active",
+            detail=_generic_error,
         )
+ 
+    # ── Token verification ──────────────────────────────────────────
+    # Hash the raw token the caller supplied and compare against the
+    # stored hash.  Use hmac.compare_digest for timing-safety.
+    if not user.invite_token_hash:
+        # No invite token on record — the user was not invited through
+        # the proper flow, or the token was already consumed.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_generic_error,
+        )
+ 
+    supplied_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    if not hmac.compare_digest(supplied_hash, user.invite_token_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_generic_error,
+        )
+ 
+    # Check expiry.
+    if (
+        user.invite_token_expires_at
+        and user.invite_token_expires_at < datetime.now(timezone.utc)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation has expired. Please ask an admin to re-invite you.",
+        )
+ 
+    # Set session user_id so we can select user's memberships under RLS
+    await _set_session_user_id(db, user.id)
 
-    # Check the user has at least one membership (was actually invited)
+    # ── Membership check ────────────────────────────────────────────
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
     )
@@ -324,15 +364,21 @@ async def accept_invite(
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid invitation or account already active",
+            detail=_generic_error,
         )
 
-    # Activate the account
+    # Set session org_id so we can update membership and any audit logging
+    await _set_session_org_id(db, membership.organization_id)
+
+    # ── Activate the account ────────────────────────────────────────
     user.password_hash = pwd_context.hash(payload.password)
     user.full_name = payload.full_name
     user.is_active = True
     user.email_verified = True
     user.last_login_at = datetime.now(timezone.utc)
+    # Consume the token — single use.
+    user.invite_token_hash = None
+    user.invite_token_expires_at = None
     membership.accepted_at = datetime.now(timezone.utc)
     await db.flush()
 
@@ -341,15 +387,15 @@ async def accept_invite(
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse | MFARequiredResponse)
 @limiter.limit("10/minute")
 async def login(
     request: Request,
     response: Response,
     payload: LoginRequest,
+    slim: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-) -> TokenResponse:
-    await _bypass_rls_for_bootstrap(db)
+) -> TokenResponse | MFARequiredResponse:
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
@@ -377,13 +423,25 @@ async def login(
             # Signal the client to collect the TOTP code — no cookies set yet.
             return MFARequiredResponse(mfa_required=True, partial=True)  # type: ignore[return-value]
         if not pyotp.TOTP(user.totp_secret).verify(payload.totp_code, valid_window=1):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid MFA code",
-            )
+            recovery_valid = False
+            if user.totp_recovery_codes:
+                codes_list = user.totp_recovery_codes.split(",")
+                input_hash = hashlib.sha256(payload.totp_code.encode()).hexdigest()
+                if input_hash in codes_list:
+                    recovery_valid = True
+                    codes_list.remove(input_hash)
+                    user.totp_recovery_codes = ",".join(codes_list) if codes_list else None
+            if not recovery_valid:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid MFA code",
+                )
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.flush()
+
+    # Set session user_id so we can select user's memberships under RLS
+    await _set_session_user_id(db, user.id)
 
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
@@ -392,7 +450,12 @@ async def login(
 
     org_id = membership.organization_id if membership else None
     role = membership.role if membership else None
-    return _build_token_response(response, user, org_id, role)
+
+    if org_id:
+        # Set session org_id for audit logging / token response
+        await _set_session_org_id(db, org_id)
+
+    return _build_token_response(response, user, org_id, role, slim=slim)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -401,9 +464,9 @@ async def refresh(
     request: Request,
     response: Response,
     payload: RefreshRequest | None = None,
+    slim: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _bypass_rls_for_bootstrap(db)
     # Prefer the httpOnly cookie (web flow); fall back to body (SDK flow).
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if not refresh_token and payload is not None:
@@ -482,12 +545,19 @@ async def refresh(
                 detail="Refresh token invalidated by password change",
             )
 
+    # Set session user_id so we can select user's memberships under RLS
+    await _set_session_user_id(db, user.id)
+
     memberships_result = await db.execute(
         select(Membership).where(Membership.user_id == user.id)
     )
     membership = memberships_result.scalars().first()
     org_id = membership.organization_id if membership else None
     role = membership.role if membership else None
+
+    if org_id:
+        # Set session org_id for audit logging / token response
+        await _set_session_org_id(db, org_id)
 
     # Refresh-token rotation: revoke the token we just consumed before
     # minting the new pair. This guarantees that if the same refresh token
@@ -504,7 +574,7 @@ async def refresh(
             reason="rotated",
         )
 
-    return _build_token_response(response, user, org_id, role)
+    return _build_token_response(response, user, org_id, role, slim=slim)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -517,9 +587,6 @@ async def logout(
 
     Idempotent — safe to call when not logged in (returns 204 either way).
     """
-    # revoked_tokens has no organization_id column so RLS doesn't apply,
-    # but bypassing keeps behaviour identical regardless of session state.
-    await _bypass_rls_for_bootstrap(db)
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if refresh_token:
         try:
@@ -561,8 +628,10 @@ async def update_me(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     update_data = payload.model_dump(exclude_unset=True)
+    allowed_fields = {"full_name", "locale", "avatar_url"}
     for field, value in update_data.items():
-        setattr(current_user, field, value)
+        if field in allowed_fields:
+            setattr(current_user, field, value)
     await db.flush()
     return UserResponse.model_validate(current_user)
 
@@ -636,10 +705,8 @@ async def delete_me(
     if not pwd_context.verify(payload.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="currentPasswordIncorrect")
 
-    # 2. Audit logs need bypass-RLS to be touched (the user's audit
-    #    rows live under their org_id; we want to pseudonymise across
-    #    all orgs they were ever a member of).
-    await _bypass_rls_for_bootstrap(db)
+    # Set session user_id so RLS allows selecting and updating user's own data
+    await _set_session_user_id(db, current_user.id)
 
     user_id = current_user.id
 
@@ -710,7 +777,7 @@ async def delete_me(
 
     # 5. Delete API keys, password reset tokens, memberships.
     await db.execute(
-        text("DELETE FROM api_keys WHERE user_id = :uid"),
+        text("DELETE FROM api_keys WHERE created_by = :uid"),
         {"uid": str(user_id)},
     )
     await db.execute(
@@ -807,7 +874,8 @@ async def export_me(
     from app.models.api_key import ApiKey
     from app.models.audit_log import AuditLog
 
-    await _bypass_rls_for_bootstrap(db)
+    # Set session user_id so RLS allows selecting user's own data
+    await _set_session_user_id(db, current_user.id)
     user_id = current_user.id
 
     # Memberships join organization for human-readable labels.
@@ -1013,6 +1081,7 @@ async def switch_org(
     request: Request,
     response: Response,
     payload: SwitchOrgRequest,
+    slim: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
@@ -1095,6 +1164,7 @@ async def switch_org(
         current_user,
         target_membership.organization_id,
         target_membership.role,
+        slim=slim,
     )
 
 
@@ -1179,13 +1249,8 @@ async def forgot_password(
       * The MTA-failure log used to print `user.email`, which (a)
         promotes a transient operational error into a long-lived
         PII record in the application logs and (b) creates a
-        secondary enumeration channel (anyone with log access can
-        confirm "this email is registered"). Now logged by user.id
-        only — sufficient for an operator triaging the failure and
-        non-identifying on its own.
+        secondary enumeration channel. Now logged by user.id only.
     """
-    await _bypass_rls_for_bootstrap(db)
-
     email = payload.email.strip().lower()
 
     # 1. Lookup. Pydantic EmailStr lowercases the domain part for us
@@ -1269,10 +1334,8 @@ async def reset_password(
       * 30-minute TTL by default (settings.reset_token_ttl_minutes)
       * not tenant-scoped (forgot flow runs without org context)
       * removed on success only via used_at; expired rows are pruned
-        out-of-band by a future Celery sweep (table is small, cheap)
+      * out-of-band by a future Celery sweep (table is small, cheap)
     """
-    await _bypass_rls_for_bootstrap(db)
-
     token_hash = _hash_reset_token(payload.token)
     token_result = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
@@ -1314,6 +1377,8 @@ async def reset_password(
 
     membership = user.memberships[0] if user.memberships else None
     if membership:
+        # Set session org_id so RLS allows inserting into audit_logs
+        await _set_session_org_id(db, membership.organization_id)
         await log_action(
             db,
             org_id=membership.organization_id,
@@ -1378,9 +1443,19 @@ async def totp_verify(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid TOTP code",
         )
+    
+    raw_codes = []
+    hashed_codes = []
+    for _ in range(8):
+        code = f"{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}"
+        raw_codes.append(code)
+        hashed_code = hashlib.sha256(code.encode()).hexdigest()
+        hashed_codes.append(hashed_code)
+        
+    current_user.totp_recovery_codes = ",".join(hashed_codes)
     current_user.totp_enabled = True
     await db.flush()
-    return TOTPVerifyResponse(mfa_enabled=True)
+    return TOTPVerifyResponse(mfa_enabled=True, recovery_codes=raw_codes)
 
 
 @router.post("/totp/disable", response_model=TOTPVerifyResponse)
@@ -1404,6 +1479,7 @@ async def totp_disable(
         )
     current_user.totp_enabled = False
     current_user.totp_secret = None
+    current_user.totp_recovery_codes = None
     await db.flush()
     return TOTPVerifyResponse(mfa_enabled=False)
 

@@ -33,8 +33,25 @@ class User(TimestampMixin, Base):
     oauth_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     oauth_provider_id: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
 
-    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    totp_secret_encrypted: Mapped[Optional[str]] = mapped_column("totp_secret", String(256), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    totp_recovery_codes: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+
+    @property
+    def totp_secret(self) -> Optional[str]:
+        if not self.totp_secret_encrypted:
+            return None
+        from app.utils.crypto import decrypt_totp_secret
+        return decrypt_totp_secret(self.totp_secret_encrypted)
+
+    @totp_secret.setter
+    def totp_secret(self, value: Optional[str]) -> None:
+        if not value:
+            self.totp_secret_encrypted = None
+        else:
+            from app.utils.crypto import encrypt_totp_secret
+            self.totp_secret_encrypted = encrypt_totp_secret(value)
+
 
     last_login_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -48,6 +65,19 @@ class User(TimestampMixin, Base):
     # this column existed) read as "never changed" — `iat is None or iat
     # >= None` is a no-op check.
     password_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Invite token — stored as a SHA-256 hash.  The raw token is sent to
+    # the invitee (email / link); only the hash lives in the DB.  When
+    # the invitee calls POST /accept-invite they supply the raw token,
+    # the route hashes it and compares (timing-safe) with this value.
+    # Cleared once the invite is accepted.  See also
+    # invite_token_expires_at below for time-boxing.
+    invite_token_hash: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True
+    )
+    invite_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

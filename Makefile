@@ -188,6 +188,30 @@ prod-preflight:
 	  echo "      openssl rand -base64 32"; \
 	  echo ""; \
 	  exit 1 )
+	@grep -qE '^REDIS_PASSWORD=.+' .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- REDIS_PASSWORD is missing or empty in .env"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Redis requires a password in production (--requirepass)."; \
+	  echo ""; \
+	  echo "  Set any non-empty string in .env, for example:"; \
+	  echo ""; \
+	  echo "      REDIS_PASSWORD=$$(openssl rand -base64 24)"; \
+	  echo ""; \
+	  exit 1 )
+	@if grep -qE '^REDIS_PASSWORD=changeme$$' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- REDIS_PASSWORD is still the default 'changeme'"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Replace it with a strong password:"; \
+	  echo ""; \
+	  echo "      REDIS_PASSWORD=$$(openssl rand -base64 24)"; \
+	  echo ""; \
+	  exit 1; fi
 	@grep -qE '^CORS_ORIGINS=.+' .env || ( \
 	  echo ""; \
 	  echo "==================================================================="; \

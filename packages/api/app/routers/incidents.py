@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, require_role
 from app.models.base import TimestampMixin
 from app.models.membership import Membership
 from app.models.user import User
@@ -142,7 +142,7 @@ async def list_incidents(
         total=total, page=page, page_size=page_size,
     )
 
-@router.post("", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin", "auditor"))])
 async def create_incident(
     payload: IncidentCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -182,7 +182,7 @@ async def get_incident(
         raise HTTPException(status_code=404, detail="Incident report not found")
     return IncidentResponse.model_validate(incident)
 
-@router.patch("/{incident_id}", response_model=IncidentResponse)
+@router.patch("/{incident_id}", response_model=IncidentResponse, dependencies=[Depends(require_role("admin", "auditor"))])
 async def update_incident(
     incident_id: uuid.UUID,
     payload: IncidentUpdate,
@@ -203,15 +203,13 @@ async def update_incident(
     await db.flush()
     return IncidentResponse.model_validate(incident)
 
-@router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("admin"))])
 async def delete_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     user, membership = current_org
-    if membership.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete incident reports")
     incident = await db.get(IncidentReport, incident_id)
     if not incident or incident.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Incident report not found")
@@ -220,7 +218,7 @@ async def delete_incident(
     await db.delete(incident)
     await db.flush()
 
-@router.post("/{incident_id}/export")
+@router.post("/{incident_id}/export", dependencies=[Depends(require_role("admin", "auditor"))])
 async def export_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),

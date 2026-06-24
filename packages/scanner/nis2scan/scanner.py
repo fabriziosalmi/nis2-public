@@ -67,15 +67,33 @@ class Scanner:
             ip_net = ipaddress.ip_network(target, strict=False)
             # Limit huge networks for safety in this demo
             if ip_net.num_addresses > 256 and ip_net.prefixlen < 24:
-                 logger.warning(f"Network {target} is large, scanning first 256 only.")
-                 return [str(ip) for ip, _ in zip(ip_net.hosts(), range(256))]
-            return [str(ip) for ip in ip_net.hosts()]
+                logger.warning(f"Network {target} is large, scanning first 256 only.")
+                ips = [str(ip) for ip, _ in zip(ip_net.hosts(), range(256))]
+            else:
+                ips = [str(ip) for ip in ip_net.hosts()]
+
+            # Filter private IPs if not allowed
+            if not getattr(self.config, "allow_private_ips", False):
+                filtered = []
+                for ip_str in ips:
+                    ip = ipaddress.ip_address(ip_str)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                        logger.warning(f"SSRF block: skipping private/reserved IP {ip_str} in range {target}")
+                    else:
+                        filtered.append(ip_str)
+                return filtered
+            return ips
         except ValueError:
             pass
 
         # Check if basic IP
         try:
             ipaddress.ip_address(target)
+            if not getattr(self.config, "allow_private_ips", False):
+                ip = ipaddress.ip_address(target)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                    logger.warning(f"SSRF block: skipping private/reserved target IP {target}")
+                    return []
             return [target]
         except ValueError:
             pass
@@ -85,16 +103,32 @@ class Scanner:
         # validation and scan, redirecting us to a private address.
         pinned = getattr(self.config, "pinned_ips", {}) or {}
         if target in pinned:
-            logger.debug(f"Using pinned IP {pinned[target]} for {target}")
-            return [pinned[target]]
+            pinned_ip = pinned[target]
+            if not getattr(self.config, "allow_private_ips", False):
+                try:
+                    ip = ipaddress.ip_address(pinned_ip)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                        logger.warning(f"SSRF block: skipping private/reserved pinned IP {pinned_ip} for {target}")
+                        return []
+                except ValueError:
+                    logger.warning(f"SSRF block: invalid pinned IP {pinned_ip} for {target}")
+                    return []
+            logger.debug(f"Using pinned IP {pinned_ip} for {target}")
+            return [pinned_ip]
 
         # Fallback for CLI / no pre-resolution path.
         try:
-            ip = socket.gethostbyname(target)
-            return [ip]
+            ip_str = socket.gethostbyname(target)
+            if not getattr(self.config, "allow_private_ips", False):
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                    logger.warning(f"SSRF block: skipping private/reserved resolved IP {ip_str} for {target}")
+                    return []
+            return [ip_str]
         except socket.gaierror:
             logger.error(f"Could not resolve domain: {target}")
             return []
+
 
     async def check_port(self, ip: str, port: int) -> bool:
         try:

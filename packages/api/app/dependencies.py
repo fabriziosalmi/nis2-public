@@ -320,10 +320,10 @@ async def _resolve_dual_auth(
 
     if raw and raw.startswith("nis2_") and not has_cookie:
         api_key, org_id = await get_api_key_org(db=db, credentials=credentials)
+        scopes = api_key.scopes if api_key.scopes is not None else []
         if (
             required_scope is not None
-            and api_key.scopes is not None
-            and required_scope not in api_key.scopes
+            and required_scope not in scopes
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -341,7 +341,7 @@ def dual_auth_with_scope(required_scope: str):
 
     When the caller presents an API key (Bearer `nis2_*` with no cookie),
     the key's scope list must contain `required_scope` — otherwise 403.
-    Keys with `scopes=None` (legacy, pre-2.4.26) pass through unrestricted.
+    Keys with `scopes=None` (legacy, pre-2.4.26) are treated as having no scopes (empty list) and rejected if a scope is required.
 
     JWT sessions are not scope-constrained (role-based access handles that).
 

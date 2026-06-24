@@ -133,23 +133,37 @@ def cleanup_old_reports() -> dict:
         logger.info("cleanup_old_reports: reports dir missing (%s)", REPORTS_DIR)
         return {"removed": 0, "skipped": 0, "bytes_freed": 0}
 
-    for filename in os.listdir(REPORTS_DIR):
-        path = os.path.join(REPORTS_DIR, filename)
-        try:
-            if not os.path.isfile(path):
-                continue
-            mtime = os.path.getmtime(path)
-            if mtime < cutoff_ts:
-                size = os.path.getsize(path)
-                os.unlink(path)
-                removed += 1
-                bytes_freed += size
-        except OSError as exc:
-            # File vanished mid-iteration (another worker process
-            # racing this one), permission denied, etc. Don't blow
-            # up the whole sweep — log and move on.
-            logger.warning("cleanup_old_reports: skip %s — %s", path, exc)
-            skipped += 1
+    for root, dirs, files in os.walk(REPORTS_DIR, topdown=False):
+        for file in files:
+            path = os.path.join(root, file)
+            try:
+                mtime = os.path.getmtime(path)
+                if mtime < cutoff_ts:
+                    size = os.path.getsize(path)
+                    os.unlink(path)
+                    removed += 1
+                    bytes_freed += size
+            except OSError as exc:
+                # File vanished mid-iteration, permission denied, etc.
+                logger.warning("cleanup_old_reports: skip %s — %s", path, exc)
+                skipped += 1
+
+        for d in dirs:
+            dir_path = os.path.join(root, d)
+            try:
+                import uuid
+                try:
+                    uuid.UUID(d)
+                    is_org_dir = True
+                except ValueError:
+                    is_org_dir = False
+
+                if is_org_dir and not os.listdir(dir_path):
+                    os.rmdir(dir_path)
+            except OSError:
+                pass
+
+
 
     logger.info(
         "cleanup_old_reports: removed=%d skipped=%d freed=%d bytes (cutoff=%s)",
@@ -198,12 +212,16 @@ async def _generate_report(
         )
         findings = findings_q.scalars().all()
 
+    # Create the org-specific directory first to make sure it exists
+    org_reports_dir = os.path.join(REPORTS_DIR, str(org_id))
+    os.makedirs(org_reports_dir, exist_ok=True)
+
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     # v2.4.19 audit reports-002: sanitize the scan name component
     # of the on-disk filename. Without this, a scan named
     # `../../../../etc/passwd` would resolve `os.path.join` outside
     # of REPORTS_DIR and the writer could clobber arbitrary files.
-    base = f"nis2_report_{_safe_basename(scan.name)}_{ts}"
+    base = f"{org_id}/nis2_report_{_safe_basename(scan.name)}_{ts}"
 
     # Normalise the locale once, here, so every renderer downstream
     # gets the same canonical 2-letter code. Unknown / null falls
@@ -654,5 +672,5 @@ def _finding_dict(f) -> dict:
     }
 
 def _result(path, filename, content_type, fmt) -> dict:
-    return {"file_path": path, "filename": filename, "content_type": content_type,
+    return {"file_path": path, "filename": os.path.basename(filename), "content_type": content_type,
             "size": os.path.getsize(path), "format": fmt}

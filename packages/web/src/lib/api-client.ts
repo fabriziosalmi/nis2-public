@@ -61,7 +61,7 @@ class ApiClient {
     if (this.refreshing) return this.refreshing
     this.refreshing = (async () => {
       try {
-        const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+        const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh?slim=true`, {
           method: 'POST',
           credentials: 'include',
           // Server reads the refresh token from the httpOnly cookie;
@@ -136,14 +136,14 @@ class ApiClient {
 
   // -------------------------------------------------------------------- Auth
   async register(data: { email: string; password: string; full_name: string; org_name: string }) {
-    return this.request<any>('/api/v1/auth/register', {
+    return this.request<any>('/api/v1/auth/register?slim=true', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async login(email: string, password: string) {
-    return this.request<any>('/api/v1/auth/login', {
+    return this.request<any>('/api/v1/auth/login?slim=true', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
@@ -224,7 +224,7 @@ class ApiClient {
       token_type: string
       user: any
       org_id: string | null
-    }>('/api/v1/auth/switch-org', {
+    }>('/api/v1/auth/switch-org?slim=true', {
       method: 'POST',
       body: JSON.stringify({ organization_id: organizationId }),
     })
