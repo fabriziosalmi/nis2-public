@@ -25,6 +25,7 @@ The slug returned is **not unique** — both call sites suffix `-1`,
 `-2`, ... in a loop until they find a free value, since the slug
 column has a UNIQUE index in Postgres.
 """
+
 import re
 
 

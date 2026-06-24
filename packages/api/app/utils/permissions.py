@@ -37,7 +37,9 @@ def require_role(roles: list[str]) -> Callable:
     return _check_role
 
 
-def require_org_role(org_id_param: str = "org_id", roles: list[str] | None = None) -> Callable:
+def require_org_role(
+    org_id_param: str = "org_id", roles: list[str] | None = None
+) -> Callable:
     """Dependency factory that checks role for a specific organization.
     The org_id is read from a path parameter."""
 

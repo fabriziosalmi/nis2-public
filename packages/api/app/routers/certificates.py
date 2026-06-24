@@ -66,7 +66,9 @@ async def bulk_check_certificates(
 
     # Summary
     scores = [r.get("score", 0) for r in results]
-    expiring = [r for r in results if r.get("validity", {}).get("expiry_risk", "OK") != "OK"]
+    expiring = [
+        r for r in results if r.get("validity", {}).get("expiry_risk", "OK") != "OK"
+    ]
 
     return {
         "results": results,
@@ -90,25 +92,33 @@ async def get_ct_logs(
     try:
         url = f"https://crt.sh/?q={domain}&output=json"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
                 if resp.status != 200:
-                    return {"domain": domain, "entries": [], "error": "crt.sh unavailable"}
+                    return {
+                        "domain": domain,
+                        "entries": [],
+                        "error": "crt.sh unavailable",
+                    }
                 data = await resp.json(content_type=None)
                 # Deduplicate and sort
                 seen = set()
                 unique = []
-                for entry in (data or []):
+                for entry in data or []:
                     cert_id = entry.get("id")
                     if cert_id not in seen:
                         seen.add(cert_id)
-                        unique.append({
-                            "id": cert_id,
-                            "issuer": entry.get("issuer_name", ""),
-                            "common_name": entry.get("common_name", ""),
-                            "not_before": entry.get("not_before", ""),
-                            "not_after": entry.get("not_after", ""),
-                            "serial": entry.get("serial_number", ""),
-                        })
+                        unique.append(
+                            {
+                                "id": cert_id,
+                                "issuer": entry.get("issuer_name", ""),
+                                "common_name": entry.get("common_name", ""),
+                                "not_before": entry.get("not_before", ""),
+                                "not_after": entry.get("not_after", ""),
+                                "serial": entry.get("serial_number", ""),
+                            }
+                        )
                 unique.sort(key=lambda x: x.get("not_before", ""), reverse=True)
                 return {"domain": domain, "total": len(unique), "entries": unique[:50]}
     except Exception as e:

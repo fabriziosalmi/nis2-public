@@ -9,6 +9,7 @@ time. The scanner must connect to that pinned IP (sending the original
 hostname as Host: header) so a DNS rebinding attack between validation
 and scan time cannot redirect the scanner to a private/internal address.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,21 +27,24 @@ BLOCKED_NETWORKS = [
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("100.64.0.0/10"),   # CGN
+    ipaddress.ip_network("100.64.0.0/10"),  # CGN
     ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("224.0.0.0/4"),      # Multicast
-    ipaddress.ip_network("240.0.0.0/4"),      # Reserved
-    ipaddress.ip_network("::1/128"),           # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),          # IPv6 ULA
-    ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
+    ipaddress.ip_network("224.0.0.0/4"),  # Multicast
+    ipaddress.ip_network("240.0.0.0/4"),  # Reserved
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 ]
 
 # Dangerous hostnames
 BLOCKED_HOSTNAMES = {
-    "localhost", "localhost.localdomain",
-    "metadata.google.internal",        # GCP metadata
-    "169.254.169.254",                 # AWS/GCP/Azure metadata
-    "metadata", "kubernetes", "kubernetes.default",
+    "localhost",
+    "localhost.localdomain",
+    "metadata.google.internal",  # GCP metadata
+    "169.254.169.254",  # AWS/GCP/Azure metadata
+    "metadata",
+    "kubernetes",
+    "kubernetes.default",
 }
 
 DOMAIN_REGEX = re.compile(
@@ -50,6 +54,7 @@ DOMAIN_REGEX = re.compile(
 
 class TargetValidationError(Exception):
     """Raised when a scan target fails safety validation."""
+
     pass
 
 
@@ -63,10 +68,10 @@ class ValidationResult:
     `pinned_ip` is None for CIDR ranges (where many IPs are involved) and
     for domains that didn't resolve at validation time.
     """
+
     target_value: str
     target_type: str  # "domain" | "ip" | "cidr"
     pinned_ip: Optional[str] = None
-
 
 
 def validate_domain(domain: str) -> str:
@@ -86,12 +91,15 @@ def validate_domain(domain: str) -> str:
         raise TargetValidationError(f"Invalid domain format: {domain}")
     return domain
 
+
 async def _resolve_first_public_ip(domain: str) -> Optional[str]:
     """Resolve `domain` and return the first public IP. Raise if any answer
     is private/blocked — the caller must reject the target outright."""
     loop = asyncio.get_running_loop()
     try:
-        answers = await loop.getaddrinfo(domain, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+        answers = await loop.getaddrinfo(
+            domain, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+        )
     except socket.gaierror:
         return None
     public: list[str] = []
@@ -103,6 +111,7 @@ async def _resolve_first_public_ip(domain: str) -> Optional[str]:
             )
         public.append(str(ip))
     return public[0] if public else None
+
 
 async def validate_domain_pinned(domain: str) -> ValidationResult:
     """Validate a domain and pin the resolved IP for scanner use."""
@@ -128,17 +137,16 @@ async def validate_domain_pinned(domain: str) -> ValidationResult:
     except TargetValidationError:
         raise
     except Exception as exc:
-        raise TargetValidationError(
-            f"DNS resolution failed for {domain}: {exc}"
-        )
+        raise TargetValidationError(f"DNS resolution failed for {domain}: {exc}")
 
     if not pinned_ip:
         raise TargetValidationError(
             f"Could not resolve domain to a valid public IP: {domain}"
         )
 
-    return ValidationResult(target_value=domain, target_type="domain", pinned_ip=pinned_ip)
-
+    return ValidationResult(
+        target_value=domain, target_type="domain", pinned_ip=pinned_ip
+    )
 
 
 def validate_ip(ip_str: str) -> str:
@@ -187,7 +195,9 @@ def validate_cidr_pinned(cidr_str: str) -> ValidationResult:
             raise TargetValidationError(
                 f"CIDR range {cidr_str} overlaps private/reserved network {blocked} — SSRF blocked"
             )
-    return ValidationResult(target_value=str(network), target_type="cidr", pinned_ip=None)
+    return ValidationResult(
+        target_value=str(network), target_type="cidr", pinned_ip=None
+    )
 
 
 def validate_target(target_type: str, target_value: str) -> str:
@@ -202,7 +212,9 @@ def validate_target(target_type: str, target_value: str) -> str:
     raise TargetValidationError(f"Unknown target type: {target_type}")
 
 
-async def validate_target_pinned(target_type: str, target_value: str) -> ValidationResult:
+async def validate_target_pinned(
+    target_type: str, target_value: str
+) -> ValidationResult:
     """Validate any target type and return both the cleaned value and the pinned IP."""
     if target_type == "domain":
         return await validate_domain_pinned(target_value)
@@ -226,15 +238,14 @@ async def validate_url_against_ssrf(url_str: str) -> None:
     """Validate a URL's host against private IP ranges and blocked domains to prevent SSRF."""
     if not url_str:
         raise TargetValidationError("Empty URL")
-    
+
     parsed = urlparse(url_str)
     hostname = parsed.hostname
     if not hostname:
         raise TargetValidationError(f"Invalid URL (no hostname): {url_str}")
-        
+
     try:
         ipaddress.ip_address(hostname)
         validate_ip_pinned(hostname)
     except ValueError:
         await validate_domain_pinned(hostname)
-

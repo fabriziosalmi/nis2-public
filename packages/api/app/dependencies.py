@@ -90,9 +90,7 @@ async def get_current_user(
         )
 
     stmt = (
-        select(User)
-        .options(selectinload(User.memberships))
-        .where(User.id == parsed_id)
+        select(User).options(selectinload(User.memberships)).where(User.id == parsed_id)
     )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -125,7 +123,11 @@ async def get_current_user(
     #   * tokens minted at or after the change (iat >= floor(now)+1) → pass
     iat_raw = payload.get("iat")
     if iat_raw is not None and user.password_changed_at is not None:
-        iat_seconds = int(iat_raw) if isinstance(iat_raw, (int, float)) else int(iat_raw.timestamp())
+        iat_seconds = (
+            int(iat_raw)
+            if isinstance(iat_raw, (int, float))
+            else int(iat_raw.timestamp())
+        )
         pwc_seconds = int(user.password_changed_at.timestamp())
         if iat_seconds < pwc_seconds:
             raise HTTPException(
@@ -241,6 +243,7 @@ def require_role(*allowed: str):
     Returning None instead of raising lets FastAPI's dependency tree
     fail with 403 cleanly without the route function being entered.
     """
+
     async def _dep(
         request: Request,
         current_user: User = Depends(get_current_user),
@@ -251,6 +254,7 @@ def require_role(*allowed: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This action requires one of: {', '.join(allowed)}",
             )
+
     return _dep
 
 
@@ -288,6 +292,7 @@ async def get_api_key_org(
         )
 
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc)
 
     # Honor expires_at. Without this, a customer who issued a key with
@@ -321,10 +326,7 @@ async def _resolve_dual_auth(
     if raw and raw.startswith("nis2_") and not has_cookie:
         api_key, org_id = await get_api_key_org(db=db, credentials=credentials)
         scopes = api_key.scopes if api_key.scopes is not None else []
-        if (
-            required_scope is not None
-            and required_scope not in scopes
-        ):
+        if required_scope is not None and required_scope not in scopes:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"API key missing required scope: {required_scope}",
@@ -348,6 +350,7 @@ def dual_auth_with_scope(required_scope: str):
     Usage:
         org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read"))
     """
+
     async def _dep(
         request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),

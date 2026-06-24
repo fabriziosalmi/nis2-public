@@ -23,6 +23,7 @@ This is intentionally not a queue or a worker job — the calling
 endpoint awaits the send; if SMTP is down, the user sees a 5xx and
 the email isn't lost (no delivery promise we couldn't keep).
 """
+
 from __future__ import annotations
 
 import asyncio

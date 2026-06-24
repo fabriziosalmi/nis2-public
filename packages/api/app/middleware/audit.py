@@ -14,6 +14,7 @@ Two entry points:
   org_id parsed from the JWT (cookie or Bearer). This guarantees that
   no state-changing endpoint is silently un-audited.
 """
+
 import logging
 import uuid
 from typing import Any, Optional

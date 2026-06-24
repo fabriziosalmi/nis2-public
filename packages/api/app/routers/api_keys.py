@@ -6,6 +6,7 @@ API Key management and authentication for CI/CD integrations.
 Uses the existing ApiKey model to provide key lifecycle management
 and a dependency for API key-based auth (alternative to JWT).
 """
+
 import hashlib
 import secrets
 import uuid
@@ -40,16 +41,18 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 # in `ApiKeyCreate.default` and the audit_log details — `<resource>:<verb>`
 # where verb is `read` or `write`. Adding a scope here is a one-line
 # change and ALWAYS additive (removing one would break existing keys).
-VALID_API_KEY_SCOPES: frozenset[str] = frozenset({
-    "scan:read",
-    "scan:write",
-    "asset:read",
-    "asset:write",
-    "finding:read",
-    "finding:write",
-    "report:read",
-    "report:write",
-})
+VALID_API_KEY_SCOPES: frozenset[str] = frozenset(
+    {
+        "scan:read",
+        "scan:write",
+        "asset:read",
+        "asset:write",
+        "finding:read",
+        "finding:write",
+        "report:read",
+        "report:write",
+    }
+)
 
 
 def _validate_scopes(scopes: Optional[list[str]]) -> list[str]:
@@ -100,9 +103,13 @@ def _validate_scopes(scopes: Optional[list[str]]) -> list[str]:
 
 # --- Schemas ---
 
+
 class ApiKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
-    scopes: Optional[list[str]] = Field(default=["scan:read", "scan:write", "report:read"])
+    scopes: Optional[list[str]] = Field(
+        default=["scan:read", "scan:write", "report:read"]
+    )
+
 
 class ApiKeyResponse(BaseModel):
     id: uuid.UUID
@@ -115,9 +122,12 @@ class ApiKeyResponse(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+
 class ApiKeyCreated(ApiKeyResponse):
     """Only returned on creation — includes the full key (shown once)."""
+
     raw_key: str
+
 
 class ApiKeyListResponse(BaseModel):
     items: list[ApiKeyResponse]
@@ -125,6 +135,7 @@ class ApiKeyListResponse(BaseModel):
 
 
 # --- Router ---
+
 
 @router.get(
     "",
@@ -141,7 +152,9 @@ async def list_api_keys(
     user, membership = current_org
     org_id = membership.organization_id
     result = await db.execute(
-        select(ApiKey).where(ApiKey.organization_id == org_id).order_by(ApiKey.created_at.desc())
+        select(ApiKey)
+        .where(ApiKey.organization_id == org_id)
+        .order_by(ApiKey.created_at.desc())
     )
     keys = result.scalars().all()
     return ApiKeyListResponse(

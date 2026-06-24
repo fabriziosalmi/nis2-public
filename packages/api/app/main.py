@@ -15,7 +15,25 @@ from app.database import ensure_schema, setup_row_level_security
 from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
-from app.routers import acn, api_keys, assets, audit, auth, bia, certificates, findings, governance, health, incidents, organizations, remediation, reports, scans, schedules, vendors
+from app.routers import (
+    acn,
+    api_keys,
+    assets,
+    audit,
+    auth,
+    bia,
+    certificates,
+    findings,
+    governance,
+    health,
+    incidents,
+    organizations,
+    remediation,
+    reports,
+    scans,
+    schedules,
+    vendors,
+)
 from app.routers import jwks as jwks_router
 from app.mcp_server import router as mcp_router
 from app.routers.auth import limiter
@@ -27,6 +45,7 @@ logger = logging.getLogger(__name__)
 # previous hardcoded literal lagging by three patch releases.
 try:
     from importlib.metadata import version as _pkg_version
+
     API_VERSION = _pkg_version("nis2-api")
 except Exception:
     API_VERSION = "0.0.0-dev"
@@ -58,7 +77,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("NIS2 Platform API %s started (env=%s)", API_VERSION, settings.environment)
+    logger.info(
+        "NIS2 Platform API %s started (env=%s)", API_VERSION, settings.environment
+    )
     # Bootstrap missing tables/columns on a fresh DB and heal any
     # additive schema drift on existing volumes. See ensure_schema for
     # the debt note — this is a stopgap until alembic/versions/ is
@@ -66,7 +87,9 @@ async def lifespan(app: FastAPI):
     try:
         await ensure_schema()
     except Exception:
-        logger.exception("ensure_schema failed — continuing; expect schema-drift errors")
+        logger.exception(
+            "ensure_schema failed — continuing; expect schema-drift errors"
+        )
     # Idempotent failsafe: ensure tenant isolation is enforced at the
     # database layer too, not only by per-router WHERE clauses. If a
     # router ever forgets to filter by organization_id, RLS still
@@ -81,7 +104,11 @@ async def lifespan(app: FastAPI):
 
 def _resolve_cors_origins() -> list[str]:
     if settings.cors_origins.strip():
-        return [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+        return [
+            origin.strip()
+            for origin in settings.cors_origins.split(",")
+            if origin.strip()
+        ]
     # In production, Settings._validate_runtime_config has already raised.
     # We only reach this branch in non-production environments.
     return ["http://localhost:3000", "http://localhost:8077"]
@@ -114,7 +141,12 @@ def create_app() -> FastAPI:
         allow_origins=_resolve_cors_origins(),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Organization-Id"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-CSRF-Token",
+            "X-Organization-Id",
+        ],
     )
 
     application.include_router(auth.router, prefix="/api/v1")

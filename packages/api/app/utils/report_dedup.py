@@ -48,6 +48,7 @@ report generation. This is the safest possible failure mode —
 the alternative (refusing to generate when Redis is down) would
 be a worse user experience for what is itself a polish feature.
 """
+
 from __future__ import annotations
 
 import logging
@@ -138,9 +139,7 @@ def count_inflight_per_org(org_id: str) -> int:
     try:
         return client.scard(_org_set_key(org_id)) or 0
     except redis.RedisError as exc:
-        logger.warning(
-            "report-dedup: redis SCARD failed for org %s: %s", org_id, exc
-        )
+        logger.warning("report-dedup: redis SCARD failed for org %s: %s", org_id, exc)
         return 0
 
 
@@ -157,14 +156,15 @@ def lookup_inflight_task(org_id: str, scan_id: str, fmt: str) -> Optional[str]:
     except redis.RedisError as exc:
         logger.warning(
             "report-dedup: redis GET failed for (%s, %s, %s): %s",
-            org_id, scan_id, fmt, exc,
+            org_id,
+            scan_id,
+            fmt,
+            exc,
         )
         return None
 
 
-def register_inflight_task(
-    org_id: str, scan_id: str, fmt: str, task_id: str
-) -> None:
+def register_inflight_task(org_id: str, scan_id: str, fmt: str, task_id: str) -> None:
     """Store the task_id under the lock key with TTL and add it to the
     org-level concurrency Set. Both are best-effort — failure is logged,
     not raised. The org Set TTL is refreshed on every SADD so stale
@@ -180,11 +180,16 @@ def register_inflight_task(
     except redis.RedisError as exc:
         logger.warning(
             "report-dedup: redis SET/SADD failed for (%s, %s, %s): %s",
-            org_id, scan_id, fmt, exc,
+            org_id,
+            scan_id,
+            fmt,
+            exc,
         )
 
 
-def clear_inflight_task(org_id: str, scan_id: str, fmt: str, task_id: str | None = None) -> None:
+def clear_inflight_task(
+    org_id: str, scan_id: str, fmt: str, task_id: str | None = None
+) -> None:
     """Drop the lock for a `(org_id, scan_id, fmt)` triple and remove
     *task_id* from the org-level concurrency Set (if provided).
 
@@ -203,5 +208,8 @@ def clear_inflight_task(org_id: str, scan_id: str, fmt: str, task_id: str | None
     except redis.RedisError as exc:
         logger.warning(
             "report-dedup: redis DEL/SREM failed for (%s, %s, %s): %s",
-            org_id, scan_id, fmt, exc,
+            org_id,
+            scan_id,
+            fmt,
+            exc,
         )

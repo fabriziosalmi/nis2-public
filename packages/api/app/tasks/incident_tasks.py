@@ -24,6 +24,7 @@ never cleans them up explicitly.
 Notification dispatch supports the three channel types already defined
 in NotificationChannel: email, webhook (HMAC-SHA256 signed), slack.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -84,6 +85,7 @@ _DEADLINES = [
 # Celery entry point
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task
 def check_incident_deadlines() -> dict:
     """Beat task: check NIS2 Art. 23 deadlines and dispatch alerts."""
@@ -93,6 +95,7 @@ def check_incident_deadlines() -> dict:
 # ---------------------------------------------------------------------------
 # Core async logic
 # ---------------------------------------------------------------------------
+
 
 async def _check_deadlines() -> dict:
     from app.models.incident import Incident
@@ -135,9 +138,7 @@ async def _check_deadlines() -> dict:
                     )
                 )
                 admins = admin_result.scalars().all()
-                channels = [
-                    _synthetic_email_channel(admin.email) for admin in admins
-                ]
+                channels = [_synthetic_email_channel(admin.email) for admin in admins]
 
             for deadline_field, sent_field, label, article_ref in _DEADLINES:
                 deadline: Optional[datetime] = getattr(incident, deadline_field, None)
@@ -190,6 +191,7 @@ async def _check_deadlines() -> dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_redis_client() -> Optional[redis_sync.Redis]:
     """Return a synchronous Redis client for dedup key operations.
@@ -299,7 +301,9 @@ async def _dispatch_email(channel, payload: dict) -> None:
     cfg = channel.config or {}
     email_to = cfg.get("email") or cfg.get("to")
     if not email_to:
-        logger.warning("incident_tasks: email channel %r has no 'email' in config", channel.name)
+        logger.warning(
+            "incident_tasks: email channel %r has no 'email' in config", channel.name
+        )
         return
     await send_email(
         to=email_to,
@@ -312,14 +316,18 @@ async def _dispatch_webhook(client: httpx.AsyncClient, channel, payload: dict) -
     cfg = channel.config or {}
     url = cfg.get("url")
     if not url:
-        logger.warning("incident_tasks: webhook channel %r has no 'url' in config", channel.name)
+        logger.warning(
+            "incident_tasks: webhook channel %r has no 'url' in config", channel.name
+        )
         return False
 
     # Validate against SSRF
     try:
         await validate_url_against_ssrf(url)
     except Exception as exc:
-        logger.warning("incident_tasks: webhook %r blocked by SSRF: %s", channel.name, exc)
+        logger.warning(
+            "incident_tasks: webhook %r blocked by SSRF: %s", channel.name, exc
+        )
         return False
 
     body_bytes = json.dumps(payload).encode()
@@ -344,14 +352,19 @@ async def _dispatch_slack(client: httpx.AsyncClient, channel, payload: dict) -> 
     cfg = channel.config or {}
     webhook_url = cfg.get("webhook_url")
     if not webhook_url:
-        logger.warning("incident_tasks: slack channel %r has no 'webhook_url' in config", channel.name)
+        logger.warning(
+            "incident_tasks: slack channel %r has no 'webhook_url' in config",
+            channel.name,
+        )
         return False
 
     # Validate against SSRF
     try:
         await validate_url_against_ssrf(webhook_url)
     except Exception as exc:
-        logger.warning("incident_tasks: slack channel %r blocked by SSRF: %s", channel.name, exc)
+        logger.warning(
+            "incident_tasks: slack channel %r blocked by SSRF: %s", channel.name, exc
+        )
         return False
 
     alert_type = payload["alert_type"]

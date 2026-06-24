@@ -5,6 +5,7 @@
 Remediation Engine API Router.
 Playbooks, AI copilot, and effort estimation.
 """
+
 import os
 import uuid
 from typing import Optional
@@ -30,20 +31,24 @@ router = APIRouter(prefix="/remediation", tags=["remediation"])
 
 # --- Playbooks ---
 
+
 @router.get("/playbooks")
 async def list_playbooks():
     """List all available remediation playbooks."""
     playbooks = get_all_playbooks()
     return {
         "total": len(playbooks),
-        "playbooks": {k: {
-            "title": v["title"],
-            "category": v["category"],
-            "effort": v["effort"],
-            "cost": v["cost"],
-            "time_minutes": v["time_minutes"],
-            "nis2_article": v["nis2_article"],
-        } for k, v in playbooks.items()},
+        "playbooks": {
+            k: {
+                "title": v["title"],
+                "category": v["category"],
+                "effort": v["effort"],
+                "cost": v["cost"],
+                "time_minutes": v["time_minutes"],
+                "nis2_article": v["nis2_article"],
+            }
+            for k, v in playbooks.items()
+        },
     }
 
 
@@ -53,7 +58,9 @@ async def get_playbook_detail(playbook_id: str):
     playbooks = get_all_playbooks()
     pb = playbooks.get(playbook_id)
     if not pb:
-        raise HTTPException(status_code=404, detail=f"Playbook '{playbook_id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Playbook '{playbook_id}' not found"
+        )
     return {"id": playbook_id, **pb}
 
 
@@ -85,6 +92,7 @@ async def get_remediation_for_finding(
 
 # --- Effort Estimator ---
 
+
 @router.get("/estimate/{scan_id}")
 async def estimate_scan_remediation(
     scan_id: uuid.UUID,
@@ -104,7 +112,11 @@ async def estimate_scan_remediation(
     findings = result.scalars().all()
 
     if not findings:
-        return {"scan_id": str(scan_id), "total_findings": 0, "message": "No open findings"}
+        return {
+            "scan_id": str(scan_id),
+            "total_findings": 0,
+            "message": "No open findings",
+        }
 
     finding_dicts = [
         {
@@ -123,9 +135,12 @@ async def estimate_scan_remediation(
 
 # --- AI Copilot ---
 
+
 class ExplainRequest(BaseModel):
     model: str = Field(default="auto", description="LLM model to use")
-    context: Optional[str] = Field(None, description="Additional infrastructure context")
+    context: Optional[str] = Field(
+        None, description="Additional infrastructure context"
+    )
 
 
 @router.post("/explain/{finding_id}")
@@ -152,9 +167,9 @@ async def explain_finding(
 - **Category**: {finding.category}
 - **Message**: {finding.message}
 - **Target**: {finding.target}
-- **Technical Detail**: {finding.technical_detail or 'N/A'}
-- **NIS2 Article**: {finding.compliance_article or 'Art. 21'}
-{f'- **Infrastructure Context**: {payload.context}' if payload.context else ''}
+- **Technical Detail**: {finding.technical_detail or "N/A"}
+- **NIS2 Article**: {finding.compliance_article or "Art. 21"}
+{f"- **Infrastructure Context**: {payload.context}" if payload.context else ""}
 
 ## Instructions
 1. Explain WHY this is a risk in plain language (for a CISO)
@@ -175,11 +190,14 @@ Respond in a structured format with clear headings."""
     if not openai_key or payload.model != "openai":
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{llm_url}/chat/completions",
                     json={
-                        "model": payload.model if payload.model != "auto" else "default",
+                        "model": payload.model
+                        if payload.model != "auto"
+                        else "default",
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.3,
                         "max_tokens": 2000,
@@ -194,14 +212,18 @@ Respond in a structured format with clear headings."""
             # swallowing silently. The fallback to OpenAI / playbook
             # still fires, but we now have visibility into why.
             import logging
+
             logging.getLogger(__name__).debug(
-                "Local LLM call failed for finding %s, trying fallback", finding_id, exc_info=True,
+                "Local LLM call failed for finding %s, trying fallback",
+                finding_id,
+                exc_info=True,
             )
 
     # Fallback to OpenAI
     if not explanation and openai_key:
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "https://api.openai.com/v1/chat/completions",
@@ -220,8 +242,11 @@ Respond in a structured format with clear headings."""
         except Exception:
             # P2-01 audit fix: same as the local LLM handler above.
             import logging
+
             logging.getLogger(__name__).debug(
-                "OpenAI call failed for finding %s, falling back to playbook", finding_id, exc_info=True,
+                "OpenAI call failed for finding %s, falling back to playbook",
+                finding_id,
+                exc_info=True,
             )
 
     # Final fallback: use playbook
@@ -229,15 +254,21 @@ Respond in a structured format with clear headings."""
         if playbook:
             explanation = _format_playbook_as_explanation(finding, playbook)
         else:
-            explanation = f"**{finding.severity}: {finding.message}**\n\n" \
-                          f"Target: `{finding.target}`\n\n" \
-                          f"This finding relates to {finding.compliance_article or 'NIS2 Art. 21'}.\n\n" \
-                          f"**Recommended action**: {finding.remediation or 'Review and remediate this finding.'}"
+            explanation = (
+                f"**{finding.severity}: {finding.message}**\n\n"
+                f"Target: `{finding.target}`\n\n"
+                f"This finding relates to {finding.compliance_article or 'NIS2 Art. 21'}.\n\n"
+                f"**Recommended action**: {finding.remediation or 'Review and remediate this finding.'}"
+            )
 
     return {
         "finding_id": str(finding.id),
         "explanation": explanation,
-        "source": "llm" if explanation and playbook is None else "playbook+llm" if explanation else "playbook",
+        "source": "llm"
+        if explanation and playbook is None
+        else "playbook+llm"
+        if explanation
+        else "playbook",
         "playbook_available": playbook is not None,
     }
 

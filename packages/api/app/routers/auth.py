@@ -216,7 +216,10 @@ def _build_token_response(
 # Routes
 # ---------------------------------------------------------------------------
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
+)
 @limiter.limit("10/minute")
 async def register(
     request: Request,
@@ -281,7 +284,10 @@ async def register(
 # Accept Invite — P0-02 audit fix (v2.5.5)
 # ---------------------------------------------------------------------------
 
-@router.post("/accept-invite", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+
+@router.post(
+    "/accept-invite", response_model=TokenResponse, status_code=status.HTTP_200_OK
+)
 @limiter.limit("10/minute")
 async def accept_invite(
     request: Request,
@@ -311,20 +317,20 @@ async def accept_invite(
 
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
- 
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_generic_error,
         )
- 
+
     if user.is_active and user.password_hash:
         # Already activated — don't allow re-activation
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_generic_error,
         )
- 
+
     # ── Token verification ──────────────────────────────────────────
     # Hash the raw token the caller supplied and compare against the
     # stored hash.  Use hmac.compare_digest for timing-safety.
@@ -335,24 +341,23 @@ async def accept_invite(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_generic_error,
         )
- 
+
     supplied_hash = hashlib.sha256(payload.token.encode()).hexdigest()
     if not hmac.compare_digest(supplied_hash, user.invite_token_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_generic_error,
         )
- 
+
     # Check expiry.
-    if (
-        user.invite_token_expires_at
-        and user.invite_token_expires_at < datetime.now(timezone.utc)
+    if user.invite_token_expires_at and user.invite_token_expires_at < datetime.now(
+        timezone.utc
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invitation has expired. Please ask an admin to re-invite you.",
         )
- 
+
     # Set session user_id so we can select user's memberships under RLS
     await _set_session_user_id(db, user.id)
 
@@ -383,7 +388,10 @@ async def accept_invite(
     await db.flush()
 
     return _build_token_response(
-        response, user, membership.organization_id, membership.role,
+        response,
+        user,
+        membership.organization_id,
+        membership.role,
     )
 
 
@@ -430,7 +438,9 @@ async def login(
                 if input_hash in codes_list:
                     recovery_valid = True
                     codes_list.remove(input_hash)
-                    user.totp_recovery_codes = ",".join(codes_list) if codes_list else None
+                    user.totp_recovery_codes = (
+                        ",".join(codes_list) if codes_list else None
+                    )
             if not recovery_valid:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -537,7 +547,11 @@ async def refresh(
     # Compare in epoch seconds — see dependencies.py for the rationale.
     iat_raw = token_payload.get("iat")
     if iat_raw is not None and user.password_changed_at is not None:
-        iat_seconds = int(iat_raw) if isinstance(iat_raw, (int, float)) else int(iat_raw.timestamp())
+        iat_seconds = (
+            int(iat_raw)
+            if isinstance(iat_raw, (int, float))
+            else int(iat_raw.timestamp())
+        )
         pwc_seconds = int(user.password_changed_at.timestamp())
         if iat_seconds < pwc_seconds:
             raise HTTPException(
@@ -672,6 +686,7 @@ async def update_me(
 # a covert tenant-data-exfil channel. The notice in docs/privacy.md is
 # explicit about this scope.
 
+
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_me(
     request: Request,
@@ -711,9 +726,7 @@ async def delete_me(
     user_id = current_user.id
 
     # 3. Resolve memberships and decide single-admin policy.
-    res = await db.execute(
-        select(Membership).where(Membership.user_id == user_id)
-    )
+    res = await db.execute(select(Membership).where(Membership.user_id == user_id))
     memberships = res.scalars().all()
 
     orgs_to_delete: list[uuid.UUID] = []
@@ -915,7 +928,9 @@ async def export_me(
 
     # Audit log entries authored by the user.
     ares = await db.execute(
-        select(AuditLog).where(AuditLog.user_id == user_id).order_by(AuditLog.created_at.desc())
+        select(AuditLog)
+        .where(AuditLog.user_id == user_id)
+        .order_by(AuditLog.created_at.desc())
     )
     audit_logs = [
         {
@@ -952,7 +967,9 @@ async def export_me(
             "email_verified": current_user.email_verified,
             "oauth_provider": getattr(current_user, "oauth_provider", None),
             "oauth_provider_id": getattr(current_user, "oauth_provider_id", None),
-            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+            "created_at": current_user.created_at.isoformat()
+            if current_user.created_at
+            else None,
             "password_changed_at": (
                 current_user.password_changed_at.isoformat()
                 if getattr(current_user, "password_changed_at", None)
@@ -1067,13 +1084,16 @@ async def change_password(
     #    that here.
     org_id = membership.organization_id if membership else None
     role = membership.role if membership else None
-    _build_token_response(response, current_user, org_id, role, iat_override=next_second)
+    _build_token_response(
+        response, current_user, org_id, role, iat_override=next_second
+    )
     return None
 
 
 # ---------------------------------------------------------------------------
 # Switch active organization (audit B-DRA-02, v2.4.16)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/switch-org", response_model=TokenResponse)
 @limiter.limit("10/minute")
@@ -1117,8 +1137,11 @@ async def switch_org(
     # second SQL hit — `get_current_user` does selectinload(memberships)
     # for exactly this kind of follow-up check.
     target_membership: Membership | None = next(
-        (m for m in current_user.memberships
-         if m.organization_id == payload.organization_id),
+        (
+            m
+            for m in current_user.memberships
+            if m.organization_id == payload.organization_id
+        ),
         None,
     )
     if target_membership is None:
@@ -1132,6 +1155,7 @@ async def switch_org(
     # Falls back to None for legacy tokens minted before v2.4.12
     # started writing org_id into the claims.
     from app.dependencies import _resolve_active_org_id
+
     previous_org_id = _resolve_active_org_id(request)
 
     # Audit log entry. We log under the *target* org so it shows up in
@@ -1139,6 +1163,7 @@ async def switch_org(
     # will look for "who accessed our tenant today". The `from_org_id`
     # in details lets a curious admin trace the path.
     from app.middleware.audit import log_action
+
     await log_action(
         db,
         org_id=target_membership.organization_id,
@@ -1171,6 +1196,7 @@ async def switch_org(
 # ---------------------------------------------------------------------------
 # Forgot / reset password (audit B05)
 # ---------------------------------------------------------------------------
+
 
 def _reset_email_text(reset_url: str, ttl_minutes: int) -> tuple[str, str]:
     """Plain-text and HTML bodies for the reset email. Kept inline here
@@ -1397,6 +1423,7 @@ async def reset_password(
 # TOTP / MFA endpoints — NIS2 Art. 21(j)
 # ---------------------------------------------------------------------------
 
+
 @router.post("/totp/setup", response_model=TOTPSetupResponse)
 async def totp_setup(
     current_user: User = Depends(get_current_user),
@@ -1443,7 +1470,7 @@ async def totp_verify(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid TOTP code",
         )
-    
+
     raw_codes = []
     hashed_codes = []
     for _ in range(8):
@@ -1451,7 +1478,7 @@ async def totp_verify(
         raw_codes.append(code)
         hashed_code = hashlib.sha256(code.encode()).hexdigest()
         hashed_codes.append(hashed_code)
-        
+
     current_user.totp_recovery_codes = ",".join(hashed_codes)
     current_user.totp_enabled = True
     await db.flush()
@@ -1489,6 +1516,7 @@ async def totp_disable(
 # ---------------------------------------------------------------------------
 
 if settings.environment != "production":
+
     @router.get(
         "/debug/last-email",
         # tags lower so the prod OpenAPI doc isn't polluted

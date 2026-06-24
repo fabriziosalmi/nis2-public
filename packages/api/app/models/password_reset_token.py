@@ -14,6 +14,7 @@ Table is intentionally NOT tenant-scoped: a forgot-password flow runs
 before the user has selected an org (or even logged in), and the
 target user may belong to multiple orgs anyway.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -57,4 +58,6 @@ class PasswordResetToken(TimestampMixin, Base):
     )
 
     def __repr__(self) -> str:
-        return f"<PasswordResetToken user_id={self.user_id} expires_at={self.expires_at}>"
+        return (
+            f"<PasswordResetToken user_id={self.user_id} expires_at={self.expires_at}>"
+        )

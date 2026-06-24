@@ -26,9 +26,14 @@ class AcceptInviteRequest(BaseModel):
     correct token, accept-invite returns the same generic 400 error
     regardless of whether the email exists — preventing both account
     takeover and email enumeration."""
+
     email: EmailStr
-    token: str = Field(..., min_length=32, max_length=128,
-                       description="Raw invite token from the invitation link")
+    token: str = Field(
+        ...,
+        min_length=32,
+        max_length=128,
+        description="Raw invite token from the invitation link",
+    )
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., min_length=1, max_length=256)
 
@@ -81,7 +86,9 @@ class UserUpdate(BaseModel):
     def validate_avatar_url(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return v
-        if not (v.startswith("http://") or v.startswith("https://") or v.startswith("/")):
+        if not (
+            v.startswith("http://") or v.startswith("https://") or v.startswith("/")
+        ):
             raise ValueError("Avatar URL must start with http://, https://, or /")
         if ":" in v and not (v.startswith("http://") or v.startswith("https://")):
             raise ValueError("Invalid URL scheme")
@@ -96,6 +103,7 @@ class ChangePasswordRequest(BaseModel):
     "passwordUpdated". This dedicated schema makes the contract explicit
     and lets the route validate before any DB mutation.
     """
+
     current_password: str = Field(..., min_length=1, max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)
 
@@ -105,6 +113,7 @@ class ForgotPasswordRequest(BaseModel):
     returns 204 regardless of whether the email exists, so this is the
     only data we accept on the wire — no extra metadata that could be
     used to enumerate registered emails."""
+
     email: EmailStr
 
 
@@ -113,6 +122,7 @@ class ResetPasswordRequest(BaseModel):
     emailed link plus the user's chosen new password. Floor of 8 chars
     matches RegisterRequest and ChangePasswordRequest so all three
     password-setting surfaces enforce the same minimum."""
+
     token: str = Field(..., min_length=20, max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)
 
@@ -128,6 +138,7 @@ class TokenResponse(BaseModel):
     frontend echoes it as the `X-CSRF-Token` header on state-changing
     requests (double-submit cookie pattern).
     """
+
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
@@ -141,6 +152,7 @@ class RefreshRequest(BaseModel):
     Body is optional now: if cookies are present, /refresh reads
     refresh_token from the httpOnly cookie. SDKs can still POST it.
     """
+
     refresh_token: Optional[str] = None
 
 
@@ -155,4 +167,5 @@ class SwitchOrgRequest(BaseModel):
     posts here from the org-switcher dropdown; SDK / CLI consumers can
     call it the same way.
     """
+
     organization_id: uuid.UUID

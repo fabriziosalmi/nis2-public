@@ -13,6 +13,7 @@ Bearer / API-key authenticated requests are not vulnerable to CSRF
 (no automatic credential attachment by the browser) and bypass this
 check.
 """
+
 import secrets
 
 from fastapi import Request

@@ -5,7 +5,16 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +64,12 @@ async def list_assets(
     )
 
 
-@router.post("", response_model=AssetResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "",
+    response_model=AssetResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 @limiter.limit("20/minute")
 async def create_asset(
     request: Request,
@@ -82,9 +96,13 @@ async def create_asset(
 
     # SSRF validation + pin the IP for the scanner to use later.
     try:
-        validation = await validate_target_pinned(payload.target_type, payload.target_value)
+        validation = await validate_target_pinned(
+            payload.target_type, payload.target_value
+        )
     except TargetValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        )
 
     asset = Asset(
         organization_id=org_id,
@@ -104,7 +122,11 @@ async def create_asset(
         action="asset.created",
         resource_type="asset",
         resource_id=str(asset.id),
-        details={"name": asset.name, "target": asset.target_value, "type": asset.target_type},
+        details={
+            "name": asset.name,
+            "target": asset.target_value,
+            "type": asset.target_type,
+        },
     )
 
     return AssetResponse.model_validate(asset)
@@ -119,12 +141,18 @@ async def get_asset(
     # Dual-auth read — see list_assets for the wiring note.
     asset = await db.get(Asset, asset_id)
     if not asset or asset.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found"
+        )
 
     return AssetResponse.model_validate(asset)
 
 
-@router.patch("/{asset_id}", response_model=AssetResponse, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.patch(
+    "/{asset_id}",
+    response_model=AssetResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def update_asset(
     asset_id: uuid.UUID,
     payload: AssetUpdate,
@@ -135,7 +163,9 @@ async def update_asset(
 
     asset = await db.get(Asset, asset_id)
     if not asset or asset.organization_id != membership.organization_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found"
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
 
@@ -185,13 +215,21 @@ async def update_asset(
         action="asset.updated",
         resource_type="asset",
         resource_id=str(asset.id),
-        details={"name": asset.name, "target": asset.target_value, "updated_fields": list(update_data.keys())},
+        details={
+            "name": asset.name,
+            "target": asset.target_value,
+            "updated_fields": list(update_data.keys()),
+        },
     )
 
     return AssetResponse.model_validate(asset)
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("admin"))])
+@router.delete(
+    "/{asset_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
 async def delete_asset(
     asset_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -201,7 +239,9 @@ async def delete_asset(
 
     asset = await db.get(Asset, asset_id)
     if not asset or asset.organization_id != membership.organization_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found"
+        )
 
     await log_action(
         db,
@@ -210,14 +250,23 @@ async def delete_asset(
         action="asset.deleted",
         resource_type="asset",
         resource_id=str(asset.id),
-        details={"name": asset.name, "target": asset.target_value, "type": asset.target_type},
+        details={
+            "name": asset.name,
+            "target": asset.target_value,
+            "type": asset.target_type,
+        },
     )
 
     await db.delete(asset)
     await db.flush()
 
 
-@router.post("/import", response_model=dict, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin"))])
+@router.post(
+    "/import",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin"))],
+)
 @limiter.limit("5/minute")
 async def import_assets_csv(
     request: Request,
@@ -246,7 +295,7 @@ async def import_assets_csv(
     if len(content) > MAX_CSV_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"CSV file too large. Maximum size: {MAX_CSV_BYTES // (1024*1024)} MB",
+            detail=f"CSV file too large. Maximum size: {MAX_CSV_BYTES // (1024 * 1024)} MB",
         )
 
     try:
@@ -264,7 +313,9 @@ async def import_assets_csv(
 
     # Load all existing assets into memory to avoid N+1 queries during import
     existing_assets_result = await db.execute(
-        select(Asset.target_type, Asset.target_value).where(Asset.organization_id == org_id)
+        select(Asset.target_type, Asset.target_value).where(
+            Asset.organization_id == org_id
+        )
     )
     existing_assets = {(row[0], row[1]) for row in existing_assets_result.all()}
 
@@ -328,7 +379,11 @@ async def import_assets_csv(
         user_id=user.id,
         action="asset.imported",
         resource_type="asset_import",
-        details={"created": created, "skipped": skipped, "errors_count": len(errors_list)},
+        details={
+            "created": created,
+            "skipped": skipped,
+            "errors_count": len(errors_list),
+        },
     )
 
     return {"created": created, "skipped": skipped, "errors": errors_list}

@@ -11,6 +11,7 @@ contacting the auth server.
 In HS256 mode the endpoint returns an empty keyset; HMAC secrets are
 symmetric and must never be published.
 """
+
 import base64
 import logging
 

@@ -37,6 +37,7 @@ Also v2.4.19:
     the user sees a real error instead of receiving an HTML file
     masquerading as `.pdf`.
 """
+
 import asyncio
 import csv
 import html
@@ -89,8 +90,10 @@ def _clear_report_inflight_lock(
         # raises we don't want it to bring down task_postrun.
         logger.warning(
             "report-dedup: postrun clear failed for task %s: %s",
-            task_id, exc,
+            task_id,
+            exc,
         )
+
 
 REPORTS_DIR = "/tmp/nis2-reports"
 os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -99,6 +102,7 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 # ---------------------------------------------------------------------------
 # Cleanup beat task (v2.4.20 audit reports-005)
 # ---------------------------------------------------------------------------
+
 
 @celery_app.task
 def cleanup_old_reports() -> dict:
@@ -152,6 +156,7 @@ def cleanup_old_reports() -> dict:
             dir_path = os.path.join(root, d)
             try:
                 import uuid
+
                 try:
                     uuid.UUID(d)
                     is_org_dir = True
@@ -163,18 +168,23 @@ def cleanup_old_reports() -> dict:
             except OSError:
                 pass
 
-
-
     logger.info(
         "cleanup_old_reports: removed=%d skipped=%d freed=%d bytes (cutoff=%s)",
-        removed, skipped, bytes_freed, cutoff.isoformat(),
+        removed,
+        skipped,
+        bytes_freed,
+        cutoff.isoformat(),
     )
     return {"removed": removed, "skipped": skipped, "bytes_freed": bytes_freed}
 
 
 @celery_app.task(bind=True, max_retries=1, time_limit=120)
 def generate_report_task(
-    self, scan_id: str, org_id: str, format: str, locale: str | None = None,
+    self,
+    scan_id: str,
+    org_id: str,
+    format: str,
+    locale: str | None = None,
 ):
     """Generate a compliance report in the requested format.
 
@@ -188,7 +198,10 @@ def generate_report_task(
 
 
 async def _generate_report(
-    scan_id: str, org_id: str, format: str, locale: str | None = None,
+    scan_id: str,
+    org_id: str,
+    format: str,
+    locale: str | None = None,
 ) -> dict:
     from app.database import async_session_factory
     from app.models.scan import Scan
@@ -205,10 +218,14 @@ async def _generate_report(
         # later — see app/routers/reports.py.
         if str(scan.organization_id) != str(org_id):
             raise ValueError("Scan does not belong to requesting organization")
-        results_q = await db.execute(select(ScanResult).where(ScanResult.scan_id == scan.id))
+        results_q = await db.execute(
+            select(ScanResult).where(ScanResult.scan_id == scan.id)
+        )
         results = results_q.scalars().all()
         findings_q = await db.execute(
-            select(Finding).where(Finding.scan_id == scan.id).order_by(Finding.severity, Finding.created_at)
+            select(Finding)
+            .where(Finding.scan_id == scan.id)
+            .order_by(Finding.severity, Finding.created_at)
         )
         findings = findings_q.scalars().all()
 
@@ -241,7 +258,9 @@ async def _generate_report(
     }
     gen = generators.get(format)
     if not gen:
-        raise ValueError(f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}")
+        raise ValueError(
+            f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}"
+        )
     result = gen(scan, results, findings, base, loc)
     # Stash the org_id on the result so the API's /status and
     # /download endpoints can validate the requester's org matches.
@@ -256,6 +275,7 @@ async def _generate_report(
 # ---------------------------------------------------------------------------
 # Sanitization helpers (v2.4.19 audit hardening)
 # ---------------------------------------------------------------------------
+
 
 def _safe_basename(name: str | None) -> str:
     """Reduce a user-supplied scan name to a filename-safe slug.
@@ -309,6 +329,7 @@ def _xml_attr(value: object) -> str:
     those). `xml.sax.saxutils.escape` handles `&`, `<`, `>`; we
     also escape `"` since attributes use double quotes."""
     from xml.sax.saxutils import escape
+
     if value is None:
         return ""
     return escape(str(value), {'"': "&quot;"})
@@ -318,6 +339,7 @@ def _xml_text(value: object) -> str:
     """Escape body text — `&`, `<`, `>` only (quotes don't matter
     in element text)."""
     from xml.sax.saxutils import escape
+
     if value is None:
         return ""
     return escape(str(value))
@@ -326,6 +348,7 @@ def _xml_text(value: object) -> str:
 # ---------------------------------------------------------------------------
 # JSON (no escaping needed — json.dumps handles everything)
 # ---------------------------------------------------------------------------
+
 
 def _gen_json(scan, results, findings, base, locale: str = "en") -> dict:
     # JSON is machine-readable; we don't translate field names (those
@@ -336,21 +359,33 @@ def _gen_json(scan, results, findings, base, locale: str = "en") -> dict:
     data = {
         "version": "2.2",
         "metadata": {
-            "scan_id": str(scan.id), "scan_name": scan.name,
+            "scan_id": str(scan.id),
+            "scan_name": scan.name,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "generator": "NIS2 Compliance Platform",
             "locale": locale,
         },
         "summary": {
             "total_score": scan.total_score,
-            "hosts_scanned": scan.hosts_scanned, "hosts_alive": scan.hosts_alive,
-            "findings_critical": scan.findings_critical, "findings_high": scan.findings_high,
-            "findings_medium": scan.findings_medium, "findings_low": scan.findings_low,
+            "hosts_scanned": scan.hosts_scanned,
+            "hosts_alive": scan.hosts_alive,
+            "findings_critical": scan.findings_critical,
+            "findings_high": scan.findings_high,
+            "findings_medium": scan.findings_medium,
+            "findings_low": scan.findings_low,
         },
         "compliance_matrix": scan.compliance_matrix or {},
         "executive_summary": scan.executive_summary or "",
         "findings": [_finding_dict(f) for f in findings],
-        "assets": [{"target": r.target, "ip": r.ip, "is_alive": r.is_alive, "open_ports": r.open_ports or []} for r in results],
+        "assets": [
+            {
+                "target": r.target,
+                "ip": r.ip,
+                "is_alive": r.is_alive,
+                "open_ports": r.open_ports or [],
+            }
+            for r in results
+        ],
     }
     path = os.path.join(REPORTS_DIR, f"{base}.json")
     with open(path, "w") as f:
@@ -362,33 +397,38 @@ def _gen_json(scan, results, findings, base, locale: str = "en") -> dict:
 # CSV (formula-injection neutered)
 # ---------------------------------------------------------------------------
 
+
 def _gen_csv(scan, results, findings, base, locale: str = "en") -> dict:
     path = os.path.join(REPORTS_DIR, f"{base}.csv")
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow([
-            _t(locale, "h_severity"),
-            _t(locale, "h_category"),
-            _t(locale, "h_finding"),
-            _t(locale, "h_target"),
-            _t(locale, "h_remediation"),
-            _t(locale, "h_cvss_score"),
-            _t(locale, "h_cvss_vector"),
-            _t(locale, "h_compliance_article"),
-            _t(locale, "h_status"),
-        ])
+        w.writerow(
+            [
+                _t(locale, "h_severity"),
+                _t(locale, "h_category"),
+                _t(locale, "h_finding"),
+                _t(locale, "h_target"),
+                _t(locale, "h_remediation"),
+                _t(locale, "h_cvss_score"),
+                _t(locale, "h_cvss_vector"),
+                _t(locale, "h_compliance_article"),
+                _t(locale, "h_status"),
+            ]
+        )
         for fi in findings:
-            w.writerow([
-                _csv_safe(fi.severity),
-                _csv_safe(fi.category),
-                _csv_safe(fi.message),
-                _csv_safe(fi.target),
-                _csv_safe(fi.remediation or ""),
-                _csv_safe(fi.cvss_base_score or ""),
-                _csv_safe(fi.cvss_vector or ""),
-                _csv_safe(fi.compliance_article or ""),
-                _csv_safe(fi.status),
-            ])
+            w.writerow(
+                [
+                    _csv_safe(fi.severity),
+                    _csv_safe(fi.category),
+                    _csv_safe(fi.message),
+                    _csv_safe(fi.target),
+                    _csv_safe(fi.remediation or ""),
+                    _csv_safe(fi.cvss_base_score or ""),
+                    _csv_safe(fi.cvss_vector or ""),
+                    _csv_safe(fi.compliance_article or ""),
+                    _csv_safe(fi.status),
+                ]
+            )
     return _result(path, f"{base}.csv", "text/csv", "csv")
 
 
@@ -396,11 +436,16 @@ def _gen_csv(scan, results, findings, base, locale: str = "en") -> dict:
 # Markdown (structural chars escaped)
 # ---------------------------------------------------------------------------
 
+
 def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
     lines = []
     lines.append(f"# {_t(locale, 'report_title')}\n")
     lines.append(f"**{_t(locale, 'field_scan')}:** {_md(scan.name)}  ")
-    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else _t(locale, "not_available")
+    date_str = (
+        (scan.completed_at or scan.created_at).strftime("%Y-%m-%d %H:%M UTC")
+        if (scan.completed_at or scan.created_at)
+        else _t(locale, "not_available")
+    )
     lines.append(f"**{_t(locale, 'field_date')}:** {date_str}  ")
     lines.append(f"**{_t(locale, 'field_score')}:** {scan.total_score or 0}/100  ")
     lines.append(f"**{_t(locale, 'field_duration')}:** {scan.duration_seconds or 0}s\n")
@@ -432,7 +477,12 @@ def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
     )
     lines.append("|----------|----------|---------|--------|-------------|")
     for f in findings:
-        sev_icon = {"CRITICAL": "[!]", "HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[.]"}.get(f.severity, "[ ]")
+        sev_icon = {
+            "CRITICAL": "[!]",
+            "HIGH": "[!]",
+            "MEDIUM": "[-]",
+            "LOW": "[.]",
+        }.get(f.severity, "[ ]")
         lines.append(
             f"| {sev_icon} {_md(f.severity)} | {_md(f.category)} | {_md(f.message)} | "
             f"`{_md(f.target)}` | {_md(f.remediation) if f.remediation else _t(locale, 'not_applicable')} |"
@@ -448,7 +498,9 @@ def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
     lines.append("|--------|-----|--------|-----------|")
     for r in results:
         st = _t(locale, "host_active") if r.is_alive else _t(locale, "host_inactive")
-        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(locale, "no_open_ports")
+        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(
+            locale, "no_open_ports"
+        )
         lines.append(f"| {_md(r.target)} | `{_md(r.ip)}` | {st} | {_md(ports)} |")
     lines.append("")
 
@@ -467,6 +519,7 @@ def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
 # JUnit XML (CI/CD integration) — attribute + text escaping via
 # xml.sax.saxutils plus the wrappers above.
 # ---------------------------------------------------------------------------
+
 
 def _gen_junit(scan, results, findings, base, locale: str = "en") -> dict:
     # ElementTree's SubElement(name, attr=value) handles attribute
@@ -509,7 +562,8 @@ def _gen_junit(scan, results, findings, base, locale: str = "en") -> dict:
             )
             if f.severity in ("CRITICAL", "HIGH"):
                 fail = SubElement(
-                    tc, "failure",
+                    tc,
+                    "failure",
                     message=_xml_attr(f.message),
                     type=_xml_attr(f.severity),
                 )
@@ -520,7 +574,8 @@ def _gen_junit(scan, results, findings, base, locale: str = "en") -> dict:
                 )
             elif f.severity == "MEDIUM":
                 fail = SubElement(
-                    tc, "failure",
+                    tc,
+                    "failure",
                     message=_xml_attr(f.message),
                     type="WARNING",
                 )
@@ -542,6 +597,7 @@ def _gen_junit(scan, results, findings, base, locale: str = "en") -> dict:
 # HTML (every user-content interpolation goes through html.escape)
 # ---------------------------------------------------------------------------
 
+
 def _h(value: object) -> str:
     """Tiny shorthand for `html.escape` — used pervasively below
     so the templating reads close to a plain f-string."""
@@ -553,8 +609,17 @@ def _h(value: object) -> str:
 def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     score = scan.total_score or 0
     sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
-    sev_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04", "LOW": "#2563eb"}
-    date_str = (scan.completed_at or scan.created_at).strftime('%Y-%m-%d %H:%M UTC') if (scan.completed_at or scan.created_at) else _t(locale, "not_available")
+    sev_colors = {
+        "CRITICAL": "#dc2626",
+        "HIGH": "#ea580c",
+        "MEDIUM": "#ca8a04",
+        "LOW": "#2563eb",
+    }
+    date_str = (
+        (scan.completed_at or scan.created_at).strftime("%Y-%m-%d %H:%M UTC")
+        if (scan.completed_at or scan.created_at)
+        else _t(locale, "not_available")
+    )
 
     f_rows = ""
     for f in findings:
@@ -562,21 +627,23 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
         f_rows += (
             f'<tr><td><span style="background:{c};color:#fff;padding:2px 8px;'
             f'border-radius:4px;font-size:12px;font-weight:600">{_h(f.severity)}</span></td>'
-            f'<td>{_h(f.category)}</td>'
-            f'<td>{_h(f.message)}</td>'
-            f'<td><code>{_h(f.target)}</code></td>'
-            f'<td>{_h(f.remediation) if f.remediation else "-"}</td></tr>\n'
+            f"<td>{_h(f.category)}</td>"
+            f"<td>{_h(f.message)}</td>"
+            f"<td><code>{_h(f.target)}</code></td>"
+            f"<td>{_h(f.remediation) if f.remediation else '-'}</td></tr>\n"
         )
 
     a_rows = ""
     for r in results:
         st = _t(locale, "host_active") if r.is_alive else _t(locale, "host_inactive")
-        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(locale, "no_open_ports")
+        ports = ", ".join(str(p) for p in (r.open_ports or [])) or _t(
+            locale, "no_open_ports"
+        )
         a_rows += (
-            f'<tr><td>{_h(r.target)}</td>'
-            f'<td><code>{_h(r.ip)}</code></td>'
-            f'<td>{_h(st)}</td>'
-            f'<td>{_h(ports)}</td></tr>\n'
+            f"<tr><td>{_h(r.target)}</td>"
+            f"<td><code>{_h(r.ip)}</code></td>"
+            f"<td>{_h(st)}</td>"
+            f"<td>{_h(ports)}</td></tr>\n"
         )
 
     # Executive summary — escape the user-supplied text inside an
@@ -587,7 +654,7 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     exec_block = ""
     if scan.executive_summary:
         exec_block = (
-            f'<h2>{_h(_t(locale, "executive_summary"))}</h2>'
+            f"<h2>{_h(_t(locale, 'executive_summary'))}</h2>"
             f'<div class="executive">{_h(scan.executive_summary)}</div>'
         )
 
@@ -627,7 +694,7 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 <table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
 <table><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr>{a_rows}</table>
-<div class="footer">{_h(_t(locale, "footer_generated_by"))} &bull; {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} &bull; {_h(_t(locale, "footer_ref"))}</div>
+<div class="footer">{_h(_t(locale, "footer_generated_by"))} &bull; {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} &bull; {_h(_t(locale, "footer_ref"))}</div>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
@@ -642,6 +709,7 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 # libcairo system stack alongside the pip package.
 # ---------------------------------------------------------------------------
 
+
 def _gen_pdf(scan, results, findings, base, locale: str = "en") -> dict:
     html_result = _gen_html(scan, results, findings, base, locale)
     html_path = html_result["file_path"]
@@ -654,6 +722,7 @@ def _gen_pdf(scan, results, findings, base, locale: str = "en") -> dict:
     # open without explanation. If the import or render fails, the
     # task fails and the API surfaces the error to the user.
     from weasyprint import HTML
+
     with open(html_path) as f:
         HTML(string=f.read()).write_pdf(pdf_path)
     return _result(pdf_path, f"{base}.pdf", "application/pdf", "pdf")
@@ -663,14 +732,26 @@ def _gen_pdf(scan, results, findings, base, locale: str = "en") -> dict:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _finding_dict(f) -> dict:
     return {
-        "severity": f.severity, "category": f.category, "message": f.message,
-        "target": f.target, "remediation": f.remediation,
-        "cvss_base_score": f.cvss_base_score, "cvss_vector": f.cvss_vector,
-        "compliance_article": f.compliance_article, "status": f.status,
+        "severity": f.severity,
+        "category": f.category,
+        "message": f.message,
+        "target": f.target,
+        "remediation": f.remediation,
+        "cvss_base_score": f.cvss_base_score,
+        "cvss_vector": f.cvss_vector,
+        "compliance_article": f.compliance_article,
+        "status": f.status,
     }
 
+
 def _result(path, filename, content_type, fmt) -> dict:
-    return {"file_path": path, "filename": os.path.basename(filename), "content_type": content_type,
-            "size": os.path.getsize(path), "format": fmt}
+    return {
+        "file_path": path,
+        "filename": os.path.basename(filename),
+        "content_type": content_type,
+        "size": os.path.getsize(path),
+        "format": fmt,
+    }

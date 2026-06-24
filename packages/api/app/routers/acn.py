@@ -13,6 +13,7 @@ Endpoints:
 - /csirt/emergency: "Red Button" - instant CSIRT Early Warning payload
   generator. Produces an artefact ready for manual submission to csirt.gov.it.
 """
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -110,12 +111,14 @@ async def get_deadlines():
         else:
             urgency = "on_track"
 
-        enriched.append({
-            **d,
-            "days_remaining": days_remaining,
-            "urgency": urgency,
-            "months_remaining": round(days_remaining / 30.44, 1),
-        })
+        enriched.append(
+            {
+                **d,
+                "days_remaining": days_remaining,
+                "urgency": urgency,
+                "months_remaining": round(days_remaining / 30.44, 1),
+            }
+        )
 
     enriched.sort(key=lambda x: x["days_remaining"])
 
@@ -131,8 +134,10 @@ async def get_deadlines():
 # CSIRT Emergency — "Tasto Rosso" (Art. 23)
 # -------------------------------------------------------------------------
 
+
 class EmergencyIncidentRequest(BaseModel):
     """Minimal fields for panic-mode incident declaration."""
+
     what_happened: str
     affected_services: str
     is_ongoing: bool = True
@@ -159,14 +164,14 @@ async def csirt_emergency_payload(
 
     # Fetch org name
     from app.models.organization import Organization
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == org_id)
-    )
+
+    org_result = await db.execute(select(Organization).where(Organization.id == org_id))
     org = org_result.scalar_one_or_none()
     org_name = org.name if org else "Unknown Organization"
 
     # Fetch latest asset inventory
     from app.models.asset import Asset
+
     asset_result = await db.execute(
         select(Asset).where(Asset.organization_id == org_id)
     )
@@ -182,41 +187,36 @@ async def csirt_emergency_payload(
         "document_type": "early_warning",
         "generated_at": now.isoformat(),
         "generator": "NIS2 Compliance Platform (nis2-public)",
-
         "reporting_entity": {
             "organization_name": org_name,
             "organization_id": str(org_id),
-            "contact_email": user.email if hasattr(user, 'email') else None,
+            "contact_email": user.email if hasattr(user, "email") else None,
         },
-
         "incident": {
             "detection_timestamp": detected.isoformat(),
             "early_warning_deadline": (detected + timedelta(hours=24)).isoformat(),
             "notification_deadline": (detected + timedelta(hours=72)).isoformat(),
             "final_report_deadline": (detected + timedelta(days=30)).isoformat(),
-
             "description": data.what_happened,
             "affected_services": data.affected_services,
             "is_ongoing": data.is_ongoing,
             "estimated_users_affected": data.estimated_users_affected,
-
             "hours_remaining_early_warning": max(
-                0, round((detected + timedelta(hours=24) - now).total_seconds() / 3600, 1)
+                0,
+                round((detected + timedelta(hours=24) - now).total_seconds() / 3600, 1),
             ),
             "hours_remaining_notification": max(
-                0, round((detected + timedelta(hours=72) - now).total_seconds() / 3600, 1)
+                0,
+                round((detected + timedelta(hours=72) - now).total_seconds() / 3600, 1),
             ),
         },
-
         "asset_inventory_snapshot": asset_inventory,
-
         "classification": {
             "severity": "to_be_determined",
             "csirt_taxonomy": "to_be_classified",
             "cross_border_impact": False,
             "supply_chain_impact": False,
         },
-
         "instructions": {
             "next_step": "Submit this payload to CSIRT Italia within the early_warning_deadline.",
             "notification_portal": "https://www.csirt.gov.it/",
@@ -231,6 +231,7 @@ async def csirt_emergency_payload(
 # ACN Export — Determina 127437 compliant data export
 # -------------------------------------------------------------------------
 
+
 @router.get("/acn-export/art18")
 async def export_art18_vendors(
     db: AsyncSession = Depends(get_db),
@@ -243,18 +244,20 @@ async def export_art18_vendors(
     user, org_id = auth
 
     from app.models.vendor import Vendor
+
     result = await db.execute(
-        select(Vendor).where(
+        select(Vendor)
+        .where(
             Vendor.organization_id == org_id,
             Vendor.acn_rilevanza_art18,
-        ).order_by(Vendor.criticality)
+        )
+        .order_by(Vendor.criticality)
     )
     vendors = result.scalars().all()
 
     from app.models.organization import Organization
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == org_id)
-    )
+
+    org_result = await db.execute(select(Organization).where(Organization.id == org_id))
     org = org_result.scalar_one_or_none()
 
     export = {
@@ -264,12 +267,10 @@ async def export_art18_vendors(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "NIS2 Compliance Platform (nis2-public)",
         "reference": "Determina ACN 127437/2026 — Art. 18 D.Lgs 138/2024",
-
         "reporting_entity": {
             "organization_name": org.name if org else "Unknown",
             "organization_id": str(org_id),
         },
-
         "vendor_inventory": [
             {
                 "nome_fornitore": v.name,
@@ -279,7 +280,9 @@ async def export_art18_vendors(
                 "livello_accesso_dati": v.data_access_level,
                 "localizzazione_geografica": v.geographic_location,
                 "certificazioni_sicurezza": v.has_security_certification,
-                "data_ultimo_audit": v.last_audit_date.isoformat() if v.last_audit_date else None,
+                "data_ultimo_audit": v.last_audit_date.isoformat()
+                if v.last_audit_date
+                else None,
                 "codice_servizio_acn": v.acn_codice_servizio,
                 "stato": v.status,
                 "punteggio_sicurezza": v.security_score,
@@ -287,11 +290,12 @@ async def export_art18_vendors(
             }
             for v in vendors
         ],
-
         "summary": {
             "total_vendors_art18": len(vendors),
             "critical_count": sum(1 for v in vendors if v.criticality == 1),
-            "without_certification": sum(1 for v in vendors if not v.has_security_certification),
+            "without_certification": sum(
+                1 for v in vendors if not v.has_security_certification
+            ),
             "without_audit": sum(1 for v in vendors if not v.last_audit_date),
         },
     }
@@ -311,6 +315,7 @@ async def export_bia(
     user, org_id = auth
 
     from app.models.bia import BusinessProcess
+
     result = await db.execute(
         select(BusinessProcess)
         .where(BusinessProcess.organization_id == org_id)
@@ -319,9 +324,8 @@ async def export_bia(
     processes = result.scalars().all()
 
     from app.models.organization import Organization
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == org_id)
-    )
+
+    org_result = await db.execute(select(Organization).where(Organization.id == org_id))
     org = org_result.scalar_one_or_none()
 
     export = {
@@ -331,12 +335,10 @@ async def export_bia(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "NIS2 Compliance Platform (nis2-public)",
         "reference": "Art. 21(c) D.Lgs 138/2024 — Business Continuity",
-
         "reporting_entity": {
             "organization_name": org.name if org else "Unknown",
             "organization_id": str(org_id),
         },
-
         "business_processes": [
             {
                 "nome_processo": p.name,
@@ -360,11 +362,12 @@ async def export_bia(
             }
             for p in processes
         ],
-
         "summary": {
             "total_processes": len(processes),
             "mission_critical": sum(1 for p in processes if p.criticality_level == 1),
-            "essential_services": sum(1 for p in processes if p.acn_servizio_essenziale),
+            "essential_services": sum(
+                1 for p in processes if p.acn_servizio_essenziale
+            ),
             "without_bcp": sum(1 for p in processes if not p.has_bcp),
             "without_drp": sum(1 for p in processes if not p.has_drp),
             "without_rto": sum(1 for p in processes if not p.rto_hours),

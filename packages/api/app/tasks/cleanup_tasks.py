@@ -33,6 +33,7 @@ The job runs once per hour. Hourly is enough because:
 
 Idempotent — re-running mid-hour is a no-op on already-pruned rows.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -109,4 +110,8 @@ async def _cleanup():
         else:
             logger.debug("cleanup_expired_auth_records: nothing to prune")
 
-        return {"revoked_tokens": revoked_n, "password_reset_tokens": reset_n, "audit_logs": audit_n}
+        return {
+            "revoked_tokens": revoked_n,
+            "password_reset_tokens": reset_n,
+            "audit_logs": audit_n,
+        }

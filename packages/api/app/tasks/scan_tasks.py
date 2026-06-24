@@ -110,15 +110,11 @@ async def _run_scan(scan_id: str) -> dict:
             scan.findings_critical = sum(
                 1 for f in report.findings if f.severity == "CRITICAL"
             )
-            scan.findings_high = sum(
-                1 for f in report.findings if f.severity == "HIGH"
-            )
+            scan.findings_high = sum(1 for f in report.findings if f.severity == "HIGH")
             scan.findings_medium = sum(
                 1 for f in report.findings if f.severity == "MEDIUM"
             )
-            scan.findings_low = sum(
-                1 for f in report.findings if f.severity == "LOW"
-            )
+            scan.findings_low = sum(1 for f in report.findings if f.severity == "LOW")
             scan.compliance_matrix = getattr(report, "compliance_matrix", {})
             scan.executive_summary = getattr(report, "executive_summary", "")
             scan.completed_at = datetime.now(timezone.utc)
@@ -182,6 +178,7 @@ async def _run_scheduled_scan(schedule_id: str):
         pinned_ips: dict[str, str] = {}
         if asset_ids:
             from sqlalchemy import select
+
             assets_result = await db.execute(
                 select(Asset).where(
                     Asset.id.in_([uuid.UUID(a) for a in asset_ids]),
@@ -279,7 +276,10 @@ def _should_run(cron_expr: str, last_run, now) -> bool:
                     return value % step == 0
                 elif "-" in base:
                     low, high = base.split("-", 1)
-                    return int(low) <= value <= int(high) and (value - int(low)) % step == 0
+                    return (
+                        int(low) <= value <= int(high)
+                        and (value - int(low)) % step == 0
+                    )
                 else:
                     start = int(base)
                     return value >= start and (value - start) % step == 0
@@ -290,13 +290,15 @@ def _should_run(cron_expr: str, last_run, now) -> bool:
             # Exact match
             return str(value) == field
 
-        if not all([
-            matches(minute, now.minute),
-            matches(hour, now.hour),
-            matches(dom, now.day),
-            matches(month, now.month),
-            matches(dow, now.isoweekday() % 7),  # 0=Sun
-        ]):
+        if not all(
+            [
+                matches(minute, now.minute),
+                matches(hour, now.hour),
+                matches(dom, now.day),
+                matches(month, now.month),
+                matches(dow, now.isoweekday() % 7),  # 0=Sun
+            ]
+        ):
             return False
 
         # Don't run if already ran this minute

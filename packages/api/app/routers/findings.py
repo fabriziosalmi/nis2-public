@@ -41,7 +41,9 @@ async def list_findings(
     # identity to write into the audit log.
 
     query = select(Finding).where(Finding.organization_id == org_id)
-    count_query = select(func.count(Finding.id)).where(Finding.organization_id == org_id)
+    count_query = select(func.count(Finding.id)).where(
+        Finding.organization_id == org_id
+    )
 
     if severity:
         query = query.where(Finding.severity == severity)
@@ -126,12 +128,18 @@ async def get_finding(
     # Dual-auth read — see list_findings for the wiring note.
     finding = await db.get(Finding, finding_id)
     if not finding or finding.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found"
+        )
 
     return FindingResponse.model_validate(finding)
 
 
-@router.patch("/{finding_id}", response_model=FindingResponse, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.patch(
+    "/{finding_id}",
+    response_model=FindingResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def update_finding(
     finding_id: uuid.UUID,
     payload: FindingUpdate,
@@ -142,7 +150,9 @@ async def update_finding(
 
     finding = await db.get(Finding, finding_id)
     if not finding or finding.organization_id != membership.organization_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found"
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -166,7 +176,11 @@ async def update_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/bulk-update", response_model=dict, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "/bulk-update",
+    response_model=dict,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def bulk_update_findings(
     payload: BulkFindingUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -201,7 +215,11 @@ async def bulk_update_findings(
         user_id=user.id,
         action="finding.bulk_updated",
         resource_type="finding",
-        details={"status": payload.status, "updated_count": updated_count, "requested_count": len(payload.finding_ids)},
+        details={
+            "status": payload.status,
+            "updated_count": updated_count,
+            "requested_count": len(payload.finding_ids),
+        },
     )
 
     return {"updated": updated_count, "total_requested": len(payload.finding_ids)}

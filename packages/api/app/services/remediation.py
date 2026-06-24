@@ -7,6 +7,7 @@ NIS2 Remediation Playbooks & Effort Estimator.
 Provides structured, copy-pasteable fix instructions per finding category.
 Includes server-specific configs (Nginx, Apache, Caddy, IIS) and effort/cost estimation.
 """
+
 from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -30,8 +31,8 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "Verify with SSL Labs: https://www.ssllabs.com/ssltest/",
         ],
         "configs": {
-            "nginx": 'ssl_protocols TLSv1.2 TLSv1.3;\nssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;\nssl_prefer_server_ciphers off;',
-            "apache": 'SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1\nSSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256\nSSLHonorCipherOrder off',
+            "nginx": "ssl_protocols TLSv1.2 TLSv1.3;\nssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;\nssl_prefer_server_ciphers off;",
+            "apache": "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1\nSSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256\nSSLHonorCipherOrder off",
             "caddy": "tls {\n    protocols tls1.2 tls1.3\n}",
             "iis": "# Run in PowerShell as Admin:\nDisable-TlsCipherSuite -Name TLS_RSA_WITH_AES_128_CBC_SHA\n# Or use IISCrypto tool: https://www.nartac.com/Products/IISCrypto",
         },
@@ -92,7 +93,6 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "certbot_apache": "certbot --apache -d example.com -d www.example.com --non-interactive --agree-tos -m admin@example.com",
         },
     },
-
     # ── DNS Security ────────────────────────────────────────────────────
     "dns_no_spf": {
         "title": "Configure SPF Record",
@@ -144,10 +144,9 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "Test with: https://dkimvalidator.com/",
         ],
         "configs": {
-            "opendkim": "# Generate key\nopendkim-genkey -s mail -d yourdomain.com -b 2048\n\n# DNS record (from mail.txt):\nmail._domainkey.yourdomain.com. IN TXT \"v=DKIM1; k=rsa; p=MIIBIjANBg...\"",
+            "opendkim": '# Generate key\nopendkim-genkey -s mail -d yourdomain.com -b 2048\n\n# DNS record (from mail.txt):\nmail._domainkey.yourdomain.com. IN TXT "v=DKIM1; k=rsa; p=MIIBIjANBg..."',
         },
     },
-
     # ── Exposed Services ────────────────────────────────────────────────
     "port_smb_exposed": {
         "title": "Block SMB (Port 445) From Internet",
@@ -165,7 +164,7 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         "configs": {
             "iptables": "# Block SMB from external\niptables -A INPUT -p tcp --dport 445 -j DROP\niptables -A INPUT -p udp --dport 445 -j DROP\n\n# Save rules\niptables-save > /etc/iptables/rules.v4",
             "ufw": "ufw deny 445/tcp\nufw deny 445/udp\nufw reload",
-            "aws_sg": '# AWS CLI — remove SMB from security group\naws ec2 revoke-security-group-ingress \\\n  --group-id sg-XXXXX \\\n  --protocol tcp --port 445 \\\n  --cidr 0.0.0.0/0',
+            "aws_sg": "# AWS CLI — remove SMB from security group\naws ec2 revoke-security-group-ingress \\\n  --group-id sg-XXXXX \\\n  --protocol tcp --port 445 \\\n  --cidr 0.0.0.0/0",
         },
     },
     "port_rdp_exposed": {
@@ -223,7 +222,6 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "postgres_conf": "# In postgresql.conf:\nlisten_addresses = 'localhost'\n\n# In pg_hba.conf — remove any 0.0.0.0/0 entries:\n# host all all 127.0.0.1/32 scram-sha-256",
         },
     },
-
     # ── HTTP Security Headers ───────────────────────────────────────────
     "header_missing_hsts": {
         "title": "Enable HSTS Header",
@@ -239,9 +237,9 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "Consider adding to HSTS preload list",
         ],
         "configs": {
-            "nginx": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\" always;",
-            "apache": "Header always set Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\"",
-            "caddy": "header Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\"",
+            "nginx": 'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;',
+            "apache": 'Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"',
+            "caddy": 'header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"',
         },
     },
     "header_missing_csp": {
@@ -260,10 +258,9 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         ],
         "configs": {
             "nginx": "add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'\" always;",
-            "apache": 'Header always set Content-Security-Policy "default-src \'self\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:; frame-ancestors \'none\'"',
+            "apache": "Header always set Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'\"",
         },
     },
-
     # ── Sensitive Files ─────────────────────────────────────────────────
     "sensitive_git_exposed": {
         "title": "Block .git Directory Access",
@@ -307,7 +304,10 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
 # Lookup API
 # ---------------------------------------------------------------------------
 
-def get_playbook(finding_category: str, finding_message: str) -> Optional[Dict[str, Any]]:
+
+def get_playbook(
+    finding_category: str, finding_message: str
+) -> Optional[Dict[str, Any]]:
     """Find the best matching playbook for a finding."""
     msg_lower = finding_message.lower()
 

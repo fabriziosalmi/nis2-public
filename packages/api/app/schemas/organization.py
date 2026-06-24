@@ -38,6 +38,7 @@ class CreateOrgRequest(BaseModel):
     URL identifier uniqueness. The plan / settings / max_scans default
     from the `Organization` model — same values an org gets at
     /register time."""
+
     name: str = Field(..., min_length=1, max_length=256)
 
 

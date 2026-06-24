@@ -10,6 +10,7 @@ sub-paragraph each item maps to. Items that do not derive from
 Art. 21.2 (e.g. Art. 7 ACN registration, Art. 23 incident reporting,
 Art. 20 board/training) are tagged accordingly.
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -42,32 +43,43 @@ SUBPARAGRAPHS: dict[str, str] = {
     "21.2.h": "Cryptography and, where appropriate, encryption",
     "21.2.i": "Human resources security, access control policies and asset management",
     "21.2.j": "MFA, secured voice/video/text communications and secured emergency communications",
-    "20":     "Governance — board responsibility and management training (Art. 20)",
-    "23":     "Incident reporting to the CSIRT (Art. 23)",
-    "7":      "ACN portal registration (Art. 7, D.Lgs 138/2024)",
-    "3":      "Scope determination — Essential vs Important (Art. 3, D.Lgs 138/2024)",
+    "20": "Governance — board responsibility and management training (Art. 20)",
+    "23": "Incident reporting to the CSIRT (Art. 23)",
+    "7": "ACN portal registration (Art. 7, D.Lgs 138/2024)",
+    "3": "Scope determination — Essential vs Important (Art. 3, D.Lgs 138/2024)",
 }
 
 
 # --- Model ---
 
+
 class GovernanceItem(TimestampMixin, Base):
     __tablename__ = "governance_items"
-    organization_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), nullable=False, index=True
+    )
     item_id: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g. G-01
-    priority: Mapped[str] = mapped_column(String(20), nullable=False)  # CRITICAL, HIGH, MEDIUM
+    priority: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # CRITICAL, HIGH, MEDIUM
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     nis2_reference: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     # Machine-readable Art. 21.2 sub-paragraph (or sibling article) tag.
     # Indexed for cheap GROUP BY queries in /by-subparagraph.
-    subparagraph: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="not_started")
+    subparagraph: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="not_started"
+    )
     assigned_to_name: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     evidence_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+
 # --- Schemas ---
+
 
 class GovernanceItemResponse(BaseModel):
     id: uuid.UUID
@@ -86,8 +98,11 @@ class GovernanceItemResponse(BaseModel):
     updated_at: datetime
     model_config = {"from_attributes": True}
 
+
 class GovernanceItemUpdate(BaseModel):
-    status: Optional[str] = Field(None, pattern="^(not_started|in_progress|done|not_applicable)$")
+    status: Optional[str] = Field(
+        None, pattern="^(not_started|in_progress|done|not_applicable)$"
+    )
     assigned_to_name: Optional[str] = None
     evidence_notes: Optional[str] = None
 
@@ -95,24 +110,31 @@ class GovernanceItemUpdate(BaseModel):
 class GovernanceBulkUpdateItem(BaseModel):
     """v2.5.6 security fix: typed schema replacing raw list[dict].
     Validates UUID, constrains status to valid values, limits field lengths."""
+
     id: uuid.UUID
-    status: Optional[str] = Field(None, pattern="^(not_started|in_progress|done|not_applicable)$")
+    status: Optional[str] = Field(
+        None, pattern="^(not_started|in_progress|done|not_applicable)$"
+    )
     assigned_to_name: Optional[str] = Field(None, max_length=256)
     evidence_notes: Optional[str] = Field(None, max_length=10000)
 
 
 class GovernanceBulkUpdateRequest(BaseModel):
     """Wrapper with max batch size to prevent abuse."""
+
     items: list[GovernanceBulkUpdateItem] = Field(..., max_length=100)
+
 
 class GovernanceListResponse(BaseModel):
     items: list[GovernanceItemResponse]
     total: int
     stats: dict
 
+
 class GovernanceSeedResponse(BaseModel):
     created: int
     message: str
+
 
 # --- Checklist Template ---
 
@@ -123,38 +145,248 @@ class GovernanceSeedResponse(BaseModel):
 # this version is the corrected machine-readable mapping.
 CHECKLIST_TEMPLATE = [
     # CRITICAL
-    ("G-01", "CRITICAL", "Scoping Analysis", "Confirm if entity is Essential or Important under D.Lgs 138/2024.", "Art. 3, D.Lgs 138/2024", "3"),
-    ("G-02", "CRITICAL", "ACN Portal Registration", "Register on the National Cybersecurity Agency portal.", "Art. 7, D.Lgs 138/2024", "7"),
-    ("G-03", "CRITICAL", "Board Responsibility", "Board/Directors formally assume cybersecurity responsibility.", "Art. 20, NIS2", "20"),
-    ("G-04", "CRITICAL", "Management Training", "Governing bodies attend mandatory cybersecurity training.", "Art. 20.2, NIS2", "20"),
-    ("G-05", "CRITICAL", "MFA on Remote Access", "MFA active on all VPN, Cloud, and privileged accounts.", "Art. 21.2.j, NIS2", "21.2.j"),
-    ("G-06", "CRITICAL", "Immutable/Offline Backups", "Critical data copy disconnected or immutable (anti-ransomware).", "Art. 21.2.c, NIS2", "21.2.c"),
-    ("G-07", "CRITICAL", "Incident Notification Procedure", "Written procedure: who notifies CSIRT within 24h.", "Art. 23, NIS2", "23"),
-    ("G-08", "CRITICAL", "Asset Inventory", "Updated list of all hardware, software, and data assets.", "Art. 21.2.i, NIS2", "21.2.i"),
-    ("G-09", "CRITICAL", "Vulnerability Management", "Critical patches installed within 48-72h from release.", "Art. 21.2.e, NIS2", "21.2.e"),
-    ("G-10", "CRITICAL", "Cybersecurity Budget", "Specific and adequate budget allocated for NIS2 compliance.", "Art. 20, NIS2", "20"),
+    (
+        "G-01",
+        "CRITICAL",
+        "Scoping Analysis",
+        "Confirm if entity is Essential or Important under D.Lgs 138/2024.",
+        "Art. 3, D.Lgs 138/2024",
+        "3",
+    ),
+    (
+        "G-02",
+        "CRITICAL",
+        "ACN Portal Registration",
+        "Register on the National Cybersecurity Agency portal.",
+        "Art. 7, D.Lgs 138/2024",
+        "7",
+    ),
+    (
+        "G-03",
+        "CRITICAL",
+        "Board Responsibility",
+        "Board/Directors formally assume cybersecurity responsibility.",
+        "Art. 20, NIS2",
+        "20",
+    ),
+    (
+        "G-04",
+        "CRITICAL",
+        "Management Training",
+        "Governing bodies attend mandatory cybersecurity training.",
+        "Art. 20.2, NIS2",
+        "20",
+    ),
+    (
+        "G-05",
+        "CRITICAL",
+        "MFA on Remote Access",
+        "MFA active on all VPN, Cloud, and privileged accounts.",
+        "Art. 21.2.j, NIS2",
+        "21.2.j",
+    ),
+    (
+        "G-06",
+        "CRITICAL",
+        "Immutable/Offline Backups",
+        "Critical data copy disconnected or immutable (anti-ransomware).",
+        "Art. 21.2.c, NIS2",
+        "21.2.c",
+    ),
+    (
+        "G-07",
+        "CRITICAL",
+        "Incident Notification Procedure",
+        "Written procedure: who notifies CSIRT within 24h.",
+        "Art. 23, NIS2",
+        "23",
+    ),
+    (
+        "G-08",
+        "CRITICAL",
+        "Asset Inventory",
+        "Updated list of all hardware, software, and data assets.",
+        "Art. 21.2.i, NIS2",
+        "21.2.i",
+    ),
+    (
+        "G-09",
+        "CRITICAL",
+        "Vulnerability Management",
+        "Critical patches installed within 48-72h from release.",
+        "Art. 21.2.e, NIS2",
+        "21.2.e",
+    ),
+    (
+        "G-10",
+        "CRITICAL",
+        "Cybersecurity Budget",
+        "Specific and adequate budget allocated for NIS2 compliance.",
+        "Art. 20, NIS2",
+        "20",
+    ),
     # HIGH
-    ("G-11", "HIGH", "Risk Assessment", "Formal cyber risk analysis on all critical assets.", "Art. 21.2.a, NIS2", "21.2.a"),
-    ("G-12", "HIGH", "Information Security Policy", "Approved master document dictating corporate security rules.", "Art. 21.2.a, NIS2", "21.2.a"),
-    ("G-13", "HIGH", "Supplier Mapping", "List of critical suppliers (MSP, Software, Cloud).", "Art. 21.2.d, NIS2", "21.2.d"),
-    ("G-14", "HIGH", "Supply Chain Security", "Security requirements and notification clauses in supplier contracts.", "Art. 21.2.d, NIS2", "21.2.d"),
-    ("G-15", "HIGH", "Incident Response Plan", "Technical plan to contain and eradicate attacks.", "Art. 21.2.b, NIS2", "21.2.b"),
-    ("G-16", "HIGH", "Business Continuity Plan", "Procedures to continue operations if IT is down.", "Art. 21.2.c, NIS2", "21.2.c"),
-    ("G-17", "HIGH", "Disaster Recovery Plan", "IT system restoration after disaster, defined and tested.", "Art. 21.2.c, NIS2", "21.2.c"),
-    ("G-18", "HIGH", "Employee Awareness Training", "Continuous anti-phishing training for all staff.", "Art. 21.2.g, NIS2", "21.2.g"),
-    ("G-19", "HIGH", "Backup Testing", "Data restoration test performed at least every 6 months.", "Art. 21.2.c, NIS2", "21.2.c"),
-    ("G-20", "HIGH", "Access Control (Least Privilege)", "Employees have only permissions strictly necessary.", "Art. 21.2.i, NIS2", "21.2.i"),
+    (
+        "G-11",
+        "HIGH",
+        "Risk Assessment",
+        "Formal cyber risk analysis on all critical assets.",
+        "Art. 21.2.a, NIS2",
+        "21.2.a",
+    ),
+    (
+        "G-12",
+        "HIGH",
+        "Information Security Policy",
+        "Approved master document dictating corporate security rules.",
+        "Art. 21.2.a, NIS2",
+        "21.2.a",
+    ),
+    (
+        "G-13",
+        "HIGH",
+        "Supplier Mapping",
+        "List of critical suppliers (MSP, Software, Cloud).",
+        "Art. 21.2.d, NIS2",
+        "21.2.d",
+    ),
+    (
+        "G-14",
+        "HIGH",
+        "Supply Chain Security",
+        "Security requirements and notification clauses in supplier contracts.",
+        "Art. 21.2.d, NIS2",
+        "21.2.d",
+    ),
+    (
+        "G-15",
+        "HIGH",
+        "Incident Response Plan",
+        "Technical plan to contain and eradicate attacks.",
+        "Art. 21.2.b, NIS2",
+        "21.2.b",
+    ),
+    (
+        "G-16",
+        "HIGH",
+        "Business Continuity Plan",
+        "Procedures to continue operations if IT is down.",
+        "Art. 21.2.c, NIS2",
+        "21.2.c",
+    ),
+    (
+        "G-17",
+        "HIGH",
+        "Disaster Recovery Plan",
+        "IT system restoration after disaster, defined and tested.",
+        "Art. 21.2.c, NIS2",
+        "21.2.c",
+    ),
+    (
+        "G-18",
+        "HIGH",
+        "Employee Awareness Training",
+        "Continuous anti-phishing training for all staff.",
+        "Art. 21.2.g, NIS2",
+        "21.2.g",
+    ),
+    (
+        "G-19",
+        "HIGH",
+        "Backup Testing",
+        "Data restoration test performed at least every 6 months.",
+        "Art. 21.2.c, NIS2",
+        "21.2.c",
+    ),
+    (
+        "G-20",
+        "HIGH",
+        "Access Control (Least Privilege)",
+        "Employees have only permissions strictly necessary.",
+        "Art. 21.2.i, NIS2",
+        "21.2.i",
+    ),
     # MEDIUM
-    ("G-21", "MEDIUM", "Network Segmentation", "Production/OT network separated from office/guest.", "Art. 21.2.e, NIS2", "21.2.e"),
-    ("G-22", "MEDIUM", "Onboarding/Offboarding", "Automatic access revocation when employees leave.", "Art. 21.2.i, NIS2", "21.2.i"),
-    ("G-23", "MEDIUM", "Encryption at Rest", "Sensitive data encrypted when stored.", "Art. 21.2.h, NIS2", "21.2.h"),
-    ("G-24", "MEDIUM", "Cryptographic Key Management", "Keys managed securely and separated from data.", "Art. 21.2.h, NIS2", "21.2.h"),
-    ("G-25", "MEDIUM", "Logging and Monitoring", "System logs collected centrally and analyzed.", "Art. 21.2.f, NIS2", "21.2.f"),
-    ("G-26", "MEDIUM", "Security in Acquisition", "Security requirements evaluated before buying/developing software.", "Art. 21.2.e, NIS2", "21.2.e"),
-    ("G-27", "MEDIUM", "Secure Emergency Communications", "Secure systems for emergency comms if email is down.", "Art. 21.2.j, NIS2", "21.2.j"),
-    ("G-28", "MEDIUM", "Internal Audits", "Periodic checks planned to verify procedure compliance.", "Art. 21.2.f, NIS2", "21.2.f"),
-    ("G-29", "MEDIUM", "VA/Pen Test", "Technical vulnerability scan performed at least annually.", "Art. 21.2.f, NIS2", "21.2.f"),
-    ("G-30", "MEDIUM", "End-to-End Encryption", "Advanced measures for protecting confidential communications.", "Art. 21.2.h, NIS2", "21.2.h"),
+    (
+        "G-21",
+        "MEDIUM",
+        "Network Segmentation",
+        "Production/OT network separated from office/guest.",
+        "Art. 21.2.e, NIS2",
+        "21.2.e",
+    ),
+    (
+        "G-22",
+        "MEDIUM",
+        "Onboarding/Offboarding",
+        "Automatic access revocation when employees leave.",
+        "Art. 21.2.i, NIS2",
+        "21.2.i",
+    ),
+    (
+        "G-23",
+        "MEDIUM",
+        "Encryption at Rest",
+        "Sensitive data encrypted when stored.",
+        "Art. 21.2.h, NIS2",
+        "21.2.h",
+    ),
+    (
+        "G-24",
+        "MEDIUM",
+        "Cryptographic Key Management",
+        "Keys managed securely and separated from data.",
+        "Art. 21.2.h, NIS2",
+        "21.2.h",
+    ),
+    (
+        "G-25",
+        "MEDIUM",
+        "Logging and Monitoring",
+        "System logs collected centrally and analyzed.",
+        "Art. 21.2.f, NIS2",
+        "21.2.f",
+    ),
+    (
+        "G-26",
+        "MEDIUM",
+        "Security in Acquisition",
+        "Security requirements evaluated before buying/developing software.",
+        "Art. 21.2.e, NIS2",
+        "21.2.e",
+    ),
+    (
+        "G-27",
+        "MEDIUM",
+        "Secure Emergency Communications",
+        "Secure systems for emergency comms if email is down.",
+        "Art. 21.2.j, NIS2",
+        "21.2.j",
+    ),
+    (
+        "G-28",
+        "MEDIUM",
+        "Internal Audits",
+        "Periodic checks planned to verify procedure compliance.",
+        "Art. 21.2.f, NIS2",
+        "21.2.f",
+    ),
+    (
+        "G-29",
+        "MEDIUM",
+        "VA/Pen Test",
+        "Technical vulnerability scan performed at least annually.",
+        "Art. 21.2.f, NIS2",
+        "21.2.f",
+    ),
+    (
+        "G-30",
+        "MEDIUM",
+        "End-to-End Encryption",
+        "Advanced measures for protecting confidential communications.",
+        "Art. 21.2.h, NIS2",
+        "21.2.h",
+    ),
 ]
 
 # Fail at import time if anyone adds an item with an unknown subparagraph code.
@@ -169,6 +401,7 @@ for _row in CHECKLIST_TEMPLATE:
 # --- Router ---
 
 router = APIRouter(prefix="/governance", tags=["governance"])
+
 
 @router.get("", response_model=GovernanceListResponse)
 async def list_governance_items(
@@ -188,7 +421,9 @@ async def list_governance_items(
         query = query.where(GovernanceItem.status == status_filter)
     if subparagraph:
         if subparagraph not in SUBPARAGRAPHS:
-            raise HTTPException(status_code=400, detail=f"Unknown subparagraph: {subparagraph}")
+            raise HTTPException(
+                status_code=400, detail=f"Unknown subparagraph: {subparagraph}"
+            )
         query = query.where(GovernanceItem.subparagraph == subparagraph)
     query = query.order_by(GovernanceItem.sort_order)
     result = await db.execute(query)
@@ -208,10 +443,16 @@ async def list_governance_items(
     }
     return GovernanceListResponse(
         items=[GovernanceItemResponse.model_validate(i) for i in items],
-        total=total, stats=stats,
+        total=total,
+        stats=stats,
     )
 
-@router.post("/seed", response_model=GovernanceSeedResponse, dependencies=[Depends(require_role("admin"))])
+
+@router.post(
+    "/seed",
+    response_model=GovernanceSeedResponse,
+    dependencies=[Depends(require_role("admin"))],
+)
 async def seed_governance(
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
@@ -222,12 +463,19 @@ async def seed_governance(
 
     # Check if already seeded
     existing = await db.execute(
-        select(func.count(GovernanceItem.id)).where(GovernanceItem.organization_id == org_id)
+        select(func.count(GovernanceItem.id)).where(
+            GovernanceItem.organization_id == org_id
+        )
     )
     if (existing.scalar() or 0) > 0:
-        raise HTTPException(status_code=400, detail="Governance checklist already initialized. Use PATCH to update items.")
+        raise HTTPException(
+            status_code=400,
+            detail="Governance checklist already initialized. Use PATCH to update items.",
+        )
 
-    for idx, (item_id, priority, title, description, ref, subpara) in enumerate(CHECKLIST_TEMPLATE):
+    for idx, (item_id, priority, title, description, ref, subpara) in enumerate(
+        CHECKLIST_TEMPLATE
+    ):
         item = GovernanceItem(
             organization_id=org_id,
             item_id=item_id,
@@ -241,9 +489,16 @@ async def seed_governance(
         )
         db.add(item)
     await db.flush()
-    return GovernanceSeedResponse(created=len(CHECKLIST_TEMPLATE), message="30 governance items created")
+    return GovernanceSeedResponse(
+        created=len(CHECKLIST_TEMPLATE), message="30 governance items created"
+    )
 
-@router.patch("/{item_id}", response_model=GovernanceItemResponse, dependencies=[Depends(require_role("admin", "auditor"))])
+
+@router.patch(
+    "/{item_id}",
+    response_model=GovernanceItemResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def update_governance_item(
     item_id: uuid.UUID,
     payload: GovernanceItemUpdate,
@@ -259,6 +514,7 @@ async def update_governance_item(
         setattr(item, field, value)
     await db.flush()
     return GovernanceItemResponse.model_validate(item)
+
 
 @router.post("/bulk-update", dependencies=[Depends(require_role("admin", "auditor"))])
 async def bulk_update_governance(
@@ -287,6 +543,7 @@ async def bulk_update_governance(
     await db.flush()
     return {"updated": updated}
 
+
 @router.get("/score")
 async def governance_score(
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -300,19 +557,30 @@ async def governance_score(
     )
     items = result.scalars().all()
     if not items:
-        return {"score": 0, "message": "No governance items. Call POST /governance/seed first."}
+        return {
+            "score": 0,
+            "message": "No governance items. Call POST /governance/seed first.",
+        }
 
     weights = {"CRITICAL": 3.0, "HIGH": 2.0, "MEDIUM": 1.0}
     total_weight = sum(weights.get(i.priority, 1.0) for i in items)
     earned = sum(weights.get(i.priority, 1.0) for i in items if i.status == "done")
-    partial = sum(weights.get(i.priority, 1.0) * 0.5 for i in items if i.status == "in_progress")
-    score = round(((earned + partial) / total_weight) * 100, 1) if total_weight > 0 else 0
+    partial = sum(
+        weights.get(i.priority, 1.0) * 0.5 for i in items if i.status == "in_progress"
+    )
+    score = (
+        round(((earned + partial) / total_weight) * 100, 1) if total_weight > 0 else 0
+    )
 
     by_priority = {}
     for p in ("CRITICAL", "HIGH", "MEDIUM"):
         p_items = [i for i in items if i.priority == p]
         done = sum(1 for i in p_items if i.status == "done")
-        by_priority[p] = {"total": len(p_items), "done": done, "pct": round((done / len(p_items)) * 100, 1) if p_items else 0}
+        by_priority[p] = {
+            "total": len(p_items),
+            "done": done,
+            "pct": round((done / len(p_items)) * 100, 1) if p_items else 0,
+        }
 
     return {"score": score, "by_priority": by_priority, "total_items": len(items)}
 
@@ -385,42 +653,42 @@ async def list_subparagraphs():
 # all technical evidence is relevant to the overall risk register.
 CATEGORY_SUBPARAGRAPH_MAP: list[tuple[str, str]] = [
     # Cryptography / TLS / certificates
-    ("tls",            "21.2.h"),
-    ("ssl",            "21.2.h"),
-    ("certificate",    "21.2.h"),
-    ("crypto",         "21.2.h"),
-    ("encryption",     "21.2.h"),
+    ("tls", "21.2.h"),
+    ("ssl", "21.2.h"),
+    ("certificate", "21.2.h"),
+    ("crypto", "21.2.h"),
+    ("encryption", "21.2.h"),
     # Access control / credentials
-    ("secret",         "21.2.i"),
-    ("credential",     "21.2.i"),
-    ("password",       "21.2.i"),
-    ("access",         "21.2.i"),
+    ("secret", "21.2.i"),
+    ("credential", "21.2.i"),
+    ("password", "21.2.i"),
+    ("access", "21.2.i"),
     # Authentication / MFA
-    ("auth",           "21.2.j"),
-    ("mfa",            "21.2.j"),
+    ("auth", "21.2.j"),
+    ("mfa", "21.2.j"),
     # Network / acquisition / maintenance
-    ("port",           "21.2.e"),
-    ("network",        "21.2.e"),
-    ("firewall",       "21.2.e"),
-    ("http",           "21.2.e"),
-    ("web",            "21.2.e"),
-    ("dns",            "21.2.e"),
-    ("patch",          "21.2.e"),
+    ("port", "21.2.e"),
+    ("network", "21.2.e"),
+    ("firewall", "21.2.e"),
+    ("http", "21.2.e"),
+    ("web", "21.2.e"),
+    ("dns", "21.2.e"),
+    ("patch", "21.2.e"),
     # Effectiveness / monitoring
-    ("vulnerab",       "21.2.f"),
-    ("logging",        "21.2.f"),
-    ("monitor",        "21.2.f"),
+    ("vulnerab", "21.2.f"),
+    ("logging", "21.2.f"),
+    ("monitor", "21.2.f"),
     # Supply chain
-    ("supply",         "21.2.d"),
-    ("vendor",         "21.2.d"),
+    ("supply", "21.2.d"),
+    ("vendor", "21.2.d"),
     # Business continuity / backup
-    ("backup",         "21.2.c"),
-    ("continuity",     "21.2.c"),
-    ("recovery",       "21.2.c"),
+    ("backup", "21.2.c"),
+    ("continuity", "21.2.c"),
+    ("recovery", "21.2.c"),
     # Incident handling
-    ("incident",       "21.2.b"),
+    ("incident", "21.2.b"),
     # Catch-all: every finding feeds Art. 21.2.a (risk analysis)
-    ("",               "21.2.a"),
+    ("", "21.2.a"),
 ]
 
 # Findings with these statuses are considered "resolved" and do not
@@ -473,7 +741,13 @@ async def risk_summary(
     findings = result.scalars().all()
 
     # Severity counts
-    counts: dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    counts: dict[str, int] = {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+        "INFO": 0,
+    }
     for f in findings:
         sev = f.severity.upper()
         counts[sev] = counts.get(sev, 0) + 1
@@ -515,12 +789,14 @@ async def risk_summary(
                 entry["medium"] += 1
             # Collect up to 3 representative messages per subparagraph
             if len(entry["top_findings"]) < 3:
-                entry["top_findings"].append({
-                    "severity": f.severity,
-                    "category": f.category,
-                    "message": f.message[:120],
-                    "target": f.target,
-                })
+                entry["top_findings"].append(
+                    {
+                        "severity": f.severity,
+                        "category": f.category,
+                        "message": f.message[:120],
+                        "target": f.target,
+                    }
+                )
 
     # Attach governance item IDs for each signalled subparagraph
     gov_result = await db.execute(
@@ -579,14 +855,24 @@ async def sync_risk(
     findings = finding_result.scalars().all()
 
     if not findings:
-        return {"updated": 0, "message": "No open findings — governance items unchanged.", "changes": []}
+        return {
+            "updated": 0,
+            "message": "No open findings — governance items unchanged.",
+            "changes": [],
+        }
 
     # Build per-subparagraph evidence maps
     sp_evidence: dict[str, dict] = {}
     for f in findings:
         for sp in _category_to_subparagraphs(f.category):
             if sp not in sp_evidence:
-                sp_evidence[sp] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "samples": []}
+                sp_evidence[sp] = {
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "low": 0,
+                    "samples": [],
+                }
             ev = sp_evidence[sp]
             sev = f.severity.upper()
             if sev == "CRITICAL":
@@ -639,14 +925,16 @@ async def sync_risk(
         if item.status == "not_started" and high_risk_count > 0:
             item.status = "in_progress"
 
-        changes.append({
-            "item_id": item.item_id,
-            "title": item.title,
-            "subparagraph": sp,
-            "status_before": old_status,
-            "status_after": item.status,
-            "evidence_added": f"CRITICAL:{ev['critical']} HIGH:{ev['high']} MEDIUM:{ev['medium']}",
-        })
+        changes.append(
+            {
+                "item_id": item.item_id,
+                "title": item.title,
+                "subparagraph": sp,
+                "status_before": old_status,
+                "status_after": item.status,
+                "evidence_added": f"CRITICAL:{ev['critical']} HIGH:{ev['high']} MEDIUM:{ev['medium']}",
+            }
+        )
 
     await db.flush()
 

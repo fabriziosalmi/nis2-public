@@ -34,7 +34,9 @@ class ScanResult(TimestampMixin, Base):
     )
 
     # Scan data sections
-    http_info: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict, nullable=True)
+    http_info: Mapped[Optional[dict]] = mapped_column(
+        JSONB, default=dict, nullable=True
+    )
     tls_info: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict, nullable=True)
     dns_info: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict, nullable=True)
     legal_info: Mapped[Optional[dict]] = mapped_column(

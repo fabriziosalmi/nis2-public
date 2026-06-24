@@ -17,6 +17,7 @@ both contextvars at their default of None — and that is the safe
 default: an unset `app.current_org_id` makes every RLS policy
 non-matching, so even a forgotten WHERE clause returns zero rows.
 """
+
 from __future__ import annotations
 
 import uuid

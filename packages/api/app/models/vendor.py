@@ -5,6 +5,7 @@
 Vendor Risk Management model (Art. 18 D.Lgs 138/2024).
 Tracks critical suppliers and their security posture for supply chain risk.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional

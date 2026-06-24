@@ -41,14 +41,18 @@ class FindingResponse(BaseModel):
 
 
 class FindingUpdate(BaseModel):
-    status: Optional[str] = Field(None, pattern="^(open|acknowledged|in_progress|resolved|accepted_risk)$")
+    status: Optional[str] = Field(
+        None, pattern="^(open|acknowledged|in_progress|resolved|accepted_risk)$"
+    )
     assigned_to: Optional[uuid.UUID] = None
     resolution_note: Optional[str] = None
 
 
 class BulkFindingUpdate(BaseModel):
     finding_ids: list[uuid.UUID] = Field(..., min_length=1)
-    status: str = Field(..., pattern="^(open|acknowledged|in_progress|resolved|accepted_risk)$")
+    status: str = Field(
+        ..., pattern="^(open|acknowledged|in_progress|resolved|accepted_risk)$"
+    )
     resolution_note: Optional[str] = None
 
 

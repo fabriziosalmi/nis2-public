@@ -45,16 +45,22 @@ RLS_PREDICATE = (
     "organization_id::text IN (SELECT organization_id::text FROM memberships WHERE user_id::text = current_setting('app.current_user_id', true))))"
 )
 
+RLS_MEMBERSHIPS_PREDICATE = (
+    "(organization_id::text = current_setting('app.current_org_id', true) "
+    "OR user_id::text = current_setting('app.current_user_id', true))"
+)
+
 
 def upgrade() -> None:
     for t in TENANT_TABLES:
         op.execute(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY")
         op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {t}")
+        predicate = RLS_MEMBERSHIPS_PREDICATE if t == "memberships" else RLS_PREDICATE
         op.execute(
             f"CREATE POLICY tenant_isolation ON {t} "
-            f"USING {RLS_PREDICATE} "
-            f"WITH CHECK {RLS_PREDICATE}"
+            f"USING {predicate} "
+            f"WITH CHECK {predicate}"
         )
 
 

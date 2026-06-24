@@ -65,7 +65,12 @@ async def list_scans(
     )
 
 
-@router.post("", response_model=ScanResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "",
+    response_model=ScanResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 @limiter.limit("10/minute")
 async def create_scan(
     request: Request,
@@ -114,7 +119,8 @@ async def create_scan(
         "ip_ranges": ip_ranges,
         "pinned_ips": pinned_ips,
         "scan_type": payload.scan_type,
-        "features": payload.features or {
+        "features": payload.features
+        or {
             "dns_checks": True,
             "web_checks": True,
             "port_scan": True,
@@ -149,8 +155,12 @@ async def create_scan(
         # and the user can retry. Pre-fix, a Celery/Redis outage left
         # scans in limbo with no feedback.
         import logging
+
         logging.getLogger(__name__).error(
-            "Failed to enqueue scan %s: %s", scan.id, exc, exc_info=True,
+            "Failed to enqueue scan %s: %s",
+            scan.id,
+            exc,
+            exc_info=True,
         )
         scan.status = "error"
         scan.error_message = "Task queue unavailable — please retry later"
@@ -177,7 +187,9 @@ async def get_scan(
     scan = await db.get(Scan, scan_id)
 
     if not scan or scan.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found"
+        )
 
     return ScanResponse.model_validate(scan)
 
@@ -194,7 +206,9 @@ async def get_scan_results(
     # results once it completes). See list_scans for the wiring note.
     scan = await db.get(Scan, scan_id)
     if not scan or scan.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found"
+        )
 
     count_query = select(func.count(ScanResult.id)).where(ScanResult.scan_id == scan_id)
     total_result = await db.execute(count_query)
@@ -229,7 +243,9 @@ async def get_scan_findings(
     # Dual-auth read — see list_scans for the wiring note.
     scan = await db.get(Scan, scan_id)
     if not scan or scan.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found"
+        )
 
     count_query = select(func.count(Finding.id)).where(Finding.scan_id == scan_id)
     total_result = await db.execute(count_query)
@@ -253,7 +269,11 @@ async def get_scan_findings(
     )
 
 
-@router.post("/{scan_id}/cancel", response_model=ScanResponse, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "/{scan_id}/cancel",
+    response_model=ScanResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
 async def cancel_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -263,7 +283,9 @@ async def cancel_scan(
 
     scan = await db.get(Scan, scan_id)
     if not scan or scan.organization_id != membership.organization_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found"
+        )
 
     if scan.status not in ("pending", "running"):
         raise HTTPException(
@@ -284,9 +306,11 @@ async def cancel_scan(
             # revoke signal (e.g. Redis down). Logging gives operators
             # visibility into this orphaned-task scenario.
             import logging
+
             logging.getLogger(__name__).warning(
                 "Failed to revoke Celery task %s for scan cancel: %s",
-                scan.celery_task_id, exc,
+                scan.celery_task_id,
+                exc,
             )
 
     scan.status = "cancelled"
@@ -295,7 +319,11 @@ async def cancel_scan(
     return ScanResponse.model_validate(scan)
 
 
-@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("admin"))])
+@router.delete(
+    "/{scan_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
 async def delete_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -305,7 +333,9 @@ async def delete_scan(
 
     scan = await db.get(Scan, scan_id)
     if not scan or scan.organization_id != membership.organization_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found"
+        )
 
     await db.delete(scan)
     await db.flush()
@@ -329,12 +359,8 @@ async def compare_scans(
         raise HTTPException(status_code=404, detail="Comparison scan not found")
 
     # Load findings for both scans
-    findings_a_q = await db.execute(
-        select(Finding).where(Finding.scan_id == scan_id)
-    )
-    findings_b_q = await db.execute(
-        select(Finding).where(Finding.scan_id == other_id)
-    )
+    findings_a_q = await db.execute(select(Finding).where(Finding.scan_id == scan_id))
+    findings_b_q = await db.execute(select(Finding).where(Finding.scan_id == other_id))
     findings_a = findings_a_q.scalars().all()
     findings_b = findings_b_q.scalars().all()
 
@@ -347,13 +373,29 @@ async def compare_scans(
 
     def serialize_findings(findings, fps_set):
         return [
-            {"severity": f.severity, "category": f.category, "message": f.message, "target": f.target}
-            for f in findings if f.fingerprint in fps_set
+            {
+                "severity": f.severity,
+                "category": f.category,
+                "message": f.message,
+                "target": f.target,
+            }
+            for f in findings
+            if f.fingerprint in fps_set
         ]
 
     return {
-        "scan_a": {"id": str(scan_a.id), "name": scan_a.name, "score": scan_a.total_score, "date": scan_a.created_at.isoformat() if scan_a.created_at else None},
-        "scan_b": {"id": str(scan_b.id), "name": scan_b.name, "score": scan_b.total_score, "date": scan_b.created_at.isoformat() if scan_b.created_at else None},
+        "scan_a": {
+            "id": str(scan_a.id),
+            "name": scan_a.name,
+            "score": scan_a.total_score,
+            "date": scan_a.created_at.isoformat() if scan_a.created_at else None,
+        },
+        "scan_b": {
+            "id": str(scan_b.id),
+            "name": scan_b.name,
+            "score": scan_b.total_score,
+            "date": scan_b.created_at.isoformat() if scan_b.created_at else None,
+        },
         "score_delta": (scan_a.total_score or 0) - (scan_b.total_score or 0),
         "new_findings": serialize_findings(findings_a, new_fps),
         "resolved_findings": serialize_findings(findings_b, resolved_fps),

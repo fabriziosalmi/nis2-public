@@ -23,6 +23,7 @@ Three tiers — each suitable for a different probe type:
   GET /health/live   — alias for GET /health, kept for k8s naming conventions
                        where liveness and readiness probes have distinct paths.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, Response
@@ -100,9 +101,7 @@ async def readiness(
         # directly). Run in a thread to avoid blocking the event loop.
         import asyncio
 
-        replies = await asyncio.get_running_loop().run_in_executor(
-            None, inspector.ping
-        )
+        replies = await asyncio.get_running_loop().run_in_executor(None, inspector.ping)
         if replies:
             checks["celery_workers"] = "ok"
         else:

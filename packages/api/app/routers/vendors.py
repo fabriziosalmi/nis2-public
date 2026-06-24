@@ -28,6 +28,7 @@ Call GET /vendors/score-formula for the machine-readable breakdown.
 Call GET /vendors/{id}/score for a per-vendor computed score + rationale.
 Call POST /vendors/{id}/score/apply to persist the computed score.
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -127,16 +128,21 @@ def compute_vendor_score(vendor: Vendor) -> dict:
     elif "SOC2" in cert or "SOC 2" in cert:
         cert_score, cert_rationale = 15, "SOC 2 Type I certified (+15)"
     elif cert and cert not in ("NONE", "N/A", "-"):
-        cert_score, cert_rationale = 10, f"Other certification: {vendor.has_security_certification} (+10)"
+        cert_score, cert_rationale = (
+            10,
+            f"Other certification: {vendor.has_security_certification} (+10)",
+        )
     else:
         cert_score, cert_rationale = 0, "No recognised security certification (+0)"
-    breakdown.append({
-        "factor_id": "certification",
-        "label": "Security Certification",
-        "max_weight": 25,
-        "earned": cert_score,
-        "rationale": cert_rationale,
-    })
+    breakdown.append(
+        {
+            "factor_id": "certification",
+            "label": "Security Certification",
+            "max_weight": 25,
+            "earned": cert_score,
+            "rationale": cert_rationale,
+        }
+    )
     total += cert_score
 
     # ── Factor 2: Data access level (max 25, inverse of risk) ──────────────
@@ -151,13 +157,15 @@ def compute_vendor_score(vendor: Vendor) -> dict:
         (vendor.data_access_level or "none").lower(),
         (5, f"Unknown access level '{vendor.data_access_level}' (+5)"),
     )
-    breakdown.append({
-        "factor_id": "data_access",
-        "label": "Data Access Level",
-        "max_weight": 25,
-        "earned": da_score,
-        "rationale": da_rationale,
-    })
+    breakdown.append(
+        {
+            "factor_id": "data_access",
+            "label": "Data Access Level",
+            "max_weight": 25,
+            "earned": da_score,
+            "rationale": da_rationale,
+        }
+    )
     total += da_score
 
     # ── Factor 3: Audit recency (max 20) ───────────────────────────────────
@@ -168,24 +176,41 @@ def compute_vendor_score(vendor: Vendor) -> dict:
             last_audit = last_audit.replace(tzinfo=timezone.utc)
         months_ago = (now - last_audit).days / 30.44
         if months_ago < 6:
-            audit_score, audit_rationale = 20, f"Audit {months_ago:.0f} months ago — current (+20)"
+            audit_score, audit_rationale = (
+                20,
+                f"Audit {months_ago:.0f} months ago — current (+20)",
+            )
         elif months_ago < 12:
-            audit_score, audit_rationale = 15, f"Audit {months_ago:.0f} months ago (+15)"
+            audit_score, audit_rationale = (
+                15,
+                f"Audit {months_ago:.0f} months ago (+15)",
+            )
         elif months_ago < 24:
-            audit_score, audit_rationale = 8, f"Audit {months_ago:.0f} months ago — aging (+8)"
+            audit_score, audit_rationale = (
+                8,
+                f"Audit {months_ago:.0f} months ago — aging (+8)",
+            )
         elif months_ago < 36:
-            audit_score, audit_rationale = 3, f"Audit {months_ago:.0f} months ago — stale (+3)"
+            audit_score, audit_rationale = (
+                3,
+                f"Audit {months_ago:.0f} months ago — stale (+3)",
+            )
         else:
-            audit_score, audit_rationale = 0, f"Audit {months_ago:.0f} months ago — outdated (+0)"
+            audit_score, audit_rationale = (
+                0,
+                f"Audit {months_ago:.0f} months ago — outdated (+0)",
+            )
     else:
         audit_score, audit_rationale = 0, "No audit on record (+0)"
-    breakdown.append({
-        "factor_id": "audit_recency",
-        "label": "Audit Recency",
-        "max_weight": 20,
-        "earned": audit_score,
-        "rationale": audit_rationale,
-    })
+    breakdown.append(
+        {
+            "factor_id": "audit_recency",
+            "label": "Audit Recency",
+            "max_weight": 20,
+            "earned": audit_score,
+            "rationale": audit_rationale,
+        }
+    )
     total += audit_score
 
     # ── Factor 4: Geographic location (max 15) ─────────────────────────────
@@ -198,33 +223,47 @@ def compute_vendor_score(vendor: Vendor) -> dict:
     geo = (vendor.geographic_location or "").lower().replace(" ", "_").replace("-", "_")
     geo_score, geo_rationale = geo_scores.get(
         geo,
-        (5, f"Unknown/unspecified location '{vendor.geographic_location}' (+5)") if geo else (5, "Location not specified (+5)"),
+        (5, f"Unknown/unspecified location '{vendor.geographic_location}' (+5)")
+        if geo
+        else (5, "Location not specified (+5)"),
     )
-    breakdown.append({
-        "factor_id": "geography",
-        "label": "Geographic Location",
-        "max_weight": 15,
-        "earned": geo_score,
-        "rationale": geo_rationale,
-    })
+    breakdown.append(
+        {
+            "factor_id": "geography",
+            "label": "Geographic Location",
+            "max_weight": 15,
+            "earned": geo_score,
+            "rationale": geo_rationale,
+        }
+    )
     total += geo_score
 
     # ── Factor 5: Security contract clauses (max 15, 3 pts each) ───────────
     clauses = vendor.security_clauses or {}
-    clause_keys = ["sla", "audit_rights", "incident_notification", "data_breach_clause", "sub_processor_clause"]
+    clause_keys = [
+        "sla",
+        "audit_rights",
+        "incident_notification",
+        "data_breach_clause",
+        "sub_processor_clause",
+    ]
     present = [k for k in clause_keys if clauses.get(k)]
     clause_score = min(len(present) * 3, 15)
     if present:
-        clause_rationale = f"{len(present)}/5 clauses present ({', '.join(present)}) (+{clause_score})"
+        clause_rationale = (
+            f"{len(present)}/5 clauses present ({', '.join(present)}) (+{clause_score})"
+        )
     else:
         clause_rationale = "No security clauses documented (+0)"
-    breakdown.append({
-        "factor_id": "clauses",
-        "label": "Security Contract Clauses",
-        "max_weight": 15,
-        "earned": clause_score,
-        "rationale": clause_rationale,
-    })
+    breakdown.append(
+        {
+            "factor_id": "clauses",
+            "label": "Security Contract Clauses",
+            "max_weight": 15,
+            "earned": clause_score,
+            "rationale": clause_rationale,
+        }
+    )
     total += clause_score
 
     return {
@@ -236,6 +275,7 @@ def compute_vendor_score(vendor: Vendor) -> dict:
 
 
 # --- Schemas ---
+
 
 class VendorCreate(BaseModel):
     name: str
@@ -301,6 +341,7 @@ class VendorOut(BaseModel):
 
 # --- Schemas ---
 
+
 class ScoreBreakdownItem(BaseModel):
     factor_id: str
     label: str
@@ -320,6 +361,7 @@ class VendorScoreResponse(BaseModel):
 
 
 # --- Endpoints ---
+
 
 @router.get("/score-formula")
 async def get_score_formula():
@@ -376,7 +418,9 @@ async def get_vendor_score(
     )
 
 
-@router.post("/{vendor_id}/score/apply", dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "/{vendor_id}/score/apply", dependencies=[Depends(require_role("admin", "auditor"))]
+)
 async def apply_vendor_score(
     vendor_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -440,7 +484,9 @@ async def list_vendors(
     }
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))]
+)
 async def create_vendor(
     data: VendorCreate,
     db: AsyncSession = Depends(get_db),
@@ -466,7 +512,9 @@ async def create_vendor(
             f"[{now_str}] Score auto-computed at creation "
             f"(formula v{score_data['formula_version']}): {vendor.security_score}"
         )
-        vendor.risk_notes = (audit_line + "\n" + (vendor.risk_notes or "")).strip()[:4000]
+        vendor.risk_notes = (audit_line + "\n" + (vendor.risk_notes or "")).strip()[
+            :4000
+        ]
         await db.flush()
         await db.refresh(vendor)
 
@@ -480,9 +528,7 @@ async def vendor_stats(
 ):
     """Supply chain risk overview: distribution by criticality, type, location."""
     user, org_id = auth
-    result = await db.execute(
-        select(Vendor).where(Vendor.organization_id == org_id)
-    )
+    result = await db.execute(select(Vendor).where(Vendor.organization_id == org_id))
     vendors = result.scalars().all()
 
     stats = {
@@ -497,7 +543,9 @@ async def vendor_stats(
 
     scores = []
     for v in vendors:
-        stats["by_criticality"][v.criticality] = stats["by_criticality"].get(v.criticality, 0) + 1
+        stats["by_criticality"][v.criticality] = (
+            stats["by_criticality"].get(v.criticality, 0) + 1
+        )
         stats["by_status"][v.status] = stats["by_status"].get(v.status, 0) + 1
         stats["by_type"][v.vendor_type] = stats["by_type"].get(v.vendor_type, 0) + 1
         if v.acn_rilevanza_art18:
@@ -522,8 +570,7 @@ async def get_vendor(
     """Get vendor details."""
     user, org_id = auth
     result = await db.execute(
-        select(Vendor)
-        .where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
+        select(Vendor).where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
     )
     vendor = result.scalar_one_or_none()
     if not vendor:
@@ -541,8 +588,7 @@ async def update_vendor(
     """Update vendor details."""
     user, org_id = auth
     result = await db.execute(
-        select(Vendor)
-        .where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
+        select(Vendor).where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
     )
     vendor = result.scalar_one_or_none()
     if not vendor:
@@ -556,7 +602,9 @@ async def update_vendor(
     return VendorOut.model_validate(vendor)
 
 
-@router.delete("/{vendor_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
+@router.delete(
+    "/{vendor_id}", status_code=204, dependencies=[Depends(require_role("admin"))]
+)
 async def delete_vendor(
     vendor_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -565,8 +613,7 @@ async def delete_vendor(
     """Remove a vendor."""
     user, org_id = auth
     result = await db.execute(
-        select(Vendor)
-        .where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
+        select(Vendor).where(Vendor.id == vendor_id, Vendor.organization_id == org_id)
     )
     vendor = result.scalar_one_or_none()
     if not vendor:

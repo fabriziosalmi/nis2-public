@@ -5,6 +5,7 @@
 BIA (Business Impact Analysis) API.
 Maps business processes to IT assets and criticality for ACN BIA template.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/bia", tags=["bia"])
 
 
 # --- Schemas ---
+
 
 class ProcessCreate(BaseModel):
     name: str
@@ -77,6 +79,7 @@ class ProcessOut(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get("")
 async def list_processes(
     db: AsyncSession = Depends(get_db),
@@ -96,7 +99,9 @@ async def list_processes(
     }
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))])
+@router.post(
+    "", status_code=201, dependencies=[Depends(require_role("admin", "auditor"))]
+)
 async def create_process(
     data: ProcessCreate,
     db: AsyncSession = Depends(get_db),
@@ -128,21 +133,26 @@ async def bia_matrix(
     matrix = []
     for p in processes:
         max_impact = max(
-            p.impact_financial, p.impact_operational,
-            p.impact_reputational, p.impact_regulatory, p.impact_safety
+            p.impact_financial,
+            p.impact_operational,
+            p.impact_reputational,
+            p.impact_regulatory,
+            p.impact_safety,
         )
-        matrix.append({
-            "id": str(p.id),
-            "name": p.name,
-            "criticality_level": p.criticality_level,
-            "rto_hours": p.rto_hours,
-            "rpo_hours": p.rpo_hours,
-            "max_impact_score": max_impact,
-            "has_bcp": p.has_bcp,
-            "has_drp": p.has_drp,
-            "acn_servizio_essenziale": p.acn_servizio_essenziale,
-            "gaps": [],
-        })
+        matrix.append(
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "criticality_level": p.criticality_level,
+                "rto_hours": p.rto_hours,
+                "rpo_hours": p.rpo_hours,
+                "max_impact_score": max_impact,
+                "has_bcp": p.has_bcp,
+                "has_drp": p.has_drp,
+                "acn_servizio_essenziale": p.acn_servizio_essenziale,
+                "gaps": [],
+            }
+        )
 
         # Identify gaps
         if not p.has_bcp:
@@ -176,8 +186,9 @@ async def get_process(
     """Get business process details."""
     user, org_id = auth
     result = await db.execute(
-        select(BusinessProcess)
-        .where(BusinessProcess.id == process_id, BusinessProcess.organization_id == org_id)
+        select(BusinessProcess).where(
+            BusinessProcess.id == process_id, BusinessProcess.organization_id == org_id
+        )
     )
     process = result.scalar_one_or_none()
     if not process:
@@ -185,7 +196,9 @@ async def get_process(
     return ProcessOut.model_validate(process)
 
 
-@router.delete("/{process_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
+@router.delete(
+    "/{process_id}", status_code=204, dependencies=[Depends(require_role("admin"))]
+)
 async def delete_process(
     process_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -194,8 +207,9 @@ async def delete_process(
     """Remove a business process."""
     user, org_id = auth
     result = await db.execute(
-        select(BusinessProcess)
-        .where(BusinessProcess.id == process_id, BusinessProcess.organization_id == org_id)
+        select(BusinessProcess).where(
+            BusinessProcess.id == process_id, BusinessProcess.organization_id == org_id
+        )
     )
     process = result.scalar_one_or_none()
     if not process:

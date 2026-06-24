@@ -6,6 +6,7 @@ Business Impact Analysis model.
 Prepares for ACN standardized BIA template integration.
 Maps business processes to assets and criticality levels.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -20,6 +21,7 @@ from app.models.base import TimestampMixin
 
 class BusinessProcess(TimestampMixin, Base):
     """A business process that depends on IT assets and services."""
+
     __tablename__ = "business_processes"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(

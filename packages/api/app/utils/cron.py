@@ -41,6 +41,7 @@ Field ranges:
 Anything else (letters, day names, @keywords, special chars) is rejected
 with a 400-friendly error message that points at the offending field.
 """
+
 from __future__ import annotations
 
 
@@ -65,9 +66,7 @@ def _parse_int(token: str, lo: int, hi: int, field_name: str) -> int:
     try:
         value = int(token)
     except ValueError:
-        raise CronValidationError(
-            f"{field_name}: '{token}' is not a number"
-        )
+        raise CronValidationError(f"{field_name}: '{token}' is not a number")
     if value < lo or value > hi:
         raise CronValidationError(
             f"{field_name}: {value} is outside the allowed range {lo}-{hi}"
@@ -92,9 +91,7 @@ def _validate_field(field: str, lo: int, hi: int, field_name: str) -> None:
     if "," in field:
         sub_tokens = field.split(",")
         if any(not s for s in sub_tokens):
-            raise CronValidationError(
-                f"{field_name}: empty list element in '{field}'"
-            )
+            raise CronValidationError(f"{field_name}: empty list element in '{field}'")
         for sub in sub_tokens:
             _validate_field(sub.strip(), lo, hi, field_name)
         return

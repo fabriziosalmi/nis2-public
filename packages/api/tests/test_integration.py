@@ -65,6 +65,16 @@ pytestmark = pytest.mark.skipif(
 async def _bootstrap_async() -> None:
     """Drop and recreate the schema, then apply RLS policies."""
     async with engine.begin() as conn:
+        await conn.execute(text("""
+            DO $$ 
+            DECLARE 
+                pol record;
+            BEGIN
+                FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' LOOP
+                    EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(pol.policyname) || ' ON ' || quote_ident(pol.tablename);
+                END LOOP;
+            END $$;
+        """))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     await setup_row_level_security()
@@ -306,7 +316,7 @@ class TestAuditMiddleware:
             json={
                 "name": "audited-asset",
                 "target_type": "domain",
-                "target_value": "audit-test.example.com",
+                "target_value": "example.com",
             },
             headers=_csrf_headers(fresh_client),
         )

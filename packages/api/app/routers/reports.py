@@ -30,11 +30,11 @@ v2.4.19 audit hardening:
     string to the client — operators read the worker logs to
     diagnose, end users get something actionable.
 """
+
 import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -96,7 +96,9 @@ async def generate_report(
     if not scan or scan.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Scan not found")
     if scan.status != "completed":
-        raise HTTPException(status_code=400, detail="Scan must be completed to generate reports")
+        raise HTTPException(
+            status_code=400, detail="Scan must be completed to generate reports"
+        )
 
     org_id_str = str(membership.organization_id)
     scan_id_str = str(scan_id)
@@ -141,6 +143,7 @@ async def generate_report(
     # back inside `report_i18n.normalize_locale` to "en" if the
     # user's locale is null / unknown.
     from app.tasks.report_tasks import generate_report_task
+
     task = generate_report_task.delay(
         scan_id_str,
         org_id_str,
@@ -152,11 +155,14 @@ async def generate_report(
     # TTL window can dedupe to it. The postrun signal will clear
     # this key when the task finishes — but we set a TTL anyway
     # as a safety net (lost worker, lost signal, etc.).
-    report_dedup.register_inflight_task(
-        org_id_str, scan_id_str, format, task.id
-    )
+    report_dedup.register_inflight_task(org_id_str, scan_id_str, format, task.id)
 
-    return {"task_id": task.id, "status": "queued", "format": format, "scan_id": scan_id_str}
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "format": format,
+        "scan_id": scan_id_str,
+    }
 
 
 @router.get("/status/{task_id}")
@@ -175,6 +181,7 @@ async def report_status(
     user, membership = current_org
 
     from app.tasks.celery_app import celery_app
+
     result = celery_app.AsyncResult(task_id)
 
     response = {"task_id": task_id, "status": result.status.lower()}
@@ -214,6 +221,7 @@ async def download_report(
     user, membership = current_org
 
     from app.tasks.celery_app import celery_app
+
     result = celery_app.AsyncResult(task_id)
 
     if result.status != "SUCCESS" or not result.result:
@@ -241,13 +249,19 @@ async def download_report(
     # FileResponse serve it. We resolve to an absolute, symlink-free
     # path and verify it lives under the expected REPORTS_DIR.
     from app.tasks.report_tasks import REPORTS_DIR
+
     real_base_dir = os.path.realpath(REPORTS_DIR)
     expected_org_dir = os.path.join(real_base_dir, str(membership.organization_id))
     real_path = os.path.realpath(file_path)
-    if not real_path.startswith(expected_org_dir + os.sep) and real_path != expected_org_dir:
+    if (
+        not real_path.startswith(expected_org_dir + os.sep)
+        and real_path != expected_org_dir
+    ):
         logger.warning(
             "Path traversal blocked: file_path=%r resolved to %r (outside %r)",
-            file_path, real_path, expected_org_dir,
+            file_path,
+            real_path,
+            expected_org_dir,
         )
         raise HTTPException(status_code=404, detail="Report file not found")
 
@@ -274,5 +288,5 @@ async def download_report(
         headers={
             "Content-Length": str(file_size),
             "Content-Disposition": f'attachment; filename="{filename}"',
-        }
+        },
     )

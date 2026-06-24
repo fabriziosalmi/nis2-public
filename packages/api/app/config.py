@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # Set JWT_PRIVATE_KEY and JWT_PUBLIC_KEY env vars to the PEM content
     # (with literal \n or as multi-line).
     jwt_private_key: str = ""  # PEM-encoded RSA private key (RS256 signing)
-    jwt_public_key: str = ""   # PEM-encoded RSA public key (RS256 verification)
+    jwt_public_key: str = ""  # PEM-encoded RSA public key (RS256 verification)
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     cors_origins: str = ""

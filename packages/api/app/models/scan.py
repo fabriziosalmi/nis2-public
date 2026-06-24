@@ -17,9 +17,7 @@ from app.models.base import TimestampMixin
 
 class Scan(TimestampMixin, Base):
     __tablename__ = "scans"
-    __table_args__ = (
-        Index("ix_scans_org_created", "organization_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_scans_org_created", "organization_id", "created_at"),)
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -30,13 +28,13 @@ class Scan(TimestampMixin, Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(256), nullable=False, default="Untitled Scan")
+    name: Mapped[str] = mapped_column(
+        String(256), nullable=False, default="Untitled Scan"
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
     )  # pending, running, completed, failed, cancelled
-    scan_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="full"
-    )
+    scan_type: Mapped[str] = mapped_column(String(50), nullable=False, default="full")
     config_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Results summary

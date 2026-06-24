@@ -6,6 +6,7 @@ Incident model for CSIRT Art. 23 D.Lgs 138/2024.
 Tracks the full incident lifecycle: detection -> early warning (24h) ->
 notification (72h) -> final report (1 month).
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -77,9 +78,7 @@ class Incident(TimestampMixin, Base):
     )  # 1=catastrophic, 2=severe, 3=significant, 4=minor
     cross_border: Mapped[bool] = mapped_column(default=False)
     supply_chain_impact: Mapped[bool] = mapped_column(default=False)
-    users_affected_count: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
-    )
+    users_affected_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Evidence and IOCs
     indicators_of_compromise: Mapped[Optional[dict]] = mapped_column(

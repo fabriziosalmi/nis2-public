@@ -143,11 +143,15 @@ async def get_organization(
     # Verify membership
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     org = await db.get(Organization, org_id)
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     return OrgResponse.model_validate(org)
 
@@ -161,7 +165,9 @@ async def update_organization(
 ) -> OrgResponse:
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     if membership.role != "admin":
         raise HTTPException(
@@ -171,7 +177,9 @@ async def update_organization(
 
     org = await db.get(Organization, org_id)
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
     allowed_fields = {"name", "settings"}
@@ -191,7 +199,9 @@ async def list_members(
 ) -> list[MemberResponse]:
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
 
     result = await db.execute(
         select(Membership)
@@ -204,7 +214,11 @@ async def list_members(
     return [MemberResponse.model_validate(m) for m in members]
 
 
-@router.post("/{org_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{org_id}/members",
+    response_model=MemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def invite_member(
     org_id: uuid.UUID,
     payload: InviteMemberRequest,
@@ -335,7 +349,9 @@ async def update_member_role(
 
     target_membership = await db.get(Membership, member_id)
     if not target_membership or target_membership.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
 
     new_role = payload.role
     old_role = target_membership.role
@@ -413,7 +429,9 @@ async def remove_member(
 
     target_membership = await db.get(Membership, member_id)
     if not target_membership or target_membership.organization_id != org_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
 
     # Prevent removing the last admin
     if target_membership.role == "admin":

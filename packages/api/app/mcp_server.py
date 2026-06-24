@@ -13,6 +13,7 @@ Exposes the NIS2 Compliance Platform as MCP tools for AI assistants:
 - get_governance_score(org_id) → Governance checklist status
 - search_playbooks(query) → Find remediation playbooks
 """
+
 import asyncio
 import json
 import logging
@@ -20,9 +21,10 @@ import sys
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.dependencies import get_current_user_org
+from app.routers.auth import limiter
 from app.models.user import User
 
 logger = logging.getLogger("nis2.mcp")
@@ -32,9 +34,11 @@ def _mcp_version() -> str:
     """Return the installed package version, matching main.py's logic."""
     try:
         from importlib.metadata import version as _pkg_version
+
         return _pkg_version("nis2-api")
     except Exception:
         return "0.0.0-dev"
+
 
 # MCP tool definitions (JSON-Schema format for MCP protocol)
 MCP_TOOLS = [
@@ -44,8 +48,15 @@ MCP_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "domain": {"type": "string", "description": "Domain to analyze (e.g. example.com)"},
-                "port": {"type": "integer", "description": "TLS port (default 443)", "default": 443},
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to analyze (e.g. example.com)",
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "TLS port (default 443)",
+                    "default": 443,
+                },
             },
             "required": ["domain"],
         },
@@ -76,7 +87,10 @@ MCP_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search term (e.g. 'TLS', 'SPF', 'SMB', 'HSTS')"},
+                "query": {
+                    "type": "string",
+                    "description": "Search term (e.g. 'TLS', 'SPF', 'SMB', 'HSTS')",
+                },
             },
             "required": ["query"],
         },
@@ -87,7 +101,10 @@ MCP_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "playbook_id": {"type": "string", "description": "Playbook ID (e.g. 'tls_obsolete_protocol', 'dns_no_spf')"},
+                "playbook_id": {
+                    "type": "string",
+                    "description": "Playbook ID (e.g. 'tls_obsolete_protocol', 'dns_no_spf')",
+                },
             },
             "required": ["playbook_id"],
         },
@@ -131,7 +148,11 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
     if name == "check_certificate":
         # P0-04 audit fix: validate domain against SSRF blocklist
         # before any outbound connection.
-        from app.utils.target_validator import validate_domain_pinned, TargetValidationError
+        from app.utils.target_validator import (
+            validate_domain_pinned,
+            TargetValidationError,
+        )
+
         domain = arguments.get("domain", "")
         try:
             await validate_domain_pinned(domain)
@@ -139,6 +160,7 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
             return {"error": f"Target blocked: {exc}"}
 
         from nis2scan.certificate import CertificateAnalyzer
+
         analyzer = CertificateAnalyzer(timeout=10)
         info = await analyzer.analyze(
             domain,
@@ -159,10 +181,12 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
         # endpoints (169.254.169.254), or internal RFC-1918 ranges
         # via the HTTP MCP endpoint.
         from app.utils.target_validator import (
-            validate_domain_pinned, validate_ip_pinned,
+            validate_domain_pinned,
+            validate_ip_pinned,
             TargetValidationError,
         )
         import ipaddress as _ipaddress
+
         try:
             # Heuristic: if it parses as an IP, validate as IP;
             # otherwise treat as domain.
@@ -174,9 +198,14 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
 
-        features = arguments.get("features", {
-            "dns_checks": True, "web_checks": True, "port_scan": True,
-        })
+        features = arguments.get(
+            "features",
+            {
+                "dns_checks": True,
+                "web_checks": True,
+                "port_scan": True,
+            },
+        )
         config = Config(
             targets=Targets(domains=[target]),
             features=features,
@@ -208,11 +237,14 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
 
     elif name == "search_playbooks":
         from app.services.remediation import get_all_playbooks
+
         query = arguments["query"].lower()
         playbooks = get_all_playbooks()
         matches = {}
         for pid, pb in playbooks.items():
-            searchable = f"{pb['title']} {pb['category']} {pid} {' '.join(pb['steps'])}".lower()
+            searchable = (
+                f"{pb['title']} {pb['category']} {pid} {' '.join(pb['steps'])}".lower()
+            )
             if query in searchable:
                 matches[pid] = {
                     "title": pb["title"],
@@ -224,6 +256,7 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
 
     elif name == "get_playbook":
         from app.services.remediation import get_all_playbooks
+
         playbooks = get_all_playbooks()
         pb = playbooks.get(arguments["playbook_id"])
         if not pb:
@@ -232,15 +265,22 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
 
     elif name == "estimate_remediation":
         from app.services.remediation import estimate_remediation
+
         return estimate_remediation(arguments["findings"])
 
     elif name == "list_governance_items":
         from app.routers.governance import CHECKLIST_TEMPLATE
+
         return {
             "total": len(CHECKLIST_TEMPLATE),
             "items": [
-                {"id": item_id, "priority": priority, "title": title,
-                 "description": desc, "nis2_reference": ref}
+                {
+                    "id": item_id,
+                    "priority": priority,
+                    "title": title,
+                    "description": desc,
+                    "nis2_reference": ref,
+                }
                 for item_id, priority, title, desc, ref in CHECKLIST_TEMPLATE
             ],
         }
@@ -295,16 +335,33 @@ def run_mcp_stdio():
                             "jsonrpc": "2.0",
                             "id": request.get("id"),
                             "result": {
-                                "content": [{"type": "text", "text": json.dumps(result, default=str, indent=2)}],
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            result, default=str, indent=2
+                                        ),
+                                    }
+                                ],
                             },
                         }
                     except Exception as e:
-                        logger.error("MCP tool %r failed in stdio: %s", tool_name, e, exc_info=True)
+                        logger.error(
+                            "MCP tool %r failed in stdio: %s",
+                            tool_name,
+                            e,
+                            exc_info=True,
+                        )
                         response = {
                             "jsonrpc": "2.0",
                             "id": request.get("id"),
                             "result": {
-                                "content": [{"type": "text", "text": "Error: Internal error processing MCP tool call"}],
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "Error: Internal error processing MCP tool call",
+                                    }
+                                ],
                                 "isError": True,
                             },
                         }
@@ -334,9 +391,6 @@ def run_mcp_stdio():
 # full network scans which are expensive on both the platform and the
 # target. Without limits a single client could saturate every Celery
 # worker.
-
-from fastapi import APIRouter, Depends, Request
-from app.routers.auth import limiter
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 

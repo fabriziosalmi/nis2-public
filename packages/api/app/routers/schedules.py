@@ -20,7 +20,9 @@ from app.utils.cron import CronValidationError, validate_cron
 
 class ScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
-    cron_expression: str = Field(..., min_length=5, max_length=100, examples=["0 9 * * 1-5"])
+    cron_expression: str = Field(
+        ..., min_length=5, max_length=100, examples=["0 9 * * 1-5"]
+    )
     asset_ids: list[uuid.UUID]
     scan_type: str = Field("full", pattern="^(full|quick|custom)$")
     features: Optional[dict] = None
@@ -93,9 +95,12 @@ async def create_schedule(
     config = {
         "asset_ids": [str(a) for a in payload.asset_ids],
         "scan_type": payload.scan_type,
-        "features": payload.features or {
-            "dns_checks": True, "web_checks": True,
-            "port_scan": True, "whois_checks": True,
+        "features": payload.features
+        or {
+            "dns_checks": True,
+            "web_checks": True,
+            "port_scan": True,
+            "whois_checks": True,
         },
     }
 
@@ -184,6 +189,7 @@ async def trigger_schedule(
         raise HTTPException(status_code=404, detail="Schedule not found")
 
     from app.tasks.scan_tasks import run_scheduled_scan_task
+
     task = run_scheduled_scan_task.delay(str(schedule.id))
 
     return {"task_id": task.id, "status": "queued", "schedule_id": str(schedule_id)}

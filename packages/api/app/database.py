@@ -173,6 +173,11 @@ _RLS_PREDICATE = (
     "organization_id::text IN (SELECT organization_id::text FROM memberships WHERE user_id::text = current_setting('app.current_user_id', true))))"
 )
 
+_RLS_MEMBERSHIPS_PREDICATE = (
+    "(organization_id::text = current_setting('app.current_org_id', true) "
+    "OR user_id::text = current_setting('app.current_user_id', true))"
+)
+
 
 async def setup_row_level_security() -> None:
     """Ensure RLS policies are in place for all tenant-scoped tables.
@@ -196,13 +201,14 @@ async def setup_row_level_security() -> None:
         return
 
     tenant_tables = sorted(
-        t.name for t in Base.metadata.tables.values()
-        if "organization_id" in t.columns
+        t.name for t in Base.metadata.tables.values() if "organization_id" in t.columns
     )
 
     async with engine.connect() as conn:
         result = await conn.execute(
-            text("SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'")
+            text(
+                "SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'"
+            )
         )
         has_policy = {row[0] for row in result}
 
@@ -210,29 +216,41 @@ async def setup_row_level_security() -> None:
     if missing:
         logger.warning(
             "RLS: tenant_isolation policy missing on %d table(s): %s — applying now.",
-            len(missing), ", ".join(missing),
+            len(missing),
+            ", ".join(missing),
         )
         async with engine.begin() as conn:
             for t in missing:
                 await conn.execute(text(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"))
                 await conn.execute(text(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY"))
-                await conn.execute(
-                    text(f"CREATE POLICY tenant_isolation ON {t} "
-                         f"USING {_RLS_PREDICATE} "
-                         f"WITH CHECK {_RLS_PREDICATE}")
+                predicate = (
+                    _RLS_MEMBERSHIPS_PREDICATE if t == "memberships" else _RLS_PREDICATE
                 )
-        logger.info("RLS: tenant_isolation policies applied on %d table(s).", len(missing))
+                await conn.execute(
+                    text(
+                        f"CREATE POLICY tenant_isolation ON {t} "
+                        f"USING {predicate} "
+                        f"WITH CHECK {predicate}"
+                    )
+                )
+        logger.info(
+            "RLS: tenant_isolation policies applied on %d table(s).", len(missing)
+        )
     else:
-        logger.info("RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables))
+        logger.info(
+            "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
+        )
 
     # Defence-in-depth check: if the application's Postgres role is a
     # SUPERUSER (or has BYPASSRLS), RLS policies are bypassed for this role.
     # In production the API refuses to start unless RLS_SUPERUSER_OK=1 is set.
     try:
         async with engine.connect() as conn:
-            result = await conn.execute(text(
-                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
-            ))
+            result = await conn.execute(
+                text(
+                    "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+                )
+            )
             row = result.first()
             if row and (row[0] or row[1]):
                 msg = (
@@ -242,8 +260,10 @@ async def setup_row_level_security() -> None:
                     "app role with BYPASSRLS revoked before going live, e.g.:\n"
                     "  ALTER ROLE <app_role> NOSUPERUSER NOBYPASSRLS;"
                 )
-                if settings.environment == "production" and \
-                        os.environ.get("RLS_SUPERUSER_OK") != "1":
+                if (
+                    settings.environment == "production"
+                    and os.environ.get("RLS_SUPERUSER_OK") != "1"
+                ):
                     logger.error("%s", msg)
                     raise RuntimeError(
                         "Refusing to start: production deploy with a SUPERUSER/BYPASSRLS app role. "

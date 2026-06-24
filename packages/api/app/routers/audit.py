@@ -12,6 +12,7 @@ read view so the UI in settings/audit-log can render real data.
 Audit B03: previous version of the UI was 100% mocked because no API
 endpoint existed; the screen lied to auditors.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -70,7 +71,9 @@ class AuditLogListResponse(BaseModel):
 async def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    action: Optional[str] = Query(None, description="Exact match on action, e.g. 'member.role_changed'"),
+    action: Optional[str] = Query(
+        None, description="Exact match on action, e.g. 'member.role_changed'"
+    ),
     resource_type: Optional[str] = Query(None),
     user_id: Optional[uuid.UUID] = Query(None, description="Filter by actor user id"),
     current_org: tuple[User, Membership] = Depends(get_current_org),
@@ -113,9 +116,7 @@ async def list_audit_logs(
     actor_ids = {r.user_id for r in rows if r.user_id is not None}
     actors_by_id: dict[uuid.UUID, User] = {}
     if actor_ids:
-        actors_result = await db.execute(
-            select(User).where(User.id.in_(actor_ids))
-        )
+        actors_result = await db.execute(select(User).where(User.id.in_(actor_ids)))
         actors_by_id = {u.id: u for u in actors_result.scalars().all()}
 
     def to_response(row: AuditLog) -> AuditLogResponse:
