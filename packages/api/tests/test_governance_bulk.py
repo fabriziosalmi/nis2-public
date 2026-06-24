@@ -106,6 +106,12 @@ def test_bulk_update_string_too_long(client_admin):
     assert resp.status_code == 422
     assert "assigned_to_name" in resp.text
 
+def test_bulk_update_missing_items_key(client_admin):
+    payload = {"other_field": "value"}  # Missing required 'items' key
+    resp = client_admin.post("/api/v1/governance/bulk-update", json=payload)
+    assert resp.status_code == 422
+    assert "items" in resp.text
+
 def test_bulk_update_valid_passes_schema(client_admin):
     payload = {
         "items": [
