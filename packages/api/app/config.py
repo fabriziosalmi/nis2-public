@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     # shared / multi-tenant setups. Default 3.
     max_concurrent_reports_per_org: int = 3
 
+    # AI remediation copilot (POST /remediation/explain). OpenAI egress is OFF by
+    # default — OPENAI_API_KEY alone does NOT enable it; ENABLE_OPENAI must be true.
+    # See docs/privacy.md §7.3 (transborder data flow to OpenAI, USA).
+    enable_openai: bool = False
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @model_validator(mode="after")
