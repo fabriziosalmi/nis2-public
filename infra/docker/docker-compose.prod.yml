@@ -78,6 +78,8 @@ services:
       context: ../..
       dockerfile: packages/api/Dockerfile
     command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    # L11: block setuid-based privilege escalation inside the container.
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - reports-data:/tmp/nis2-reports
     env_file: ../../.env
@@ -101,6 +103,11 @@ services:
       context: ../..
       dockerfile: packages/api/Dockerfile
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    # L11: block privilege escalation + cap process fan-out. The worker spawns
+    # scan subprocesses and headless Chromium; pids_limit backstops a fork bomb
+    # without starving Chromium (gated to 2 concurrent by the scanner's L5 cap).
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 1024
     volumes:
       - reports-data:/tmp/nis2-reports
     env_file: ../../.env
@@ -142,6 +149,8 @@ services:
     # schedule to survive container restarts so cron-style triggers
     # don't double-fire after a deploy — hence the named volume.
     command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/var/celerybeat/schedule
+    # L11: block setuid-based privilege escalation inside the container.
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - celerybeat_data:/var/celerybeat
     env_file: ../../.env
