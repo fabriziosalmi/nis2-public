@@ -155,6 +155,24 @@ async def update_finding(
         )
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    # I4: an assignee must be a member of THIS org. Otherwise an admin/auditor
+    # could write an arbitrary (foreign) user UUID into assigned_to — leaking
+    # that id and corrupting assignment-based UI / notifications.
+    assignee = update_data.get("assigned_to")
+    if assignee is not None:
+        member = await db.execute(
+            select(Membership.id).where(
+                Membership.user_id == assignee,
+                Membership.organization_id == membership.organization_id,
+            )
+        )
+        if member.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="assigned_to must be a member of this organization",
+            )
+
     for field, value in update_data.items():
         setattr(finding, field, value)
 
