@@ -5,6 +5,7 @@
 Regional and Legal Compliance Checks
 Validates security.txt, Italian P.IVA, Privacy Policy, Cookie Banners
 """
+import asyncio
 import ipaddress
 import re
 import logging
@@ -18,6 +19,11 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 logger = logging.getLogger("nis2scan")
+
+# L5: cap concurrent headless-Chromium launches per scan. Each browser spawns
+# many processes; an unbounded fan-out (up to the scanner's `concurrency`,
+# default 20) can pin every scan slot in 30s renders and spike memory.
+_MAX_CONCURRENT_PLAYWRIGHT = 2
 
 # Internal/metadata hostnames Playwright must never be steered toward.
 _BLOCKED_HOSTNAMES = {
@@ -71,6 +77,11 @@ class LegalChecker:
             'cookie', 'accetta', 'accetto', 'consenso', 'accept cookies',
             'cookie policy', 'gestisci cookie', 'manage cookies'
         ]
+
+        # Gate concurrent Playwright launches (see _MAX_CONCURRENT_PLAYWRIGHT).
+        # Constructed here (no running loop needed in 3.10+); binds to the loop on
+        # first acquire — one LegalChecker per Scanner per Celery-task loop.
+        self._playwright_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_PLAYWRIGHT)
 
     def check_security_txt(self, url: str, http_response: Optional[str]) -> Dict[str, Any]:
         """
@@ -165,6 +176,9 @@ class LegalChecker:
         logger.info(
             f"Starting Playwright dynamic check for {url} (pinned {host} -> {pinned_ip})"
         )
+        # L5: serialize browser launches through the per-checker semaphore;
+        # released in the finally below regardless of which path returns.
+        await self._playwright_semaphore.acquire()
         try:
             async with async_playwright() as p:
                 # We assume 'playwright install' has been run.
@@ -224,6 +238,8 @@ class LegalChecker:
         except Exception as e:
             logger.error(f"Playwright check failed: {e}")
             return {}
+        finally:
+            self._playwright_semaphore.release()
 
     async def analyze_page(
         self, url: str, html_body: str, pinned_ip: Optional[str] = None
