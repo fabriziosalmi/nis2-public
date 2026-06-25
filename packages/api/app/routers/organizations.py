@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -91,7 +92,16 @@ async def create_organization(
     #    admin to manage it.
     org = Organization(name=payload.name, slug=slug)
     db.add(org)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Lost the check-then-insert race on the slug — another request created
+        # the same slug between our uniqueness check and this flush. get_db rolls
+        # the request transaction back; surface a clean 409 instead of a 500.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An organization with a conflicting name was just created; please retry.",
+        )
 
     membership = Membership(
         user_id=current_user.id,

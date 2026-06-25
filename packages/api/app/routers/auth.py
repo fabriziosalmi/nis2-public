@@ -16,6 +16,7 @@ from passlib.context import CryptContext
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -241,7 +242,14 @@ async def register(
         full_name=payload.full_name,
     )
     db.add(user)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent registration with the same email raced past the pre-check.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
 
     base_slug = _slugify(payload.org_name)
     slug = base_slug
@@ -257,7 +265,14 @@ async def register(
 
     org = Organization(name=payload.org_name, slug=slug)
     db.add(org)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Lost the check-then-insert race on the slug — surface a clean 409.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An organization with a conflicting name was just created; please retry.",
+        )
 
     # Set the session org_id so that inserting into the RLS-protected memberships table is allowed
     await _set_session_org_id(db, org.id)
