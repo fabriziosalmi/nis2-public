@@ -196,7 +196,12 @@ async def csirt_emergency_payload(
             "detection_timestamp": detected.isoformat(),
             "early_warning_deadline": (detected + timedelta(hours=24)).isoformat(),
             "notification_deadline": (detected + timedelta(hours=72)).isoformat(),
-            "final_report_deadline": (detected + timedelta(days=30)).isoformat(),
+            # NIS2 Art. 23(4)(d): the final report is due 1 month from the
+            # *notification* (the 72h report), NOT from detection. Was
+            # `detected + 30d`, which told operators it was due ~a month early.
+            "final_report_deadline": (
+                detected + timedelta(hours=72) + timedelta(days=30)
+            ).isoformat(),
             "description": data.what_happened,
             "affected_services": data.affected_services,
             "is_ongoing": data.is_ongoing,
