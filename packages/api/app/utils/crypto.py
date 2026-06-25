@@ -10,8 +10,21 @@ from app.config import settings
 
 
 def get_totp_encryption_key() -> bytes:
-    """Derive a 32-byte key from settings.jwt_secret."""
-    secret = settings.jwt_secret or "temporary-ephemeral-secret-key-for-mfa"
+    """Derive the 32-byte AES-GCM key for field-level TOTP encryption.
+
+    Prefers the dedicated DATA_ENCRYPTION_KEY; falls back to JWT_SECRET so
+    deployments provisioned before DATA_ENCRYPTION_KEY existed keep the same
+    derived key and their stored secrets stay decryptable. Fails closed when
+    neither is available — it must never derive from a hardcoded literal, which
+    would let anyone with the (public, AGPL) source decrypt MFA seeds from a
+    stolen DB. Production config validation guarantees key material is present.
+    """
+    secret = settings.data_encryption_key or settings.jwt_secret
+    if not secret:
+        raise RuntimeError(
+            "No encryption key for TOTP secrets: set DATA_ENCRYPTION_KEY (or "
+            "JWT_SECRET). Refusing to derive a key from a hardcoded value."
+        )
     return hashlib.sha256(secret.encode()).digest()
 
 
