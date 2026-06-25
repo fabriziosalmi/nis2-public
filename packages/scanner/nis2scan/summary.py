@@ -1,8 +1,21 @@
 # Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import html
 from typing import List, Dict, Any
 from dataclasses import dataclass
+
+
+def _esc(value) -> str:
+    """HTML-escape a value embedded into the executive-summary markup.
+
+    The summary is *rendered* (not escaped) by the report generators and the
+    web UI, so every DATA interpolation MUST be escaped here at the source —
+    otherwise a finding/risk string containing `<script>` injects into the
+    report HTML. The structural tags below are static and stay raw.
+    """
+    return html.escape(str(value))
+
 
 @dataclass
 class BusinessRisk:
@@ -183,7 +196,7 @@ class SummaryGenerator:
             # Link to GDPR
             url = "https://eur-lex.europa.eu/eli/reg/2016/679/oj"
 
-        return f'<a href="{url}" target="_blank" title="Approfondisci: {reference}" style="text-decoration: none; font-size: 0.9em; margin-left: 4px; vertical-align: middle;">📖</a>'
+        return f'<a href="{url}" target="_blank" title="Approfondisci: {_esc(reference)}" style="text-decoration: none; font-size: 0.9em; margin-left: 4px; vertical-align: middle;">📖</a>'
 
     def _build_html(self, report, risks: List[BusinessRisk], metrics: Dict[str, Any], action_plan: List[Dict[str, str]]) -> str:
         """Construct the final HTML string."""
@@ -192,7 +205,7 @@ class SummaryGenerator:
         html = f"""
         <div style="margin-bottom: 20px;">
             <p class="executive-text">
-                <strong>Audit Status:</strong> <span style="color: {'#ef4444' if metrics['status'] == 'CRITICAL' else '#eab308' if metrics['status'] == 'IMPROVEMENT NEEDED' else '#10b981'}">{metrics['status']}</span>
+                <strong>Audit Status:</strong> <span style="color: {'#ef4444' if metrics['status'] == 'CRITICAL' else '#eab308' if metrics['status'] == 'IMPROVEMENT NEEDED' else '#10b981'}">{_esc(metrics['status'])}</span>
                 (Score: {metrics['score']}/100)
             </p>
             <p class="executive-text">
@@ -215,7 +228,7 @@ class SummaryGenerator:
 
                 html += f"""
                 <li style="margin-bottom: 8px;">
-                    <strong>{risk.name}:</strong> {risk.impact} {ref_link}
+                    <strong>{_esc(risk.name)}:</strong> {_esc(risk.impact)} {ref_link}
                 </li>
                 """
             html += "</ul></div>"
@@ -229,9 +242,9 @@ class SummaryGenerator:
 
                 html += f"""
                 <li style="margin-bottom: 8px;">
-                    <strong style="color: {priority_color};">{action['priority']}:</strong> {action['step']} {ref_link}
+                    <strong style="color: {priority_color};">{_esc(action['priority'])}:</strong> {_esc(action['step'])} {ref_link}
                     <div style="font-size: 0.85em; color: var(--text-muted); margin-top: 2px;">
-                        Issue: {action['finding']} | Affects: {action['target']}
+                        Issue: {_esc(action['finding'])} | Affects: {_esc(action['target'])}
                     </div>
                 </li>
                 """
