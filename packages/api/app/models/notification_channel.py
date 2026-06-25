@@ -7,11 +7,12 @@ import uuid
 from typing import Optional
 
 from sqlalchemy import ARRAY, Boolean, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 from app.models.base import TimestampMixin
+from app.utils.encrypted_types import EncryptedJSON
 
 
 class NotificationChannel(TimestampMixin, Base):
@@ -27,7 +28,9 @@ class NotificationChannel(TimestampMixin, Base):
         String(20), nullable=False
     )  # email, webhook, slack
     name: Mapped[str] = mapped_column(String(256), nullable=False)
-    config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # L14: notification credentials (Slack/webhook tokens, secrets) are
+    # sensitive at rest — encrypt the column.
+    config: Mapped[dict] = mapped_column(EncryptedJSON, default=dict, nullable=False)
     events: Mapped[Optional[list[str]]] = mapped_column(
         ARRAY(Text), default=list, nullable=True
     )

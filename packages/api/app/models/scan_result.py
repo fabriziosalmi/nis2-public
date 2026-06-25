@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.base import TimestampMixin
+from app.utils.encrypted_types import EncryptedJSON
 
 if TYPE_CHECKING:
     from app.models.scan import Scan
@@ -48,8 +49,9 @@ class ScanResult(TimestampMixin, Base):
     whois_info: Mapped[Optional[dict]] = mapped_column(
         JSONB, default=dict, nullable=True
     )
+    # L14: leaked-secret evidence is sensitive at rest — encrypt the column.
     secrets_found: Mapped[Optional[dict]] = mapped_column(
-        JSONB, default=list, nullable=True
+        EncryptedJSON, default=list, nullable=True
     )
     errors: Mapped[Optional[list[str]]] = mapped_column(
         ARRAY(String), default=list, nullable=True

@@ -3,6 +3,7 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import base64
 import hashlib
+import json
 import os
 from typing import Optional
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -63,3 +64,27 @@ def decrypt_totp_secret(encrypted_str: Optional[str]) -> Optional[str]:
     except Exception:
         # Decryption failed; return as-is (legacy cleartext support)
         return encrypted_str
+
+
+def encrypt_json(value) -> str:
+    """AES-GCM-encrypt a JSON-serialisable value to a base64 string.
+
+    Keyed by the same DATA_ENCRYPTION_KEY as TOTP secrets
+    (get_totp_encryption_key). Used for field-level encryption of JSONB columns
+    that hold sensitive data at rest (leaked-secret evidence, notification
+    credentials). Format: base64(nonce[12] + ciphertext + tag[16]).
+    """
+    key = get_totp_encryption_key()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    raw = json.dumps(value, separators=(",", ":")).encode("utf-8")
+    return base64.b64encode(nonce + aesgcm.encrypt(nonce, raw, None)).decode("utf-8")
+
+
+def decrypt_json(blob: str):
+    """Inverse of encrypt_json. Raises on tamper / wrong key (callers handle)."""
+    key = get_totp_encryption_key()
+    raw = base64.b64decode(blob.encode("utf-8"), validate=True)
+    nonce, ciphertext_tag = raw[:12], raw[12:]
+    aesgcm = AESGCM(key)
+    return json.loads(aesgcm.decrypt(nonce, ciphertext_tag, None).decode("utf-8"))
