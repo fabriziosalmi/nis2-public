@@ -52,7 +52,12 @@ from app.utils.jwt import create_access_token, create_refresh_token, decode_toke
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt silently truncates at 72 bytes, so a >72-char passphrase only gets 72
+# bytes of entropy honoured. bcrypt_sha256 pre-hashes with SHA-256 (no length
+# limit) and is the default for new/updated hashes; plain bcrypt stays
+# registered so existing hashes still verify and are transparently upgraded on
+# next login (verify_and_update).
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 limiter = Limiter(key_func=get_remote_address)
 logger = logging.getLogger(__name__)
 
@@ -441,12 +446,19 @@ async def login(
             detail="Invalid email or password",
         )
 
-    if not pwd_context.verify(payload.password, user.password_hash):
+    password_ok, upgraded_hash = pwd_context.verify_and_update(
+        payload.password, user.password_hash
+    )
+    if not password_ok:
         await login_throttle.record_failure(payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+    if upgraded_hash:
+        # Transparently migrate a legacy bcrypt hash to bcrypt_sha256 (persisted
+        # by the db.flush below). Only fires for deprecated/old-scheme hashes.
+        user.password_hash = upgraded_hash
 
     if not user.is_active:
         raise HTTPException(
