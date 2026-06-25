@@ -10,13 +10,14 @@ import os
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, require_role
+from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User
@@ -143,9 +144,14 @@ class ExplainRequest(BaseModel):
     )
 
 
-@router.post("/explain/{finding_id}")
+@router.post(
+    "/explain/{finding_id}",
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+@limiter.limit("10/minute")
 async def explain_finding(
     finding_id: uuid.UUID,
+    request: Request,
     payload: ExplainRequest = ExplainRequest(),
     current_org: tuple[User, Membership] = Depends(get_current_org),
     db: AsyncSession = Depends(get_db),
