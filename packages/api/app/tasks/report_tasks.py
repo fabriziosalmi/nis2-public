@@ -466,7 +466,12 @@ def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
         lines.append(f"## {_t(locale, 'executive_summary')}\n")
         # Blockquote — escape pipes/asterisks/etc inside the body
         # so a `*emphasis*` from the user doesn't reflow the doc.
-        lines.append(f"> {_md(scan.executive_summary)}\n")
+        # executive_summary is HTML; strip tags to readable plain text for the
+        # Markdown report (Markdown viewers don't reliably render embedded HTML,
+        # and escaping it showed the raw tags). The inner text is still _md-escaped.
+        _summary_text = html.unescape(re.sub(r"<[^>]+>", " ", scan.executive_summary))
+        _summary_text = re.sub(r"\s+", " ", _summary_text).strip()
+        lines.append(f"> {_md(_summary_text)}\n")
 
     # Findings table
     lines.append(f"## {_t(locale, 'findings')}\n")
@@ -646,16 +651,19 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
             f"<td>{_h(ports)}</td></tr>\n"
         )
 
-    # Executive summary — escape the user-supplied text inside an
-    # otherwise-static `<div class="executive">`. Pre-v2.4.19 this
-    # was string-concat'd raw, opening an XSS that fired the moment
-    # someone opened the report (or its PDF rendering pulled the
-    # injected JS into the print pipeline).
+    # Executive summary — RENDERED, not escaped. The scanner's SummaryGenerator
+    # emits HTML (<div>/<strong>/<a>/<ul>…); html.escape()'ing it here showed the
+    # raw tags verbatim instead of the formatted summary. It is safe to render
+    # because SummaryGenerator now html-escapes every DATA value it interpolates
+    # (risk names, finding text, references) at the source, so the only HTML left
+    # is its own static structural tags. (Pre-v2.4.19 this was raw AND the data
+    # was unescaped — THAT was the XSS; escaping the data at the source closes it,
+    # without flattening the formatting.)
     exec_block = ""
     if scan.executive_summary:
         exec_block = (
             f"<h2>{_h(_t(locale, 'executive_summary'))}</h2>"
-            f'<div class="executive">{_h(scan.executive_summary)}</div>'
+            f'<div class="executive">{scan.executive_summary}</div>'
         )
 
     # The lang attribute matches the user's requested locale (audit
