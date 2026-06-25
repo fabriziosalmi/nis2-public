@@ -27,6 +27,7 @@ from app.models.password_reset_token import PasswordResetToken
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.utils.email import get_dev_outbox, send_email
+from app.utils import login_throttle
 import pyotp
 
 from app.schemas.auth import (
@@ -404,16 +405,29 @@ async def login(
     slim: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse | MFARequiredResponse:
+    # Per-account lockout (M3): IP-independent brute-force / credential-stuffing
+    # defense, complementing the per-IP slowapi limit on this route.
+    locked_for = await login_throttle.seconds_until_unlock(payload.email)
+    if locked_for > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account temporarily locked after repeated failed logins. "
+            f"Try again in {locked_for}s.",
+            headers={"Retry-After": str(locked_for)},
+        )
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
     if not user or not user.password_hash:
+        await login_throttle.record_failure(payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not pwd_context.verify(payload.password, user.password_hash):
+        await login_throttle.record_failure(payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -442,10 +456,15 @@ async def login(
                         ",".join(codes_list) if codes_list else None
                     )
             if not recovery_valid:
+                await login_throttle.record_failure(payload.email)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid MFA code",
                 )
+
+    # Full auth success (password + MFA) — clear any accumulated failed-attempt
+    # / lock state for this account.
+    await login_throttle.reset(payload.email)
 
     user.last_login_at = datetime.now(timezone.utc)
     await db.flush()
