@@ -241,9 +241,24 @@ async def setup_row_level_security() -> None:
             "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
         )
 
-    # Defence-in-depth check: if the application's Postgres role is a
-    # SUPERUSER (or has BYPASSRLS), RLS policies are bypassed for this role.
-    # In production the API refuses to start unless RLS_SUPERUSER_OK=1 is set.
+    # Defence-in-depth: refuse to run with a SUPERUSER/BYPASSRLS role in prod
+    # (shared with the Celery worker boot guard — see assert_db_role_rls_safe).
+    await assert_db_role_rls_safe()
+
+
+async def assert_db_role_rls_safe() -> None:
+    """Refuse to run on a SUPERUSER/BYPASSRLS Postgres role in production.
+
+    If the app's Postgres role is SUPERUSER or has BYPASSRLS, every RLS policy
+    is decorative for that role and tenant isolation rests on application-layer
+    org_id filters ONLY. In production we refuse to start unless
+    RLS_SUPERUSER_OK=1 is set. Shared by the API lifespan
+    (setup_row_level_security) and the Celery worker boot guard
+    (tasks.celery_app) so both processes enforce the same posture — pre-fix the
+    worker had NO guard and silently ran cross-tenant queries under superuser.
+    """
+    if not IS_POSTGRES:
+        return
     try:
         async with engine.connect() as conn:
             result = await conn.execute(

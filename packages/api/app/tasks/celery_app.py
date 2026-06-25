@@ -1,9 +1,14 @@
 # Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+import logging
+
 from celery import Celery
+from celery.signals import worker_init
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "nis2",
@@ -83,3 +88,29 @@ from app.tasks import scan_tasks  # noqa: E402,F401
 from app.tasks import report_tasks  # noqa: E402,F401
 from app.tasks import cleanup_tasks  # noqa: E402,F401
 from app.tasks import incident_tasks  # noqa: E402,F401
+
+
+@worker_init.connect
+def _enforce_rls_role(**_kwargs) -> None:
+    """Boot guard: refuse to start a Celery worker on a SUPERUSER/BYPASSRLS DB
+    role in production, mirroring the API's startup check
+    (database.assert_db_role_rls_safe).
+
+    The worker runs raw cross-tenant queries with no per-request RLS context, so
+    a superuser/BYPASSRLS role here silently defeats tenant isolation — and
+    pre-fix the worker had NO equivalent of the API's guard. Fires once in the
+    worker's main process (not in beat, which uses a file-based scheduler and
+    never touches Postgres). Set RLS_SUPERUSER_OK=1 to opt out (not recommended).
+    """
+    import asyncio
+    import sys
+
+    from app.database import assert_db_role_rls_safe
+
+    try:
+        asyncio.run(assert_db_role_rls_safe())
+    except RuntimeError as exc:
+        # Hard-stop the worker boot — the same loud, restart-looping failure the
+        # API raises in its lifespan, rather than silently running insecure.
+        logger.error("%s", exc)
+        sys.exit(1)
