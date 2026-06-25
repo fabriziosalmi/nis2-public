@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_org, require_role
 from app.routers.auth import limiter  # share the single Limiter instance
@@ -225,8 +226,10 @@ Respond in a structured format with clear headings."""
                 exc_info=True,
             )
 
-    # Fallback to OpenAI
-    if not explanation and openai_key:
+    # Fallback to OpenAI — gated behind an explicit opt-in. A configured key is
+    # NOT enough: cloud egress (finding text -> api.openai.com, USA) only fires
+    # when ENABLE_OPENAI=true. See docs/privacy.md §7.3.
+    if not explanation and openai_key and settings.enable_openai:
         try:
             import aiohttp
 

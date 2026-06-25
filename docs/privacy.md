@@ -131,8 +131,9 @@ The scanner makes **direct DNS, TLS, HTTP, and TCP connections to the targets th
 | `crt.sh` (Sectigo) | Certificate Transparency log lookup for subdomain enumeration | the domain being scanned | Sectigo Limited (USA / UK) | scanner → crt.sh over HTTPS |
 | Public DNS resolvers (system-configured) | Name resolution for scan targets | the domain being scanned | the deployer's resolver chain (often Cloudflare 1.1.1.1, Google 8.8.8.8, ISP) | OS resolver |
 | Target hosts | TLS / HTTP / port probes | source IP of the scanner pod, scanner User-Agent | the target's operator | direct connection |
+| `api.openai.com` *(only when `ENABLE_OPENAI=true`)* | AI remediation explanations (`POST /remediation/explain`) | the finding's message / target / technical detail — may contain internal hostnames, leaked secrets, incidental PII | OpenAI, L.L.C. (USA) | API → OpenAI over HTTPS |
 
-If your deployment uses a corporate proxy or a dedicated egress IP, replace the rows above accordingly. **No telemetry leaves the platform**: there is no callback to the maintainer, no error-reporting service, no analytics endpoint.
+If your deployment uses a corporate proxy or a dedicated egress IP, replace the rows above accordingly. **No telemetry leaves the platform**: there is no callback to the maintainer, no error-reporting service, no analytics endpoint. The AI remediation copilot is the one *optional* third-party egress — it is **off by default** and only sends data to OpenAI when the operator explicitly sets `ENABLE_OPENAI=true` (see the `api.openai.com` row above and `.env.example`).
 
 ### 7.4 PII captured incidentally by the scanner
 
