@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # (with literal \n or as multi-line).
     jwt_private_key: str = ""  # PEM-encoded RSA private key (RS256 signing)
     jwt_public_key: str = ""  # PEM-encoded RSA public key (RS256 verification)
+
+    # Dedicated key for field-level encryption (TOTP/MFA secrets today; other
+    # encrypted columns later). Independent of jwt_secret. When unset, the TOTP
+    # key derives from jwt_secret for backward compatibility with deployments
+    # provisioned before this key existed (fine for HS256). RS256 mode has no
+    # jwt_secret, so production REQUIRES this — see _validate_runtime_config.
+    data_encryption_key: str = ""
+
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     cors_origins: str = ""
@@ -125,6 +133,21 @@ class Settings(BaseSettings):
             )
         elif self.jwt_algorithm != "RS256" and len(self.jwt_secret) < 32:
             problems.append("JWT_SECRET must be at least 32 characters in production.")
+
+        # Field-level encryption key material (TOTP/MFA secrets).
+        # get_totp_encryption_key() uses DATA_ENCRYPTION_KEY, falling back to
+        # JWT_SECRET. Independent of the JWT algorithm: an RS256 deploy has no
+        # JWT_SECRET, so without a dedicated key MFA encryption would silently
+        # key off a hardcoded literal — defeating MFA for anyone with a DB dump.
+        # Require strong material either way; fail closed.
+        totp_key_material = self.data_encryption_key or self.jwt_secret
+        if totp_key_material in _INSECURE_JWT_DEFAULTS or len(totp_key_material) < 32:
+            problems.append(
+                "DATA_ENCRYPTION_KEY must be a strong secret of at least 32 "
+                "characters — it keys field-level MFA/TOTP encryption. In RS256 "
+                "mode there is no JWT_SECRET to fall back on, so it is required. "
+                "Generate with `openssl rand -base64 32`."
+            )
         if not self.cors_origins.strip():
             problems.append(
                 "CORS_ORIGINS must be set explicitly in production "
