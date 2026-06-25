@@ -5,9 +5,11 @@
 Regional and Legal Compliance Checks
 Validates security.txt, Italian P.IVA, Privacy Policy, Cookie Banners
 """
+import ipaddress
 import re
 import logging
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 try:
     from playwright.async_api import async_playwright
@@ -16,6 +18,43 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 logger = logging.getLogger("nis2scan")
+
+# Internal/metadata hostnames Playwright must never be steered toward.
+_BLOCKED_HOSTNAMES = {
+    "localhost",
+    "localhost.localdomain",
+    "metadata",
+    "metadata.google.internal",
+    "169.254.169.254",
+    "kubernetes",
+    "kubernetes.default",
+}
+
+
+def _is_blocked_host(hostname: str) -> bool:
+    """True for internal/metadata names or private/reserved IP literals.
+
+    Used to (a) refuse to pin Playwright at a non-public IP and (b) abort any
+    sub-resource request to an obviously-internal host while rendering.
+    """
+    if not hostname:
+        return True
+    h = hostname.strip().lower().rstrip(".")
+    if h in _BLOCKED_HOSTNAMES:
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False  # a normal public hostname — allowed
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
 
 class LegalChecker:
     """Handles regional/legal compliance checks"""
@@ -94,27 +133,70 @@ class LegalChecker:
 
         return result
 
-    async def _check_with_playwright(self, url: str) -> Dict[str, Any]:
+    async def _check_with_playwright(
+        self, url: str, pinned_ip: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Fallback: Use Playwright to render the page and check for compliance.
+
+        SSRF: Chromium re-resolves the FQDN at navigation time, so without
+        pinning a DNS rebind could send the render to an internal address. We
+        require the API-validated `pinned_ip` and force Chromium to map the
+        target host to it (``--host-resolver-rules``), and abort any sub-resource
+        request to an internal host. If we cannot pin safely, we skip the
+        dynamic check rather than navigate via uncontrolled DNS.
         """
         if not PLAYWRIGHT_AVAILABLE:
             logger.warning("Playwright not installed. Skipping dynamic check.")
             return {}
 
-        logger.info(f"Starting Playwright dynamic check for {url}")
+        host = urlparse(url).hostname or ""
+        if not host or _is_blocked_host(host):
+            logger.warning("Skipping Playwright dynamic check for unsafe host: %s", host)
+            return {}
+        if not pinned_ip or _is_blocked_host(pinned_ip):
+            # No validated public IP to pin to — refuse to let Chromium resolve
+            # the host itself (DNS-rebinding risk).
+            logger.warning(
+                "Skipping Playwright dynamic check for %s: no safe pinned IP", host
+            )
+            return {}
+
+        logger.info(
+            f"Starting Playwright dynamic check for {url} (pinned {host} -> {pinned_ip})"
+        )
         try:
             async with async_playwright() as p:
-                # Launch browser (chromium is usually fine)
-                # We assume 'playwright install' has been run
+                # We assume 'playwright install' has been run.
                 try:
-                    browser = await p.chromium.launch(headless=True)
+                    browser = await p.chromium.launch(
+                        headless=True,
+                        # Pin the target host to the validated IP for every port,
+                        # so navigation cannot be rebinded to an internal address.
+                        args=[f"--host-resolver-rules=MAP {host} {pinned_ip}"],
+                    )
                 except Exception as e:
                     logger.error(f"Failed to launch Playwright browser: {e}. Did you run 'playwright install'?")
                     return {}
 
-                # Create a new page and ignore HTTPS errors (common when scanning IPs or internal sites)
+                # New page; ignore HTTPS errors (the pinned host may serve an
+                # IP-mismatched cert). Downloads are off by default.
                 page = await browser.new_page(ignore_https_errors=True)
+
+                # Defense in depth: abort any request to an internal host — e.g.
+                # a malicious page embedding <img src="http://169.254.169.254/">,
+                # which uses an IP literal and so bypasses host-resolver-rules.
+                async def _guard(route):
+                    try:
+                        req_host = urlparse(route.request.url).hostname or ""
+                        if _is_blocked_host(req_host):
+                            await route.abort()
+                        else:
+                            await route.continue_()
+                    except Exception:
+                        await route.abort()
+
+                await page.route("**/*", _guard)
 
                 # Go to URL with timeout
                 try:
@@ -143,7 +225,9 @@ class LegalChecker:
             logger.error(f"Playwright check failed: {e}")
             return {}
 
-    async def analyze_page(self, url: str, html_body: str) -> Dict[str, Any]:
+    async def analyze_page(
+        self, url: str, html_body: str, pinned_ip: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Run all legal checks on a page.
         Implements Multi-Fallback:
@@ -177,7 +261,7 @@ class LegalChecker:
 
         if needs_fallback and PLAYWRIGHT_AVAILABLE:
             logger.info(f"Static analysis insufficient for {url}. Attempting dynamic analysis.")
-            dynamic_result = await self._check_with_playwright(url)
+            dynamic_result = await self._check_with_playwright(url, pinned_ip=pinned_ip)
 
             if dynamic_result:
                 # Merge results - prefer dynamic if found

@@ -34,6 +34,9 @@ class CertificateInfo:
     domain: str
     ip: str = ""
     port: int = 443
+    # IP pinned by the caller (API SSRF validation). When set, all TLS
+    # connections target this IP with SNI=domain, defeating DNS rebinding.
+    connect_ip: str = ""
 
     # Basic cert fields
     subject: Dict[str, str] = field(default_factory=dict)
@@ -114,9 +117,17 @@ class CertificateAnalyzer:
     def __init__(self, timeout: int = 10):
         self.timeout = timeout
 
-    async def analyze(self, domain: str, port: int = 443) -> CertificateInfo:
-        """Full certificate analysis for a domain."""
+    async def analyze(
+        self, domain: str, port: int = 443, pinned_ip: Optional[str] = None
+    ) -> CertificateInfo:
+        """Full certificate analysis for a domain.
+
+        When `pinned_ip` is provided (the IP the API resolved + validated),
+        every TLS connection targets that IP with SNI=domain, so a DNS rebind
+        between validation and analysis cannot redirect us to an internal host.
+        """
         info = CertificateInfo(domain=domain, port=port)
+        info.connect_ip = pinned_ip or ""
 
         # 1. Get certificate via TLS handshake
         try:
@@ -161,7 +172,12 @@ class CertificateAnalyzer:
         context.check_hostname = False
         context.verify_mode = ssl.CERT_OPTIONAL
 
-        conn = asyncio.open_connection(info.domain, info.port, ssl=context)
+        conn = asyncio.open_connection(
+            info.connect_ip or info.domain,
+            info.port,
+            ssl=context,
+            server_hostname=info.domain,
+        )
         reader, writer = await asyncio.wait_for(conn, timeout=self.timeout)
 
         ssl_obj = writer.get_extra_info("ssl_object")
@@ -174,11 +190,15 @@ class CertificateAnalyzer:
         if not cert:
             raise ValueError("No certificate returned")
 
-        # IP
-        try:
-            info.ip = socket.gethostbyname(info.domain)
-        except socket.gaierror:
-            pass
+        # IP: prefer the pinned IP — re-resolving here would both block the
+        # event loop and re-open the rebinding window we just closed.
+        if info.connect_ip:
+            info.ip = info.connect_ip
+        else:
+            try:
+                info.ip = socket.gethostbyname(info.domain)
+            except socket.gaierror:
+                pass
 
         # Subject
         for rdn in cert.get("subject", ()):
@@ -286,7 +306,12 @@ class CertificateAnalyzer:
         """Analyze the certificate chain."""
         try:
             context = ssl.create_default_context()
-            conn = asyncio.open_connection(info.domain, info.port, ssl=context)
+            conn = asyncio.open_connection(
+                info.connect_ip or info.domain,
+                info.port,
+                ssl=context,
+                server_hostname=info.domain,
+            )
             reader, writer = await asyncio.wait_for(conn, timeout=self.timeout)
             ssl_obj = writer.get_extra_info("ssl_object")
             cert = ssl_obj.getpeercert()
@@ -354,7 +379,12 @@ class CertificateAnalyzer:
             context = ssl.create_default_context()
             context.check_hostname = False
             context.verify_mode = ssl.CERT_OPTIONAL
-            conn = asyncio.open_connection(info.domain, info.port, ssl=context)
+            conn = asyncio.open_connection(
+                info.connect_ip or info.domain,
+                info.port,
+                ssl=context,
+                server_hostname=info.domain,
+            )
             reader, writer = await asyncio.wait_for(conn, timeout=self.timeout)
             ssl_obj = writer.get_extra_info("ssl_object")
             cert = ssl_obj.getpeercert()
@@ -395,10 +425,18 @@ class CertificateAnalyzer:
     async def _check_pinning_headers(self, info: CertificateInfo) -> None:
         """Check for certificate pinning headers."""
         try:
-            url = f"https://{info.domain}:{info.port}/"
+            # Connect to the pinned IP (vhost via Host header), never follow
+            # redirects — both would otherwise re-resolve an attacker host.
+            host = info.connect_ip or info.domain
+            url = f"https://{host}:{info.port}/"
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=self.timeout),
-                                       ssl=False) as resp:
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                    ssl=False,
+                    headers={"Host": info.domain},
+                    allow_redirects=False,
+                ) as resp:
                     headers = resp.headers
                     if "Public-Key-Pins" in headers or "Public-Key-Pins-Report-Only" in headers:
                         info.has_hpkp = True
@@ -419,7 +457,12 @@ class CertificateAnalyzer:
                 ctx.verify_mode = ssl.CERT_NONE
                 ctx.minimum_version = version_enum
                 ctx.maximum_version = version_enum
-                conn = asyncio.open_connection(info.domain, info.port, ssl=ctx)
+                conn = asyncio.open_connection(
+                    info.connect_ip or info.domain,
+                    info.port,
+                    ssl=ctx,
+                    server_hostname=info.domain,
+                )
                 reader, writer = await asyncio.wait_for(conn, timeout=3)
                 writer.close()
                 await writer.wait_closed()

@@ -104,6 +104,16 @@ services:
     volumes:
       - reports-data:/tmp/nis2-reports
     env_file: ../../.env
+    environment:
+      # Tells app.database to use NullPool. Each Celery task runs in a
+      # fresh asyncio loop (asyncio.run per task); a pooled asyncpg
+      # connection held over from a prior task carries a now-closed loop
+      # and throws "Future attached to a different loop" on reuse. The dev
+      # compose sets this on worker + beat — prod MUST too, or scheduled
+      # scans, report generation, and incident-deadline alerts silently
+      # stop after the first task. See the _CELERY_WORKER_MODE comment
+      # block in packages/api/app/database.py.
+      CELERY_WORKER: "1"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -135,6 +145,10 @@ services:
     volumes:
       - celerybeat_data:/var/celerybeat
     env_file: ../../.env
+    environment:
+      # Same NullPool fix as celery-worker above; the dev compose sets
+      # CELERY_WORKER on both services, so prod matches to avoid drift.
+      CELERY_WORKER: "1"
     depends_on:
       redis: { condition: service_healthy }
     restart: unless-stopped

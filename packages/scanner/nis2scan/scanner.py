@@ -151,10 +151,16 @@ class Scanner:
             # We want to inspect SSL separately or just ignore errors here to get headers
             connector = aiohttp.TCPConnector(ssl=False)
             async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
-                async with session.get(url, headers={"Host": host_header}) as resp:
+                async with session.get(url, headers={"Host": host_header}, allow_redirects=False) as resp:
                     result['status'] = resp.status
                     result['headers'] = dict(resp.headers)
-                    result['redirects'] = [str(r.url) for r in resp.history]
+                    # SSRF: do NOT follow redirects — a 3xx Location could point at
+                    # an internal host / metadata endpoint that aiohttp would
+                    # re-resolve (bypassing the pinned IP). Record where it *would*
+                    # have gone for visibility instead of following it.
+                    result['redirects'] = []
+                    if 'Location' in resp.headers:
+                        result['redirect_location'] = resp.headers.get('Location')
                     # Check security headers
                     result['missing_headers'] = []
                     for h in ['Strict-Transport-Security', 'Content-Security-Policy', 'X-Frame-Options']:
@@ -231,7 +237,11 @@ class Scanner:
                         if port not in [80, 443]:
                             legal_url += f":{port}"
                         legal_url += "/"
-                        result['legal'] = await self.legal_checker.analyze_page(legal_url, body)
+                        # Pass the pinned IP so Playwright resolves the FQDN to the
+                        # same validated address (no DNS rebinding at render time).
+                        result['legal'] = await self.legal_checker.analyze_page(
+                            legal_url, body, pinned_ip=ip
+                        )
 
                     # Secrets detection
                     result['secrets'] = self.secrets_detector.scan_content(body, url)
@@ -240,14 +250,14 @@ class Scanner:
                     # We check /.well-known/security.txt relative to root
                     try:
                         sec_url = f"{schema}://{ip}:{port}/.well-known/security.txt"
-                        async with session.get(sec_url, headers={"Host": host_header}) as sec_resp:
+                        async with session.get(sec_url, headers={"Host": host_header}, allow_redirects=False) as sec_resp:
                             if sec_resp.status == 200:
                                 result['security_txt_found'] = True
                                 result['security_txt_url'] = sec_url
                             else:
                                 # Try fallback /security.txt
                                 sec_url_alt = f"{schema}://{ip}:{port}/security.txt"
-                                async with session.get(sec_url_alt, headers={"Host": host_header}) as sec_resp_alt:
+                                async with session.get(sec_url_alt, headers={"Host": host_header}, allow_redirects=False) as sec_resp_alt:
                                     if sec_resp_alt.status == 200:
                                         result['security_txt_found'] = True
                                         result['security_txt_url'] = sec_url_alt
@@ -259,10 +269,14 @@ class Scanner:
                     for sensitive_path in ['/.git/HEAD', '/.env']:
                         try:
                             sens_url = f"{schema}://{ip}:{port}{sensitive_path}"
-                            async with session.get(sens_url, headers={"Host": host_header}) as sens_resp:
+                            async with session.get(sens_url, headers={"Host": host_header}, allow_redirects=False) as sens_resp:
                                 if sens_resp.status == 200:
-                                    # Verify content to avoid false positives (e.g. custom 404 pages returning 200)
-                                    content = await sens_resp.text()
+                                    # Verify content to avoid false positives (e.g. custom 404 pages returning 200).
+                                    # Cap the read at 64KB so a malicious server streaming a huge body to
+                                    # /.env or /.git/HEAD cannot OOM the worker — the marker strings we
+                                    # look for are tiny and sit at the very start of the file.
+                                    raw = await sens_resp.content.read(64 * 1024)
+                                    content = raw.decode('utf-8', errors='ignore')
                                     if sensitive_path == '/.git/HEAD' and 'ref: refs/' in content:
                                         result['sensitive_files'].append(sensitive_path)
                                     elif sensitive_path == '/.env' and '=' in content:
