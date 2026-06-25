@@ -8,7 +8,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nis2}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nis2secret}
       POSTGRES_DB: ${POSTGRES_DB:-nis2}
-    ports: ["5433:5432"]
+    # Security: bind to loopback only. `make dev` on an untrusted LAN must not
+    # expose Postgres (default creds) to the network — and Docker's iptables
+    # rules bypass a host firewall, so the explicit 127.0.0.1 is the guard.
+    ports: ["127.0.0.1:5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nis2"]
@@ -49,7 +52,8 @@ services:
       # mid-debug); for prod a real shared filesystem or object
       # store is the right answer.
       - reports-data:/tmp/nis2-reports
-    ports: ["8000:8000"]
+    # Security: loopback-only (see postgres). Off-host access is opt-in.
+    ports: ["127.0.0.1:8000:8000"]
     env_file: ../../.env
     environment:
       ENVIRONMENT: development
@@ -134,7 +138,8 @@ services:
       - ../../packages/web:/app
       - /app/node_modules
       - /app/.next
-    ports: ["8077:3000"]
+    # Security: loopback-only (see postgres). Off-host access is opt-in.
+    ports: ["127.0.0.1:8077:3000"]
     env_file: ../../.env
     environment:
       # Browser-side: where the user's browser reaches the API directly.
