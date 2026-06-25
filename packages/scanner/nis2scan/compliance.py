@@ -6,6 +6,27 @@ from typing import List, Dict, Any
 from .scanner import ScanResult
 from .summary import SummaryGenerator
 
+# Canonical NIS2 Art. 21(2) sub-paragraphs (a–j) — single source of truth for
+# this package, mirroring packages/api/app/routers/governance.py SUBPARAGRAPHS.
+# Findings/matrix below MUST use these letters: a regression where cryptography
+# was tagged 21.2.g (should be h) and cyber hygiene 21.2.f (should be g) — and
+# those wrong letters were persisted onto auditable Finding records — is the
+# bug this guard + test_compliance_mapping.py exist to prevent recurring.
+SUBPARAGRAPHS: Dict[str, str] = {
+    "a": "Risk analysis and information system security policies",
+    "b": "Incident handling",
+    "c": "Business continuity, backup, disaster recovery, crisis management",
+    "d": "Supply chain security",
+    "e": "Security in network and information systems acquisition, development and maintenance",
+    "f": "Policies and procedures to assess effectiveness of risk management measures",
+    "g": "Basic cyber hygiene practices and cybersecurity training",
+    "h": "Cryptography and, where appropriate, encryption",
+    "i": "Human resources security, access control policies and asset management",
+    "j": "MFA, secured voice/video/text communications and secured emergency communications",
+}
+assert set(SUBPARAGRAPHS) == set("abcdefghij"), "NIS2 Art. 21(2) letter set drifted"
+
+
 @dataclass
 class ComplianceFinding:
     severity: str  # HIGH, MEDIUM, LOW, INFO
@@ -66,16 +87,19 @@ class ComplianceEngine:
 
         # NIS2 Art 21 Mapping Status (Default to Manual unless checked)
         # We will update these as we perform checks
+        # Canonical NIS2 Art. 21(2) letters (a–j). Pre-fix, f–i were shifted by
+        # one (cryptography tagged g instead of h, cyber hygiene f instead of g,
+        # etc.) — both here and in the per-finding references below.
         nis2_matrix = {
             "a) Risk Analysis per Information Security": "Manual Verification Required",
             "b) Incident Handling": "Manual Verification Required",
             "c) Business Continuity & Crisis Mgmt": "Manual Verification Required",
-            "d) Supply Chain Security": "Partially Automated", # SSL/TLS
-            "e) Security in Network & Information Systems": "Automated", # Vuln scan
-            "f) Cyber Hygiene & Training": "Partially Automated", # Basic hygiene (Updates/Crypto)
-            "g) Cryptography & Encryption": "Automated", # HTTPS/TLS
-            "h) Human Resources Security": "Manual Verification Required",
-            "i) Access Control & Asset Management": "Partially Automated", # Port exposure
+            "d) Supply Chain Security": "Partially Automated",  # SRI / external scripts
+            "e) Security in Network & Information Systems": "Automated",  # Vuln/exposure scan, DNS
+            "f) Effectiveness Assessment of Risk Measures": "Manual Verification Required",
+            "g) Cyber Hygiene & Training": "Partially Automated",  # Security headers, cookies
+            "h) Cryptography & Encryption": "Automated",  # HTTPS/TLS/cert checks
+            "i) HR Security, Access Control & Asset Management": "Partially Automated",  # Port exposure
             "j) MFA & Communications": "Manual Verification Required"
         }
 
@@ -148,14 +172,14 @@ class ComplianceEngine:
                     message="Telnet Port (23) is OPEN",
                     rationale="Use of insecure legacy protocols exposing cleartext credentials.",
                     target=host.ip,
-                    reference="D.Lgs 138/2024 Art. 21.2.g (Cryptography)",
+                    reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
                     cvss_base_score=7.5,
                     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                     technical_detail="Telnet service detected. Credential sniffing possible.",
                     remediation="Disable Telnet and replace with SSH. Ensure port 23 is closed.",
                     remediation_cost="Low",
                     remediation_effort="Medium",
-                    compliance_article="Art. 21.2.g (Cryptography)"
+                    compliance_article="Art. 21.2.h (Cryptography)"
                 )
                 host_findings.append(f)
 
@@ -166,14 +190,14 @@ class ComplianceEngine:
                     message="FTP Port (21) is OPEN",
                     rationale="Legacy protocol usage should be minimized. Ensure FTPS is enforced.",
                     target=host.ip,
-                    reference="D.Lgs 138/2024 Art. 21.2.g (Cryptography)",
+                    reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
                     cvss_base_score=5.3,
                     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
                     technical_detail="Unencrypted FTP service reachable.",
                     remediation="Migrate to SFTP/SCP or enforce FTPS (TLS).",
                     remediation_cost="Medium",
                     remediation_effort="Medium",
-                    compliance_article="Art. 21.2.g (Cryptography)"
+                    compliance_article="Art. 21.2.h (Cryptography)"
                 )
                  host_findings.append(f)
 
@@ -193,14 +217,14 @@ class ComplianceEngine:
                             message="Port 80 does not force redirect to HTTPS",
                             rationale="Data in transit must be encrypted.",
                             target=host.ip,
-                            reference="D.Lgs 138/2024 Art. 21.2.g (Cryptography)",
+                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
                             cvss_base_score=3.1,
                             cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
                             technical_detail="HTTP response code 200 OK on port 80 without redirect location.",
                             remediation="Configure web server to Redirect (301) all HTTP traffic to HTTPS.",
                             remediation_cost="Low",
                             remediation_effort="Low",
-                            compliance_article="Art. 21.2.g (Cryptography)"
+                            compliance_article="Art. 21.2.h (Cryptography)"
                          )
                          host_findings.append(f)
 
@@ -212,14 +236,14 @@ class ComplianceEngine:
                         message=f"HSTS Header missing on port {port}",
                         rationale="Prevents downgrade attacks to insecure protocols.",
                         target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.f (Cyber Hygiene)",
+                        reference="NIS2 Directive Art. 21.2.g (Cyber Hygiene)",
                         cvss_base_score=4.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail="Strict-Transport-Security header not returned by server.",
                         remediation="Enable HSTS headers (max-age=31536000; includeSubDomains).",
                         remediation_cost="Low",
                         remediation_effort="Low",
-                        compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
                      )
                      host_findings.append(f)
 
@@ -234,13 +258,13 @@ class ComplianceEngine:
                             message="Cookie Missing 'Secure' Flag",
                             rationale="Cookies without the Secure flag can be transmitted over unencrypted connections.",
                             target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
                             cvss_base_score=3.0,
                             technical_detail=f"Cookie: {c.get('raw', '')}",
                             remediation="Set the 'Secure' flag for all sensitive cookies.",
                             remediation_cost="Low",
                             remediation_effort="Low",
-                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
                         )
                         host_findings.append(f)
 
@@ -252,13 +276,13 @@ class ComplianceEngine:
                             message="Cookie Missing 'HttpOnly' Flag",
                             rationale="Cookies without HttpOnly are accessible to JavaScript, increasing XSS risk.",
                             target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
                             cvss_base_score=3.0,
                             technical_detail=f"Cookie: {c.get('raw', '')}",
                             remediation="Set the 'HttpOnly' flag for session cookies.",
                             remediation_cost="Low",
                             remediation_effort="Low",
-                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
                         )
                         host_findings.append(f)
 
@@ -294,14 +318,14 @@ class ComplianceEngine:
                         message=f"Obsolete TLS Version ({version}) Negotiated on port {port}",
                         rationale="Weak cryptography.",
                         target=host.ip,
-                        reference="D.Lgs 138/2024 Art. 21.2.g (Cryptography)",
+                        reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
                         cvss_base_score=7.5,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                         technical_detail=f"Server negotiated {version} which is deprecated.",
                         remediation="Disable support for TLS 1.0 and 1.1. Enforce TLS 1.2 or 1.3.",
                         remediation_cost="Medium",
                         remediation_effort="Medium",
-                        compliance_article="Art. 21.2.g (Cryptography)"
+                        compliance_article="Art. 21.2.h (Cryptography)"
                     )
                     host_findings.append(f)
 
@@ -314,13 +338,13 @@ class ComplianceEngine:
                         message=f"Weak TLS Versions Supported ({', '.join(weak_versions)}) on port {port}",
                         rationale="Server supports obsolete protocols (TLS 1.0/1.1) allowing downgrade attacks.",
                         target=host.ip,
-                        reference="NIS2 Art. 21.2.g (Cryptography)",
+                        reference="NIS2 Art. 21.2.h (Cryptography)",
                         cvss_base_score=7.5,
                         technical_detail=f"Accepted connection using: {', '.join(weak_versions)}",
                         remediation="Disable TLS 1.0 and TLS 1.1 in server configuration.",
                         remediation_cost="Medium",
                         remediation_effort="Low",
-                        compliance_article="Art. 21.2.g (Cryptography)"
+                        compliance_article="Art. 21.2.h (Cryptography)"
                     )
                     host_findings.append(f)
 
@@ -334,13 +358,13 @@ class ComplianceEngine:
                         message=f"Weak Cipher Suite Negotiated ({cipher}) on port {port}",
                         rationale="The server negotiated a cipher suite known to be weak.",
                         target=host.ip,
-                        reference="NIS2 Art. 21.2.g (Cryptography)",
+                        reference="NIS2 Art. 21.2.h (Cryptography)",
                         cvss_base_score=5.0,
                         technical_detail=f"Cipher: {cipher}",
                         remediation="Reconfigure server to prioritize strong ciphers (AES-GCM, ChaCha20) and disable weak ones.",
                         remediation_cost="Medium",
                         remediation_effort="Low",
-                        compliance_article="Art. 21.2.g (Cryptography)"
+                        compliance_article="Art. 21.2.h (Cryptography)"
                     )
                     host_findings.append(f)
 
@@ -352,14 +376,14 @@ class ComplianceEngine:
                         message=f"SSL/TLS Certificate Verification Failed on {port}",
                         rationale="Certificate is invalid, self-signed, or untrusted.",
                         target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.g (Cryptography)",
+                        reference="NIS2 Directive Art. 21.2.h (Cryptography)",
                         cvss_base_score=5.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail=f"TLS Error: {info.get('error')}",
                         remediation="Ensure a valid, trusted certificate is installed (e.g. Let's Encrypt).",
                         remediation_cost="Medium",
                         remediation_effort="Low",
-                        compliance_article="Art. 21.2.g (Cryptography)"
+                        compliance_article="Art. 21.2.h (Cryptography)"
                     )
                     host_findings.append(f)
 
@@ -370,14 +394,14 @@ class ComplianceEngine:
                         message=f"SSL Certificate Expired on {port}",
                         rationale="Failure to maintain security infrastructure.",
                         target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.d (Supply Chain)",
+                        reference="NIS2 Directive Art. 21.2.h (Cryptography)",
                         cvss_base_score=7.5,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
                         technical_detail="Certificate date is past 'notAfter' field.",
                         remediation="Renew the SSL certificate immediately.",
                         remediation_cost="Medium",
                         remediation_effort="Low",
-                        compliance_article="Art. 21.2.d (Supply Chain)"
+                        compliance_article="Art. 21.2.h (Cryptography)"
                     )
                     host_findings.append(f)
 
@@ -390,7 +414,7 @@ class ComplianceEngine:
                         message="DNS Zone Transfer (AXFR) Allowed",
                         rationale="Public disclosure of entire DNS zone is a severe information leak.",
                         target=host.target,
-                        reference="NIS2 Directive Art. 21.2.f (Network Security)",
+                        reference="NIS2 Directive Art. 21.2.e (Network Security)",
                         cvss_base_score=9.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
                         technical_detail="Nameserver allowed AXFR query resulting in full zone dump.",
@@ -408,14 +432,14 @@ class ComplianceEngine:
                         message="DNSSEC Not Enabled",
                         rationale="Domain does not integrity-protect its records.",
                         target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.j (Hygiene)",
+                        reference="NIS2 Directive Art. 21.2.e (Network Security)",
                         cvss_base_score=4.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail="DNSKEY record not found or valid chain not established.",
                         remediation="Enable and configure DNSSEC at your registrar and DNS provider.",
                         remediation_cost="Low",
                         remediation_effort="Medium",
-                        compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                        compliance_article="Art. 21.2.e (Network Security)"
                     )
                     host_findings.append(f)
 
@@ -470,14 +494,14 @@ class ComplianceEngine:
                             message=f"Leaked Secret Detected: {secret['type']}",
                             rationale="Exposed credentials or API keys pose immediate security risk.",
                             target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.g (Cryptography)",
+                            reference="NIS2 Art. 21.2.h (Cryptography)",
                             cvss_base_score=9.8,
                             cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
                             technical_detail=f"Found {secret['type']} at position {secret['position']}",
                             remediation="Immediately rotate exposed credentials. Remove secrets from code/responses. Use environment variables or secret management systems.",
                             remediation_cost="High",
                             remediation_effort="High",
-                            compliance_article="Art. 21.2.g (Cryptography & Encryption)"
+                            compliance_article="Art. 21.2.h (Cryptography & Encryption)"
                         )
                         host_findings.append(f)
 
@@ -648,13 +672,13 @@ class ComplianceEngine:
                             message=f"Information Leakage ({h_name})",
                             rationale="Revealing server versions helps attackers target specific vulnerabilities.",
                             target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.f (Cyber Hygiene)",
+                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
                             cvss_base_score=0.0,
                             technical_detail=f"Header {h_name}: {h_val}",
                             remediation="Configure server to suppress version banners.",
                             remediation_cost="Low",
                             remediation_effort="Low",
-                            compliance_article="Art. 21.2.f (Cyber Hygiene)"
+                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
                         )
                         host_findings.append(f)
 
@@ -772,7 +796,7 @@ class ComplianceEngine:
              nis2_matrix["c) Business Continuity & Crisis Mgmt"] = "Partially Automated (Redundancy Detected)"
 
         # Enhanced Automation Status
-        nis2_matrix["f) Cyber Hygiene & Training"] = "Partially Automated (Info Leakage & Header Checks)"
+        nis2_matrix["g) Cyber Hygiene & Training"] = "Partially Automated (Info Leakage & Header Checks)"
         nis2_matrix["d) Supply Chain Security"] = "Partially Automated (Secrets & Env File Checks)"
 
         # Generate Executive Summary using Modular Generator
