@@ -127,6 +127,10 @@ async def update_schedule(
 ) -> ScheduleResponse:
     user, membership = current_org
 
+    # Security audit: mutating a schedule is privileged — gate like create_schedule.
+    if membership.role not in ("admin", "auditor"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     schedule = await db.get(ScanSchedule, schedule_id)
     if not schedule or schedule.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -167,6 +171,10 @@ async def delete_schedule(
 ) -> None:
     user, membership = current_org
 
+    # Security audit: deletion is the most destructive action here — admin only.
+    if membership.role != "admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     schedule = await db.get(ScanSchedule, schedule_id)
     if not schedule or schedule.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -183,6 +191,12 @@ async def trigger_schedule(
 ):
     """Trigger an immediate run of a scheduled scan."""
     user, membership = current_org
+
+    # Security audit: a read-only viewer must not launch scans — gate like
+    # create_schedule. Triggering enqueues a Celery scan job, so an
+    # ungated endpoint is both privilege escalation and a DoS vector.
+    if membership.role not in ("admin", "auditor"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     schedule = await db.get(ScanSchedule, schedule_id)
     if not schedule or schedule.organization_id != membership.organization_id:
