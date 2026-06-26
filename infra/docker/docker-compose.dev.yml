@@ -43,6 +43,10 @@ services:
       - ../../packages/api/app:/app/packages/api/app:ro
       - ../../packages/api/alembic:/app/packages/api/alembic
       - ../../packages/scanner/nis2scan:/app/packages/scanner/nis2scan:ro
+      # `make db-seed` runs `python -m scripts.seed` from WORKDIR
+      # /app/packages/api; the repo's scripts/ isn't otherwise in the
+      # image, so mount it here (read-only) or the target ModuleNotFounds.
+      - ../../scripts:/app/packages/api/scripts:ro
       # v2.4.19: shared volume for generated reports. The Celery
       # worker writes the rendered file under /tmp/nis2-reports;
       # the API's GET /reports/download/{task_id} reads from the
