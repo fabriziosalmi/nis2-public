@@ -25,17 +25,16 @@
 
 \set ON_ERROR_STOP on
 
--- 1. The role (idempotent).
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nis2_app') THEN
-    EXECUTE format(
-      'CREATE ROLE nis2_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
-      :'app_pw'
-    );
-  END IF;
-END
-$$;
+-- 1. The role (idempotent). psql does NOT interpolate :'app_pw' inside a
+--    dollar-quoted DO block, so build the CREATE statement in plain SQL (where
+--    psql DOES substitute the variable) and run it with \gexec. WHERE NOT EXISTS
+--    makes it a no-op when the role already exists.
+SELECT format(
+  'CREATE ROLE nis2_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+  :'app_pw'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nis2_app')
+\gexec
 
 -- 2. DML (no DDL) on the current schema + everything migrations create later.
 GRANT USAGE ON SCHEMA public TO nis2_app;
