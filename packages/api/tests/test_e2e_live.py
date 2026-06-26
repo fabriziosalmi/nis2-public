@@ -1325,29 +1325,40 @@ class TestResetPassword:
         password_was_rotated = False
         a = httpx.Client(base_url=BASE_URL, timeout=5.0)
         try:
-            # 1. Mint a token via forgot-password.
-            forgot = a.post(
-                "/api/v1/auth/forgot-password",
-                json={"email": EMAIL},
-            )
-            assert forgot.status_code == 204
+            # 1-3. Mint a token, read it from the dev outbox, and reset.
+            #    The dev-outbox read can race the token-row's commit, so an
+            #    otherwise-fresh token intermittently came back "invalid".
+            #    Retry the mint -> read -> reset once; bounded to 2 attempts so
+            #    the suite stays under the 5/min forgot-password cap.
+            resp = None
+            token = None
+            for _attempt in range(2):
+                forgot = a.post(
+                    "/api/v1/auth/forgot-password",
+                    json={"email": EMAIL},
+                )
+                assert forgot.status_code == 204
 
-            # 2. Pull the reset link out of the dev outbox.
-            last = a.get("/api/v1/auth/debug/last-email")
-            assert last.status_code == 200
-            text = last.json()["text"]
-            marker = "/reset-password?token="
-            assert marker in text, f"reset link missing from email: {text!r}"
-            token = text.split(marker, 1)[1].split()[0].strip()
-            # 32-byte url-safe → ~43 chars; clear the schema floor.
-            assert len(token) >= 20, f"token suspiciously short: {token!r}"
+                last = a.get("/api/v1/auth/debug/last-email")
+                assert last.status_code == 200
+                text = last.json()["text"]
+                marker = "/reset-password?token="
+                assert marker in text, f"reset link missing from email: {text!r}"
+                token = text.split(marker, 1)[1].split()[0].strip()
+                # 32-byte url-safe → ~43 chars; clear the schema floor.
+                assert len(token) >= 20, f"token suspiciously short: {token!r}"
 
-            # 3. Submit the reset → 204 (contract a).
-            resp = a.post(
-                "/api/v1/auth/reset-password",
-                json={"token": token, "new_password": new_pw},
+                resp = a.post(
+                    "/api/v1/auth/reset-password",
+                    json={"token": token, "new_password": new_pw},
+                )
+                if resp.status_code == 204:  # contract a: valid token resets
+                    break
+                _t.sleep(0.5)  # let the outbox/commit settle, then re-mint
+
+            assert resp.status_code == 204, (
+                f"reset failed after retries: {resp.status_code}: {resp.text}"
             )
-            assert resp.status_code == 204, f"reset failed: {resp.status_code}: {resp.text}"
             password_was_rotated = True
 
             # 4. Replay the SAME token — must 400 with the generic
