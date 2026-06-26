@@ -249,21 +249,33 @@ def check_scheduled_scans():
 
 
 async def _check_schedules():
+    from app.models.organization import Organization
     from app.models.scan_schedule import ScanSchedule
     from sqlalchemy import select
 
     async with async_session_factory() as db:
-        result = await db.execute(
-            select(ScanSchedule).where(ScanSchedule.is_active.is_(True))
-        )
-        schedules = result.scalars().all()
-
+        # H5: the beat sweep has no request context. Under a NOBYPASSRLS role a
+        # single cross-tenant SELECT returns nothing, so walk the orgs and scope
+        # the session per-org before reading its schedules. The explicit
+        # organization_id filter keeps this correct under the current superuser
+        # role too — without it, each org's pass would re-match every active
+        # schedule and double-fire the due ones. organizations has no
+        # organization_id column, hence no tenant policy, so it stays enumerable.
+        org_ids = (await db.execute(select(Organization.id))).scalars().all()
         now = datetime.now(timezone.utc)
-        for schedule in schedules:
-            if _should_run(schedule.cron_expression, schedule.last_run_at, now):
-                run_scheduled_scan_task.delay(
-                    str(schedule.id), str(schedule.organization_id)
+        for org_id in org_ids:
+            await set_rls_org_context(db, str(org_id))
+            result = await db.execute(
+                select(ScanSchedule).where(
+                    ScanSchedule.is_active.is_(True),
+                    ScanSchedule.organization_id == org_id,
                 )
+            )
+            for schedule in result.scalars().all():
+                if _should_run(schedule.cron_expression, schedule.last_run_at, now):
+                    run_scheduled_scan_task.delay(
+                        str(schedule.id), str(schedule.organization_id)
+                    )
 
 
 def _should_run(cron_expr: str, last_run, now) -> bool:
