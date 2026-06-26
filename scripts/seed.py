@@ -13,7 +13,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 async def seed():
-    from app.database import async_session_factory, engine
+    from app.database import Base, async_session_factory, engine
     from app.models import (
         Asset,
         Finding,
@@ -22,7 +22,6 @@ async def seed():
         Scan,
         User,
     )
-    from app.models.base import Base
 
     # Create all tables
     async with engine.begin() as conn:

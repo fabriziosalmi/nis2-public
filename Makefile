@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 
-.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed test test-api test-scanner lint clean clean-all prod prod-preflight prod-up prod-down
+.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
 
 # ─── Cross-platform Python detection ─────────────────────────────────
 # v2.4.28: pre-2.4.28 the Makefile invoked `python` literally, which on
@@ -28,7 +28,13 @@
 # bash builtin and doesn't exist on `cmd.exe`; on Windows we use `where`
 # (cmd.exe / PowerShell builtin), elsewhere `command -v`. `firstword`
 # trims `where`'s multi-line output to the first hit.
-ifeq ($(OS),Windows_NT)
+# Prefer the project virtualenv (it has ruff/pytest/etc.) so `make lint/test/
+# check` work without activating it first; otherwise fall back to the
+# cross-platform interpreter detection. (venv/bin is POSIX; on Windows the
+# wildcard misses and we use the py launcher branch.)
+ifneq ($(wildcard venv/bin/python),)
+  PYTHON := venv/bin/python
+else ifeq ($(OS),Windows_NT)
   PYTHON := $(firstword $(shell where py 2>nul) $(shell where python3 2>nul) $(shell where python 2>nul))
 else
   PYTHON := $(firstword $(shell command -v python3 2>/dev/null) $(shell command -v python 2>/dev/null))
@@ -113,6 +119,54 @@ ifeq ($(strip $(PYTHON)),)
 	$(error $(PYTHON_NOT_FOUND_MSG))
 endif
 	cd packages/api && $(PYTHON) -m pytest tests/ -v
+
+# ─── Static checks (mirror CI; no running stack needed) ──────────────
+lint:
+ifeq ($(strip $(PYTHON)),)
+	$(error $(PYTHON_NOT_FOUND_MSG))
+endif
+	$(PYTHON) -m ruff check packages/scanner/nis2scan/ --select=E,W,F --ignore=E501
+	$(PYTHON) -m ruff check packages/api/app/ --select=E,W,F --ignore=E501
+
+# `check` = the CI gates that need no database: lint, the policy greps, and the
+# dependency audits. pip-audit is best-effort (skipped if not installed).
+check: lint
+	@echo "== policy: no bare 'except:' =="
+	@! grep -rn "^[[:space:]]*except:$$" --include="*.py" packages/ || (echo "  FAIL" && exit 1)
+	@echo "== policy: no CORS wildcard =="
+	@! grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py || (echo "  FAIL" && exit 1)
+	@echo "== policy: .env not tracked =="
+	@! git ls-files --error-unmatch .env 2>/dev/null || (echo "  FAIL: .env is tracked" && exit 1)
+	@echo "== npm audit (web, prod deps, high) =="
+	cd packages/web && npm audit --omit=dev --audit-level=high
+	@command -v pip-audit >/dev/null 2>&1 && pip-audit --skip-editable || echo "  (pip-audit not installed — skipped)"
+	@echo "  static checks: OK"
+
+# ─── Tests that need the running dev stack (`make dev-up`) ────────────
+# Integration suite as the non-superuser nis2_app role on a dedicated nis2_test
+# DB (so RLS is actually enforced). See scripts/test_integration.sh.
+test-integration:
+	bash scripts/test_integration.sh
+
+# E2E live suite against the local stack. See scripts/test_e2e.sh.
+test-e2e:
+	bash scripts/test_e2e.sh
+
+# Next.js production build.
+test-web:
+	cd packages/web && npm run build
+
+# Prove Postgres RLS tenant isolation under nis2_app. See scripts/h5_validate.sh.
+h5-validate:
+	bash scripts/h5_validate.sh
+
+# One-shot local mirror of CI: static checks + unit suites first (fast, no
+# stack), then bring the stack up and run the stack-bound suites.
+verify: check test-scanner test-api test-web dev-up test-integration test-e2e
+	@echo ""
+	@echo "  LOCAL VERIFY: ALL GREEN"
+	@echo "  (run 'make h5-validate' for the RLS isolation proof on seeded data)"
+	@echo ""
 
 # ─── Production ──────────────────────────────────────────────────────
 prod: prod-up
