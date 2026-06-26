@@ -183,6 +183,18 @@ async def ensure_schema() -> None:
         # NULL on existing rows = "never rotated" — the iat check
         # treats the token's iat as fresher than NULL automatically.
         ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
+        # MFA / TOTP (migrations 003, 006) and invite-by-token (migration 004)
+        # were added to the User model after these tables may already exist on an
+        # upgraded volume. create_all does NOT backfill columns, so without these
+        # a dev who made their Postgres volume before the feature 500s on
+        # register/login with "column users.totp_secret does not exist" (found in
+        # the 2026-06-26 live validation). Types match the model + the migrations'
+        # end state. Prod is unaffected — it runs Alembic.
+        ("users", "totp_secret", "VARCHAR(256)"),
+        ("users", "totp_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("users", "totp_recovery_codes", "VARCHAR(1024)"),
+        ("users", "invite_token_hash", "VARCHAR(128)"),
+        ("users", "invite_token_expires_at", "TIMESTAMP WITH TIME ZONE"),
     ]
     # v2.4.14: PasswordResetToken is a brand-new table; create_all above
     # already provisions it, no ALTER needed. Listed here for the
