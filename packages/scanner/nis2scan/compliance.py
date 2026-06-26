@@ -108,7 +108,6 @@ class ComplianceEngine:
         # Track positive indicators for matrix automation
         has_security_txt = False
         has_spf_dmarc = False
-        has_redundancy = False
 
         for host in scan_results:
             stats['analyzed_hosts'] += 1
@@ -126,10 +125,6 @@ class ComplianceEngine:
             # 2. SPF/DMARC (Secure Communications)
             if host.dns_info.get('spf', {}).get('present') or host.dns_info.get('dmarc', {}).get('present'):
                 has_spf_dmarc = True
-
-            # 3. Redundancy (MX Records)
-            if len(host.dns_info.get('mx', [])) > 1:
-                has_redundancy = True
 
             stats['active_hosts'] += 1
             host_findings = []
@@ -792,8 +787,9 @@ class ComplianceEngine:
         if has_spf_dmarc:
             nis2_matrix["j) MFA & Communications"] = "Partially Automated (Email Security Verified)"
 
-        if has_redundancy:
-             nis2_matrix["c) Business Continuity & Crisis Mgmt"] = "Partially Automated (Redundancy Detected)"
+        # I3: an MX-record count is NOT evidence of business continuity / backup
+        # / DR / crisis management, so Art. 21.2.c stays "Manual Verification
+        # Required" rather than being inferred from DNS redundancy.
 
         # Enhanced Automation Status
         nis2_matrix["g) Cyber Hygiene & Training"] = "Partially Automated (Info Leakage & Header Checks)"
