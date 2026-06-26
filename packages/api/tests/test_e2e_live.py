@@ -720,11 +720,24 @@ class TestOrgSwitch:
             #    invite flow auto-binds the membership immediately (no
             #    accept step yet — postponed B06+B07), so fabrizio
             #    instantly has memberships in two orgs.
-            invite = temp_client.post(
-                f"/api/v1/organizations/{temp_org_id}/members",
-                json={"email": EMAIL, "role": "auditor"},
-                headers={"X-CSRF-Token": temp_csrf},
-            )
+            #
+            #    Right after /register the new user's row can briefly lag its
+            #    own session cookie (register's commit lands as the 201 is
+            #    delivered), so this first authenticated call occasionally
+            #    401s "User not found". Retry on that transient 401 — a real
+            #    auth failure still fails every attempt.
+            import time
+
+            invite = None
+            for _attempt in range(4):
+                invite = temp_client.post(
+                    f"/api/v1/organizations/{temp_org_id}/members",
+                    json={"email": EMAIL, "role": "auditor"},
+                    headers={"X-CSRF-Token": temp_csrf},
+                )
+                if invite.status_code != 401:
+                    break
+                time.sleep(0.3)  # let register's commit land, then retry
             assert invite.status_code in (201, 409), (
                 f"invite: {invite.status_code} {invite.text}"
             )
