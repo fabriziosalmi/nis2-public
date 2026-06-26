@@ -8,30 +8,38 @@ import uuid
 from datetime import datetime, timezone
 
 from app.tasks.celery_app import celery_app
-from app.database import async_session_factory
+from app.database import async_session_factory, set_rls_org_context
 
 logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, max_retries=2, acks_late=True)
-def run_scan_task(self, scan_id: str) -> dict:
-    """Celery task that executes a scan asynchronously."""
+def run_scan_task(self, scan_id: str, org_id: str | None = None) -> dict:
+    """Celery task that executes a scan asynchronously.
+
+    org_id is the scan's organization; it sets the RLS context so the task can
+    read/write its tenant's rows under a non-superuser DB role (H5). Callers
+    should pass it; None keeps the legacy/superuser path working unchanged.
+    """
     logger.info("Starting Celery task for scan %s", scan_id)
     try:
-        result = asyncio.run(_run_scan(scan_id))
+        result = asyncio.run(_run_scan(scan_id, org_id))
         return result
     except Exception as exc:
         logger.error("Scan task %s failed: %s", scan_id, exc)
         raise self.retry(exc=exc, countdown=30)
 
 
-async def _run_scan(scan_id: str) -> dict:
+async def _run_scan(scan_id: str, org_id: str | None = None) -> dict:
     from app.models.finding import Finding
     from app.models.scan import Scan
     from app.models.scan_result import ScanResult as ScanResultModel
     from app.services.scan_service import ScanService
 
     async with async_session_factory() as db:
+        # H5: set the RLS org context before the first tenant-scoped query so the
+        # scan + its findings are visible/writable under a non-superuser role.
+        await set_rls_org_context(db, org_id)
         # Load scan
         try:
             scan_uuid = uuid.UUID(scan_id)
@@ -149,17 +157,20 @@ async def _run_scan(scan_id: str) -> dict:
 
 
 @celery_app.task(bind=True)
-def run_scheduled_scan_task(self, schedule_id: str):
+def run_scheduled_scan_task(self, schedule_id: str, org_id: str | None = None):
     """Run a scan from a schedule definition."""
-    asyncio.run(_run_scheduled_scan(schedule_id))
+    asyncio.run(_run_scheduled_scan(schedule_id, org_id))
 
 
-async def _run_scheduled_scan(schedule_id: str):
+async def _run_scheduled_scan(schedule_id: str, org_id: str | None = None):
     from app.models.scan_schedule import ScanSchedule
     from app.models.asset import Asset
     from app.models.scan import Scan
 
     async with async_session_factory() as db:
+        # H5: scope to the schedule's org so the schedule/assets/new-scan rows
+        # are visible/writable under a non-superuser role.
+        await set_rls_org_context(db, org_id)
         try:
             sched_uuid = uuid.UUID(schedule_id)
         except (ValueError, AttributeError):
@@ -227,8 +238,8 @@ async def _run_scheduled_scan(schedule_id: str):
         schedule.last_run_at = datetime.now(timezone.utc)
         await db.commit()
 
-    # Run the scan
-    await _run_scan(str(scan.id))
+    # Run the scan (same org as the schedule).
+    await _run_scan(str(scan.id), org_id)
 
 
 @celery_app.task
@@ -250,7 +261,9 @@ async def _check_schedules():
         now = datetime.now(timezone.utc)
         for schedule in schedules:
             if _should_run(schedule.cron_expression, schedule.last_run_at, now):
-                run_scheduled_scan_task.delay(str(schedule.id))
+                run_scheduled_scan_task.delay(
+                    str(schedule.id), str(schedule.organization_id)
+                )
 
 
 def _should_run(cron_expr: str, last_run, now) -> bool:

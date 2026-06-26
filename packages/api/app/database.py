@@ -113,6 +113,39 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def set_rls_org_context(session: AsyncSession, org_id, user_id=None) -> None:
+    """Set the RLS org context on a Celery/background-task session (H5).
+
+    The API does this in get_db from IdentityMiddleware ContextVars; the worker
+    has no request context, so each task must set `app.current_org_id` explicitly
+    with the org id of the entity it operates on. Without it, every tenant-scoped
+    query returns 0 rows under a NOSUPERUSER NOBYPASSRLS role (and the audit-log
+    retention DELETE removes 0 rows).
+
+    Unlike get_db this uses `is_local => false` (session/connection-scoped, NOT
+    transaction-scoped): a task issues several commits (scan -> running, then
+    persist findings), and a transaction-scoped SET LOCAL would be cleared by the
+    first commit, dropping context for the rest. Session scope is safe here ONLY
+    because the worker runs with NullPool (CELERY_WORKER=1) — a fresh asyncpg
+    connection per task, closed on release, so nothing leaks to another tenant's
+    task. Do NOT call this on a pooled (API) connection.
+
+    No-op on non-Postgres or when org_id is None (keeps the superuser/legacy path
+    working unchanged).
+    """
+    if not IS_POSTGRES or org_id is None:
+        return
+    await session.execute(
+        text("SELECT set_config('app.current_org_id', :v, false)"),
+        {"v": str(org_id)},
+    )
+    if user_id is not None:
+        await session.execute(
+            text("SELECT set_config('app.current_user_id', :v, false)"),
+            {"v": str(user_id)},
+        )
+
+
 async def ensure_schema() -> None:
     """Best-effort idempotent schema bootstrap (dev / first-run convenience).
 

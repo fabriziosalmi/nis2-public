@@ -204,6 +204,8 @@ async def trigger_schedule(
 
     from app.tasks.scan_tasks import run_scheduled_scan_task
 
-    task = run_scheduled_scan_task.delay(str(schedule.id))
+    task = run_scheduled_scan_task.delay(
+        str(schedule.id), str(schedule.organization_id)
+    )
 
     return {"task_id": task.id, "status": "queued", "schedule_id": str(schedule_id)}

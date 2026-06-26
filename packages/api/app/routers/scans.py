@@ -146,7 +146,7 @@ async def create_scan(
     try:
         from app.tasks.scan_tasks import run_scan_task
 
-        task = run_scan_task.delay(str(scan.id))
+        task = run_scan_task.delay(str(scan.id), str(scan.organization_id))
         scan.celery_task_id = task.id
         await db.flush()
     except Exception as exc:
