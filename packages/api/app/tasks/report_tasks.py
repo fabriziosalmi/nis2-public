@@ -203,13 +203,17 @@ async def _generate_report(
     format: str,
     locale: str | None = None,
 ) -> dict:
-    from app.database import async_session_factory
+    from app.database import async_session_factory, set_rls_org_context
     from app.models.scan import Scan
     from app.models.scan_result import ScanResult
     from app.models.finding import Finding
     from sqlalchemy import select
 
     async with async_session_factory() as db:
+        # H5: the worker has no request context, so scope this session to the
+        # requesting org before any tenant-scoped read. No-op under the current
+        # superuser role; required once the app role is NOSUPERUSER NOBYPASSRLS.
+        await set_rls_org_context(db, org_id)
         scan = await db.get(Scan, uuid.UUID(scan_id))
         if not scan:
             raise ValueError(f"Scan {scan_id} not found")
