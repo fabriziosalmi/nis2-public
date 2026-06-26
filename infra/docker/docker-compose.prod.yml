@@ -32,7 +32,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nis2}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-nis2}
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
@@ -44,13 +44,13 @@ services:
 
   redis:
     image: redis:7-alpine
-    # `${VAR:-default}` (docker compose syntax): falls back to "changeme"
-    # if .env is missing the key (e.g. user copied .env.example but forgot
-    # to fill it). Without the default, an empty string is passed to
-    # redis-server which then refuses to start with "ERR wrong number of
-    # arguments for 'requirepass'", and the healthcheck never goes green.
-    # Reported by Davide on `make prod` from Windows / WSL2.
-    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
+    # `${VAR:?msg}` (docker compose syntax): HARD-FAIL with a clear message if
+    # REDIS_PASSWORD is unset/empty, instead of silently falling back to the
+    # well-known "changeme". A weak default on the broker — even on an
+    # internal-only port — is worse than a loud startup error pointing the
+    # operator at .env. (The `:?` form also avoids the empty-string
+    # "ERR wrong number of arguments for 'requirepass'" crash Davide hit.)
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     environment:
       # Re-expose the password inside the container so the healthcheck
       # below can read it from $REDIS_PASSWORD instead of having compose
@@ -58,7 +58,7 @@ services:
       #   (a) the same compose file works whether `.env` has the var or not;
       #   (b) the password isn't baked into the rendered spec (visible via
       #       `docker inspect`), only into the container's env.
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     healthcheck:
       # `$$` escapes one $ so docker compose passes literal `$REDIS_PASSWORD`
       # to the shell inside the container, which then expands it. The
