@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.5.15] - 2026-06-27
+
+H5 worker RLS least-privilege, Alembic baseline repair, and dev/security hardening — the hardening super-session, validated live on a non-superuser Postgres.
+
+### 🔴 Security & Stability
+
+- **H5 — worker RLS least-privilege (parts 1-3)**: Celery tasks now set the tenant RLS context (`set_rls_org_context`) before any query — scan tasks (#155), report generation (#162), and the per-org scheduled-scan beat sweep (#163) — so under a `NOSUPERUSER NOBYPASSRLS` role they read only their own org's rows. Ships the `nis2_app` provisioning SQL + a validation runbook; additive / no-op under the current superuser role. **Proven live**: tenant isolation holds at the database (org A sees only A; org B sees none of A).
+- **Auth forms — no credentials in the URL**: added `method="post"` to the login / register / forgot-password / reset-password / change-password forms, so a submit before React hydration POSTs instead of leaking email + password into a `GET` URL (server logs, history, Referer) (#166).
+
+### 🟠 Database & Migrations
+
+- **Alembic now actually persists**: `alembic/env.py` ran `SET LOCAL` before `begin_transaction()`, which on SQLAlchemy 2.0 autobegan a separate transaction that was silently rolled back — `alembic upgrade`/`stamp` logged success but wrote nothing. Fixed; `make db-upgrade` / `db-stamp` work (#167).
+- **Migration baseline synced to the models** (`007_sync_model_columns`): 001-006 had drifted — 11 missing columns, 5 under-sized `VARCHAR`s, and 3 columns the models define as native arrays but were created as `JSONB` (`api_keys.scopes`, `scan_results.errors`/`open_ports`). 007 brings Alembic functionally in line with the models, deliberately **without** dropping the security-relevant unique constraints a raw autogenerate wanted to remove (#167).
+- **Dev self-heal**: `ensure_schema` now backfills the MFA / invite `users` columns, so a Postgres volume that predates those features no longer 500s on register/login (#165).
+
+### 🟢 Tooling & Docs
+
+- **Local CI mirror**: `make check / test-integration / test-e2e / test-web / h5-validate / verify` (+ supporting scripts) run the full CI suite against the docker dev stack (#164).
+- **`UPGRADING.md`**: migration guide for existing deployments (back up → adopt Alembic → enable the RLS role).
+
+### ⚡ Tests
+
+- De-flaked the two intermittently-failing E2E tests: the reset-token dev-outbox race (#156) and the multi-org register→invite visibility race (#157).
+
 ## [2.5.9] - 2026-05-15
 
 Dependency bump and UI build stabilization.
