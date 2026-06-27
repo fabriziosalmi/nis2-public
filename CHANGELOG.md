@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.16] - 2026-06-27
+
+H5 closed: the application now runs end-to-end under the `nis2_app` `NOSUPERUSER NOBYPASSRLS` role — validated by the full E2E live suite (53/53) and the GDPR-erasure path against that role. Plus M2 audit append-only, L1 active-org RLS scoping, the L12 nonce-CSP production-hydration fix, and L6 accessibility.
+
+### 🔴 Security & Stability
+
+- **H5 — worker RLS least-privilege CLOSED**: the remaining cross-tenant worker paths now scope per-org — the `api_keys` bootstrap-lookup exemption + API-key request context (#169), the incident-deadline sweep (#170), and the audit-log retention purge (#171, which also fixed a pre-existing bug where the purge was never committed and silently rolled back every run).
+- **H5 — the app runs under the least-privilege role** (#174): pointing `DATABASE_URL` at `nis2_app` is now validated end-to-end. Fixed the API-key request path (the RLS context is set before the `api_keys` writes — was a `StaleDataError` 500), the GDPR-erasure audit pseudonymisation (now a `SECURITY DEFINER` function, since `audit_logs` is append-only), the lone-org erasure cleanup (relies on the FK cascade for the append-only / no-`organization_id` tables — also fixed a pre-existing `scan_results` bug), and exempted account erasure from middleware auditing (the actor is deleted). Additive / no-op under the superuser role.
+- **M2 — `audit_logs` append-only** (#172): `REVOKE UPDATE, DELETE … FROM nis2_app`; the retention purge and erasure pseudonymisation run through `SECURITY DEFINER` functions (EXECUTE revoked from PUBLIC, granted only to the app role). The audit trail can no longer be tampered with by the application role.
+- **L1 — RLS scoped to the active org** (#175): the data-table predicate no longer OR's in "any org the current user is a member of", so a multi-org user's queries read only the org they are acting in. The membership-based clause stays only on `memberships` (so users can still enumerate / switch orgs).
+- **L12 — nonce-based CSP fixes a latent production-hydration bug** (#173): the production CSP set `script-src 'self'` with no nonce, which blocks App Router's inline hydration scripts — the app rendered but never hydrated in production (latent because CI/E2E run in dev mode, where `'unsafe-inline'` is kept). A per-request nonce (set in middleware) restores hydration under a strict policy with `'strict-dynamic'`.
+
+### 🟢 Accessibility
+
+- **L6 — icon-only buttons** (#176): added `aria-label`s to 13 icon-only buttons (back navigation, copy key, delete key/channel/schedule, send test notification, run/pause schedule, member options, close menu) that were invisible to screen readers. The rest of the a11y/UI-state audit passed (alt text, form labels, loading/empty/error states, Radix dialog focus traps, semantic clickable elements).
+
 ## [2.5.15] - 2026-06-27
 
 H5 worker RLS least-privilege, Alembic baseline repair, and dev/security hardening — the hardening super-session, validated live on a non-superuser Postgres.
