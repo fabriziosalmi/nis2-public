@@ -45,9 +45,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO nis2_app;
 
--- 3. (M2 — append-only audit log) Enable ONCE the audit-log retention purge in
---    cleanup_tasks runs under a separate maintenance role (or a SECURITY DEFINER
---    function); otherwise the purge silently deletes 0 rows. Until then, leave
---    commented so the existing cleanup keeps working.
---
---   REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app;
+-- 3. (M2 — append-only audit log) ENFORCED at app boot in
+--    app.database.setup_row_level_security, NOT here. Both the REVOKE and the
+--    purge helper reference audit_logs, which does not exist yet on first volume
+--    init (the app builds the schema on its first boot). setup_row_level_security
+--    — run as the superuser/migration role — creates a SECURITY DEFINER
+--    purge_old_audit_logs() function, restricts its EXECUTE to nis2_app, then
+--    runs `REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app`. cleanup_tasks
+--    calls that function so the retention purge keeps working under the
+--    append-only role (it bypasses RLS and keeps DELETE as the definer).
