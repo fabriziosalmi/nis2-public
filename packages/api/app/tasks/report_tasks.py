@@ -207,6 +207,7 @@ async def _generate_report(
     from app.models.scan import Scan
     from app.models.scan_result import ScanResult
     from app.models.finding import Finding
+    from app.models.organization import Organization
     from sqlalchemy import select
 
     async with async_session_factory() as db:
@@ -232,6 +233,9 @@ async def _generate_report(
             .order_by(Finding.severity, Finding.created_at)
         )
         findings = findings_q.scalars().all()
+        # Org display name for the report cover (PDF/HTML only).
+        org = await db.get(Organization, scan.organization_id)
+        org_name = org.name if org else None
 
     # Create the org-specific directory first to make sure it exists
     org_reports_dir = os.path.join(REPORTS_DIR, str(org_id))
@@ -265,7 +269,10 @@ async def _generate_report(
         raise ValueError(
             f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}"
         )
-    result = gen(scan, results, findings, base, loc)
+    if format in ("pdf", "html"):
+        result = gen(scan, results, findings, base, loc, org_name)
+    else:
+        result = gen(scan, results, findings, base, loc)
     # Stash the org_id on the result so the API's /status and
     # /download endpoints can validate the requester's org matches.
     result["org_id"] = str(org_id)
@@ -633,7 +640,27 @@ def _strip_report_emoji(value: str) -> str:
     return _EMOJI_RE.sub("", value)
 
 
-def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
+def _matrix_pill(status: str) -> str:
+    """Map a compliance-matrix coverage status to a pill colour class.
+
+    The scanner emits free-text statuses (e.g. "Partially Automated (...)",
+    "Manual Verification Required", "Automated (...)"). Default to the neutral
+    "manual" (amber, needs-review) rather than green, so an unrecognised status
+    never over-states compliance in a customer-facing document.
+    """
+    s = status.lower()
+    if any(k in s for k in ("fail", "missing", "non-compliant", "not compliant", "not implemented")):
+        return "gap"
+    if "partial" in s:
+        return "partial"
+    if "manual" in s:
+        return "manual"
+    if any(k in s for k in ("automated", "verified", "compliant", "pass", "covered")):
+        return "ok"
+    return "manual"
+
+
+def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
     score = scan.total_score or 0
     sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
     sev_colors = {
@@ -652,12 +679,11 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     for f in findings:
         c = sev_colors.get(f.severity, "#6b7280")
         f_rows += (
-            f'<tr><td><span style="background:{c};color:#fff;padding:2px 8px;'
-            f'border-radius:4px;font-size:12px;font-weight:600">{_h(f.severity)}</span></td>'
+            f'<tr><td><span class="badge" style="background:{c}">{_h(f.severity)}</span></td>'
             f"<td>{_h(f.category)}</td>"
             f"<td>{_h(f.message)}</td>"
             f"<td><code>{_h(f.target)}</code></td>"
-            f"<td>{_h(f.remediation) if f.remediation else '-'}</td></tr>\n"
+            f"<td>{_h(f.remediation) if f.remediation else '—'}</td></tr>\n"
         )
 
     a_rows = ""
@@ -688,6 +714,34 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
             f'<div class="executive">{_strip_report_emoji(scan.executive_summary)}</div>'
         )
 
+    # Compliance matrix — the NIS2 Art. 21(2) measures (a–j) mapped to their
+    # coverage status. Turns the report from a findings list into a conformity
+    # document. The status text is scanner-generated (English); the column
+    # chrome is localised.
+    cm = scan.compliance_matrix or {}
+    cm_block = ""
+    if isinstance(cm, dict) and cm:
+        cm_rows = ""
+        for measure in sorted(cm.keys()):
+            status = str(cm[measure])
+            cm_rows += (
+                f"<tr><td>{_h(measure)}</td>"
+                f'<td><span class="pill {_matrix_pill(status)}">{_h(status)}</span></td></tr>\n'
+            )
+        cm_block = (
+            f'<h2>{_h(_t(locale, "compliance_matrix"))}</h2>'
+            f'<table class="matrix"><tr><th>{_h(_t(locale, "h_measure"))}</th>'
+            f'<th>{_h(_t(locale, "h_coverage"))}</th></tr>{cm_rows}</table>'
+        )
+
+    # Optional organisation line on the cover (only when we resolved the name).
+    org_line = (
+        f'<strong>{_h(_t(locale, "field_organization"))}:</strong> '
+        f"{_h(org_name)} &nbsp;&bull;&nbsp; "
+        if org_name
+        else ""
+    )
+
     # The lang attribute matches the user's requested locale (audit
     # reports-007). Browsers, screen-readers, and accessibility
     # tooling all key off this — pre-v2.4.21 it was hardcoded
@@ -698,20 +752,45 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
 <meta charset="utf-8">
 <title>{_h(_t(locale, "html_title_prefix"))} — {_h(scan.name)}</title>
 <style>
-@page{{size:A4;margin:2cm}}body{{font-family:'Helvetica Neue',Arial,sans-serif;color:#1e293b;line-height:1.6;font-size:11px;max-width:1100px;margin:0 auto;padding:20px}}
-h1{{color:#0f172a;font-size:24px;border-bottom:3px solid #0f172a;padding-bottom:10px}}h2{{color:#334155;font-size:16px;margin-top:30px;border-bottom:1px solid #e2e8f0;padding-bottom:6px}}
-.score-box{{text-align:center;padding:20px;border:2px solid {sc};border-radius:12px;display:inline-block}}.score{{font-size:48px;font-weight:800;color:{sc}}}.score-label{{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px}}
-.stats{{display:flex;gap:20px;margin:20px 0;flex-wrap:wrap}}.stat{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;flex:1;text-align:center;min-width:100px}}.stat-value{{font-size:24px;font-weight:700;color:#0f172a}}.stat-label{{font-size:10px;color:#64748b;text-transform:uppercase}}
-table{{width:100%;border-collapse:collapse;margin:10px 0}}th{{background:#f1f5f9;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}}td{{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}}tr:hover{{background:#f8fafc}}
-code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.footer{{margin-top:40px;padding-top:15px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:9px;text-align:center}}
-:root{{--primary:#0284c7;--text-muted:#64748b}}
-.executive{{background:#f0f9ff;border-left:4px solid var(--primary);padding:16px 20px;border-radius:0 8px 8px 0;margin:15px 0;font-size:11px}}
+@page{{size:A4;margin:2.3cm 1.8cm 1.9cm;
+  @top-right{{content:"{_h(_t(locale, 'report_title_h1'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
+  @bottom-left{{content:"{_h(_t(locale, 'footer_generated_by'))}";font-size:7.5px;color:#94a3b8}}
+  @bottom-center{{content:"{_h(date_str)}";font-size:7.5px;color:#cbd5e1}}
+  @bottom-right{{content:counter(page) " / " counter(pages);font-size:7.5px;color:#94a3b8}}
+}}
+:root{{--ink:#0f172a;--slate:#334155;--muted:#64748b;--primary:#0284c7;--line:#e2e8f0;--text-muted:#64748b}}
+*{{box-sizing:border-box}}
+body{{font-family:'Helvetica Neue',Arial,sans-serif;color:var(--slate);line-height:1.55;font-size:11px;margin:0}}
+.cover{{border-bottom:3px solid var(--ink);padding-bottom:13px;margin-bottom:2px}}
+.eyebrow{{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--primary);font-weight:700}}
+h1{{color:var(--ink);font-size:25px;margin:5px 0 9px;font-weight:800;letter-spacing:-.4px}}
+.cover-meta{{font-size:10px;color:var(--muted)}}.cover-meta strong{{color:var(--slate);font-weight:600}}
+h2{{color:var(--ink);font-size:15px;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);font-weight:700}}
+.topgrid{{display:flex;gap:14px;margin:16px 0 4px;align-items:stretch}}
+.score-box{{text-align:center;padding:12px 22px;border:2px solid {sc};border-radius:12px;display:flex;flex-direction:column;justify-content:center;min-width:118px}}
+.score{{font-size:40px;font-weight:800;color:{sc};line-height:1}}.score-label{{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px}}
+.stats{{display:flex;gap:9px;flex:1;flex-wrap:wrap}}
+.stat{{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:9px 6px;flex:1;text-align:center;min-width:70px;display:flex;flex-direction:column;justify-content:center}}
+.stat-value{{font-size:20px;font-weight:700;color:var(--ink)}}.stat-label{{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+table{{width:100%;border-collapse:collapse;margin:8px 0}}
+th{{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;text-align:left;border-bottom:2px solid var(--line)}}
+td{{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:10.5px;vertical-align:top}}
+code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color:var(--slate)}}
+.badge{{display:inline-block;padding:2px 9px;border-radius:999px;font-size:9px;font-weight:700;color:#fff;letter-spacing:.3px}}
+.pill{{display:inline-block;padding:2px 9px;border-radius:999px;font-size:9px;font-weight:600}}
+.pill.ok{{background:#dcfce7;color:#166534}}.pill.partial{{background:#dbeafe;color:#1e40af}}.pill.manual{{background:#fef9c3;color:#854d0e}}.pill.gap{{background:#fee2e2;color:#991b1b}}
+.matrix td:first-child{{font-weight:600;color:var(--slate)}}
+.executive{{background:#f0f9ff;border-left:4px solid var(--primary);padding:16px 20px;border-radius:0 8px 8px 0;margin:10px 0;font-size:11px}}
 .executive p{{margin:0 0 10px}}.executive ul,.executive ol{{margin:6px 0 14px;padding-left:22px}}.executive li{{margin:0 0 6px;line-height:1.55}}.executive strong{{font-weight:700}}.executive a{{text-decoration:none}}
 </style>
 </head>
 <body>
+<div class="cover">
+<div class="eyebrow">NIS2 Compliance Platform</div>
 <h1>{_h(_t(locale, "report_title_h1"))}</h1>
-<p><strong>{_h(_t(locale, "field_scan"))}:</strong> {_h(scan.name)} &nbsp;|&nbsp; <strong>{_h(_t(locale, "field_date"))}:</strong> {_h(date_str)} &nbsp;|&nbsp; <strong>{_h(_t(locale, "field_duration"))}:</strong> {scan.duration_seconds or 0}s</p>
+<div class="cover-meta">{org_line}<strong>{_h(_t(locale, "field_scan"))}:</strong> {_h(scan.name)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_date"))}:</strong> {_h(date_str)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_duration"))}:</strong> {scan.duration_seconds or 0}s</div>
+</div>
+<div class="topgrid">
 <div class="score-box"><div class="score">{score}</div><div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
 <div class="stats">
 <div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_scanned"))}</div></div>
@@ -721,12 +800,13 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 <div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
 <div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
 </div>
+</div>
 {exec_block}
+{cm_block}
 <h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
 <table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
 <table><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr>{a_rows}</table>
-<div class="footer">{_h(_t(locale, "footer_generated_by"))} &bull; {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} &bull; {_h(_t(locale, "footer_ref"))}</div>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
@@ -742,8 +822,8 @@ code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.foot
 # ---------------------------------------------------------------------------
 
 
-def _gen_pdf(scan, results, findings, base, locale: str = "en") -> dict:
-    html_result = _gen_html(scan, results, findings, base, locale)
+def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
+    html_result = _gen_html(scan, results, findings, base, locale, org_name)
     html_path = html_result["file_path"]
     pdf_path = os.path.join(REPORTS_DIR, f"{base}.pdf")
 
