@@ -196,10 +196,10 @@ export default function NotificationsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info(t("testSent"))}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info(t("testSent"))} aria-label="Send test notification">
                     <TestTube className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeChannel(ch.id)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeChannel(ch.id)} aria-label="Delete channel">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

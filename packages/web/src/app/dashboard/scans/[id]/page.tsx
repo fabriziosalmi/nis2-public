@@ -171,7 +171,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/scans"><ArrowLeft className="h-4 w-4" /></Link>
+          <Link href="/dashboard/scans" aria-label="Back to scans"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
