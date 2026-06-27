@@ -53,23 +53,12 @@ const config: NextConfig = {
     ]
   },
   async headers() {
-    // Next.js dev mode (React Refresh + webpack HMR) compiles modules client-
-    // side via `new Function()` / `eval`, which a strict CSP without
-    // 'unsafe-eval' blocks. We only loosen the policy in development; the
-    // production build is fully pre-compiled and keeps the tight policy.
-    const isDev = process.env.NODE_ENV !== 'production'
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const scriptSrc = isDev
-      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-      // P1-09 audit fix: production CSP drops 'unsafe-inline'. Next.js
-      // standalone builds are fully pre-compiled — no inline scripts.
-      // Pre-fix, 'unsafe-inline' neutralised CSP's XSS protection
-      // entirely: any attacker who could inject HTML could also inject
-      // and execute <script> blocks. Dev mode keeps it for HMR.
-      : "script-src 'self'"
-    const connectSrc = isDev
-      ? `connect-src 'self' ${apiUrl} ws: wss:`
-      : `connect-src 'self' ${apiUrl}`
+    // The Content-Security-Policy is set per-request in src/middleware.ts so it
+    // can carry a nonce for Next's inline hydration scripts (App Router emits
+    // them; a static `script-src 'self'` blocked them in prod -> no hydration).
+    // It must live in exactly one place: a second static CSP here would be
+    // intersected with the middleware one and its missing nonce would block the
+    // nonced scripts. The static security headers below apply to every route.
     return [
       {
         source: '/(.*)',
@@ -93,20 +82,6 @@ const config: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              scriptSrc,
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https:",
-              connectSrc,
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
           },
           {
             key: 'Strict-Transport-Security',
