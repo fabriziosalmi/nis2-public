@@ -73,7 +73,8 @@ export default function RegisterPage() {
       {/* v2.4.23 audit a11y-14: aria-invalid + aria-describedby on
           every form field so SR users hear validation errors when
           they refocus the offending input. */}
-      <form onSubmit={handleSubmit(onSubmit)}>
+      {/* method="post": a pre-hydration native submit must POST, not leak creds via a GET URL. */}
+      <form method="post" onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="full_name">{t("auth.fullName")}</Label>
