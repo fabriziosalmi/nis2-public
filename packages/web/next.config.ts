@@ -4,6 +4,14 @@ import path from 'node:path'
 
 const config: NextConfig = {
   output: 'standalone',
+  // Dev-only: Next 15.2+/16 blocks cross-origin requests to internal dev
+  // resources (notably the /_next/webpack-hmr WebSocket) unless the requesting
+  // origin is allow-listed. The docker dev stack is reached at 127.0.0.1:8077 /
+  // localhost:8077 through the port-forward, which Next treats as cross-origin —
+  // so HMR logged "Blocked cross-origin request to Next.js dev resource" and the
+  // hot-reload socket never connected. Allow-listing the dev hosts restores it.
+  // Ignored in production builds.
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   // The repo root has its own package-lock.json (for the VitePress docs
   // build) AND this package has its own. Without pinning the trace root
   // Next 15 prints "We detected multiple lockfiles..." and infers the
