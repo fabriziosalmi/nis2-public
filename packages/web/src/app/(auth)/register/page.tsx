@@ -81,6 +81,7 @@ export default function RegisterPage() {
             <Input
               id="full_name"
               placeholder={t("auth.fullNamePlaceholder")}
+              autoComplete="name"
               aria-invalid={!!errors.full_name}
               aria-describedby={errors.full_name ? "full_name-error" : undefined}
               {...register("full_name")}
@@ -97,6 +98,7 @@ export default function RegisterPage() {
               id="email"
               type="email"
               placeholder={t("auth.emailPlaceholder")}
+              autoComplete="username"
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? "email-error" : undefined}
               {...register("email")}

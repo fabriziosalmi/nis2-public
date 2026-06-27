@@ -100,6 +100,7 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
+              autoComplete="username"
               placeholder={t("auth.emailPlaceholder")}
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? "email-error" : undefined}

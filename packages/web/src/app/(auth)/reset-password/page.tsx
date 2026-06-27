@@ -155,6 +155,7 @@ function ResetPasswordInner() {
               id="new_password"
               type="password"
               placeholder={t("auth.passwordMin8")}
+              autoComplete="new-password"
               autoFocus
               {...register("new_password")}
             />
@@ -167,6 +168,7 @@ function ResetPasswordInner() {
             <Input
               id="confirm_password"
               type="password"
+              autoComplete="new-password"
               {...register("confirm_password")}
             />
             {errors.confirm_password && (
