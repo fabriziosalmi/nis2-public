@@ -212,10 +212,16 @@ async def ensure_schema() -> None:
                 logger.warning("ensure_schema: %s.%s skipped: %s", table, column, exc)
 
 
+# L1: data-table tenant isolation is scoped to the ACTIVE org only. The earlier
+# predicate also OR'd in "any org the current user is a member of", which let a
+# multi-org user's queries read EVERY org they belong to — not just the one they
+# are acting in — an over-permissive defence-in-depth gap. app.current_org_id is
+# set from the JWT's active org (get_db) or the API key's org (get_api_key_org),
+# so this IS the correct tenant boundary. Membership-based access stays ONLY on
+# the `memberships` table (_RLS_MEMBERSHIPS_PREDICATE) so a user can still read
+# their own memberships to enumerate / switch orgs.
 _RLS_PREDICATE = (
-    "(organization_id::text = current_setting('app.current_org_id', true) "
-    "OR (current_setting('app.current_user_id', true) IS NOT NULL AND "
-    "organization_id::text IN (SELECT organization_id::text FROM memberships WHERE user_id::text = current_setting('app.current_user_id', true))))"
+    "(organization_id::text = current_setting('app.current_org_id', true))"
 )
 
 _RLS_MEMBERSHIPS_PREDICATE = (
@@ -285,6 +291,35 @@ async def setup_row_level_security() -> None:
         logger.info(
             "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
         )
+
+    # L1: databases created before the active-org-only predicate still carry the
+    # old membership-OR subquery in their tenant_isolation policy. Recreate any
+    # such policy (detected by 'memberships' appearing in the qual of a
+    # NON-memberships table) with the current _RLS_PREDICATE. Runs as the
+    # superuser/migration role; no-ops (caught) once the app runs as nis2_app —
+    # by then a privileged boot has already applied it.
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT tablename FROM pg_policies "
+                "WHERE policyname = 'tenant_isolation' "
+                "AND tablename <> 'memberships' AND qual LIKE '%memberships%'"
+            )
+        )
+        stale = [row[0] for row in result]
+    for t in stale:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"DROP POLICY tenant_isolation ON {t}"))
+                await conn.execute(
+                    text(
+                        f"CREATE POLICY tenant_isolation ON {t} "
+                        f"USING {_RLS_PREDICATE} WITH CHECK {_RLS_PREDICATE}"
+                    )
+                )
+            logger.info("L1: recreated tenant_isolation on %s (active-org-only).", t)
+        except Exception as exc:
+            logger.warning("L1: could not recreate tenant_isolation on %s: %s", t, exc)
 
     # api_keys is a BOOTSTRAP table: get_api_key_org looks a key up BY key_hash to
     # DISCOVER its org, so that query runs with no app.current_org_id set — and the
