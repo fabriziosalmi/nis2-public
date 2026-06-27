@@ -65,15 +65,21 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    # Migrations run with FORCE ROW LEVEL SECURITY in effect. Bypass the
-    # tenant policy explicitly so DDL and any data migrations can touch
-    # all rows. Postgres ignores the GUC for non-Postgres backends.
-    try:
-        connection.execute(text("SET LOCAL app.bypass_rls = 'on'"))
-    except Exception:
-        pass
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Migrations run with FORCE ROW LEVEL SECURITY in effect. Bypass the
+        # tenant policy so DDL/data migrations can touch all rows. Postgres
+        # ignores the GUC for non-Postgres backends.
+        #
+        # This MUST be inside begin_transaction(): in SQLAlchemy 2.0 an
+        # execute() *before* it autobegins a separate transaction that alembic
+        # never owns, so on the async NullPool connection's close the whole
+        # migration is silently rolled back — `alembic upgrade`/`stamp` log
+        # "Running ..." and exit 0 but write nothing (found 2026-06-26).
+        try:
+            connection.execute(text("SET LOCAL app.bypass_rls = 'on'"))
+        except Exception:
+            pass
         context.run_migrations()
 
 
