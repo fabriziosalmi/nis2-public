@@ -7,6 +7,7 @@ import "./globals.css"
 import { Providers } from "@/components/layout/providers"
 import { NextIntlClientProvider } from "next-intl"
 import { getLocale, getMessages } from "next-intl/server"
+import { headers } from "next/headers"
 
 const sansFont = Manrope({ subsets: ["latin"], variable: "--font-sans" })
 const monoFont = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
@@ -26,6 +27,11 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale()
   const messages = await getMessages()
+  // CSP nonce minted per-request in middleware.ts — hand it to next-themes so
+  // its pre-hydration inline theme script carries the nonce. Without it the
+  // strict prod CSP blocks that one script: a flash of the wrong theme + a
+  // console CSP error (every other inline script is nonced by Next itself).
+  const nonce = (await headers()).get("x-nonce") ?? undefined
 
   return (
     // suppressHydrationWarning on <html> covers next-themes' class swap.
@@ -41,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         suppressHydrationWarning
       >
         <NextIntlClientProvider messages={messages}>
-          <Providers>{children}</Providers>
+          <Providers nonce={nonce}>{children}</Providers>
         </NextIntlClientProvider>
       </body>
     </html>
