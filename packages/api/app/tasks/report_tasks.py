@@ -615,6 +615,24 @@ def _h(value: object) -> str:
     return html.escape(str(value))
 
 
+# The scanner's SummaryGenerator decorates each regulation reference with a 📖
+# link icon. WeasyPrint's PDF fonts have no emoji glyphs, so it renders as a
+# tofu box in the PDF/HTML reports. Strip the icon-only reference anchors (the
+# regulation references are already in the findings table) and any other stray
+# emoji before embedding the executive summary. The web dashboard renders the
+# summary separately and keeps the emoji.
+_EMOJI_RE = re.compile(
+    "[\U0001f000-\U0001faff\U00002600-\U000027bf\U00002b00-\U00002bff"
+    "\U0001f1e6-\U0001f1ff\U0000fe00-\U0000fe0f]"
+)
+
+
+def _strip_report_emoji(value: str) -> str:
+    # Drop the whole reference anchor first so no empty <a></a> is left behind.
+    value = re.sub(r"<a\b[^>]*>\s*\U0001f4d6\s*</a>", "", value)
+    return _EMOJI_RE.sub("", value)
+
+
 def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     score = scan.total_score or 0
     sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
@@ -667,7 +685,7 @@ def _gen_html(scan, results, findings, base, locale: str = "en") -> dict:
     if scan.executive_summary:
         exec_block = (
             f"<h2>{_h(_t(locale, 'executive_summary'))}</h2>"
-            f'<div class="executive">{scan.executive_summary}</div>'
+            f'<div class="executive">{_strip_report_emoji(scan.executive_summary)}</div>'
         )
 
     # The lang attribute matches the user's requested locale (audit
@@ -686,7 +704,9 @@ h1{{color:#0f172a;font-size:24px;border-bottom:3px solid #0f172a;padding-bottom:
 .stats{{display:flex;gap:20px;margin:20px 0;flex-wrap:wrap}}.stat{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;flex:1;text-align:center;min-width:100px}}.stat-value{{font-size:24px;font-weight:700;color:#0f172a}}.stat-label{{font-size:10px;color:#64748b;text-transform:uppercase}}
 table{{width:100%;border-collapse:collapse;margin:10px 0}}th{{background:#f1f5f9;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}}td{{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}}tr:hover{{background:#f8fafc}}
 code{{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:10px}}.footer{{margin-top:40px;padding-top:15px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:9px;text-align:center}}
-.executive{{background:#f0f9ff;border-left:4px solid #0284c7;padding:15px;border-radius:0 8px 8px 0;margin:15px 0;white-space:pre-wrap}}
+:root{{--primary:#0284c7;--text-muted:#64748b}}
+.executive{{background:#f0f9ff;border-left:4px solid var(--primary);padding:16px 20px;border-radius:0 8px 8px 0;margin:15px 0;font-size:11px}}
+.executive p{{margin:0 0 10px}}.executive ul,.executive ol{{margin:6px 0 14px;padding-left:22px}}.executive li{{margin:0 0 6px;line-height:1.55}}.executive strong{{font-weight:700}}.executive a{{text-decoration:none}}
 </style>
 </head>
 <body>
