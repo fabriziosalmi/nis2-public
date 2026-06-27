@@ -183,7 +183,8 @@ export default function ProfileSettingsPage() {
           <CardTitle>{t("changePassword")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+          {/* method="post": a pre-hydration native submit must POST, not leak the password via a GET URL. */}
+          <form method="post" onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="current_password">{t("currentPassword")}</Label>
               <Input id="current_password" type="password" autoComplete="current-password" {...passwordForm.register("current_password")} />

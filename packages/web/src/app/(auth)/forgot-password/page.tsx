@@ -106,7 +106,8 @@ export default function ForgotPasswordPage() {
         <CardTitle className="text-2xl">{t("forgotPasswordPage.title")}</CardTitle>
         <CardDescription>{t("forgotPasswordPage.description")}</CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      {/* method="post": a pre-hydration native submit must POST, not leak the email via a GET URL. */}
+      <form method="post" onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">{t("auth.email")}</Label>

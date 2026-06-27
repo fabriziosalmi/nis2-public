@@ -141,7 +141,8 @@ function ResetPasswordInner() {
         <CardTitle className="text-2xl">{t("resetPasswordPage.title")}</CardTitle>
         <CardDescription>{t("resetPasswordPage.description")}</CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      {/* method="post": a pre-hydration native submit must POST, not leak the new password via a GET URL. */}
+      <form method="post" onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           {submitError && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
