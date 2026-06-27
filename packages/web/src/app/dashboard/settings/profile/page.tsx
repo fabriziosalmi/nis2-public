@@ -144,7 +144,7 @@ export default function ProfileSettingsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="full_name">{t("fullName")}</Label>
-              <Input id="full_name" {...profileForm.register("full_name")} />
+              <Input id="full_name" autoComplete="name" {...profileForm.register("full_name")} />
               {profileForm.formState.errors.full_name && (
                 <p className="text-xs text-destructive">{profileForm.formState.errors.full_name.message}</p>
               )}

@@ -115,6 +115,7 @@ export default function ForgotPasswordPage() {
               id="email"
               type="email"
               placeholder={t("auth.emailPlaceholder")}
+              autoComplete="username"
               autoFocus
               {...register("email")}
             />
