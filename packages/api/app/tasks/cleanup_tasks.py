@@ -61,6 +61,9 @@ async def _cleanup():
     # same family of issue scan_tasks.py opted into in v2.4.19).
     from app.models.password_reset_token import PasswordResetToken
     from app.models.revoked_token import RevokedToken
+    from app.models.organization import Organization
+    from app.database import set_rls_org_context
+    from sqlalchemy import select
 
     now = datetime.now(timezone.utc)
 
@@ -91,11 +94,26 @@ async def _cleanup():
         # the retention ceiling passes, even the anonymised record has no further
         # legitimate purpose for the controller.
         cutoff = now - timedelta(days=settings.audit_log_retention_days)
-        audit_result = await db.execute(
-            text("DELETE FROM audit_logs WHERE created_at < :cutoff"),
-            {"cutoff": cutoff},
-        )
-        audit_n = audit_result.rowcount or 0
+        # H5: audit_logs is org-scoped, so under a NOSUPERUSER NOBYPASSRLS role a
+        # single cross-tenant DELETE matches 0 rows. Walk the orgs, scope the
+        # session per-org, and purge each org's expired rows. The explicit
+        # organization_id filter keeps it correct under the superuser role too.
+        # (Also fixes a pre-existing miss: the old single DELETE was never
+        # committed — the only commit above covered just the token purges — so the
+        # audit retention purge silently rolled back on session close.)
+        audit_n = 0
+        org_ids = (await db.execute(select(Organization.id))).scalars().all()
+        for _org_id in org_ids:
+            await set_rls_org_context(db, str(_org_id))
+            _r = await db.execute(
+                text(
+                    "DELETE FROM audit_logs "
+                    "WHERE created_at < :cutoff AND organization_id = :org"
+                ),
+                {"cutoff": cutoff, "org": str(_org_id)},
+            )
+            audit_n += _r.rowcount or 0
+        await db.commit()
 
         revoked_n = revoked_result.rowcount or 0
         reset_n = reset_result.rowcount or 0
