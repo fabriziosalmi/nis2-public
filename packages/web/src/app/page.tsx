@@ -222,7 +222,7 @@ function SiteHeader() {
           <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xs border-l bg-background p-6 shadow-lg sm:max-w-sm">
             <div className="flex items-center justify-between mb-8">
               <span className="font-semibold tracking-tight">NIS2 Platform</span>
-              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)}>
+              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} aria-label="Close menu">
                 <X className="h-5 w-5" />
               </Button>
             </div>

@@ -199,7 +199,7 @@ export default function NewScanPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/scans">
+          <Link href="/dashboard/scans" aria-label="Back to scans">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
