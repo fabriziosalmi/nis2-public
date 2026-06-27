@@ -103,6 +103,10 @@ async def create_organization(
             detail="An organization with a conflicting name was just created; please retry.",
         )
 
+    # The admin membership INSERT passes the memberships RLS WITH CHECK via its
+    # user_id clause (the founder is current_user); the audit row below is scoped
+    # to the new org by log_action itself. So no explicit context switch is needed
+    # here — organizations is not RLS-scoped either.
     membership = Membership(
         user_id=current_user.id,
         organization_id=org.id,

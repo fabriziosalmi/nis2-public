@@ -225,9 +225,14 @@ class TestRowLevelSecurity:
             "disabled."
         )
 
-    def test_user_id_membership_access_path_works(self, fresh_client):
-        """A user must still see all rows belonging to their organizations when
-        app.current_user_id is set to their user ID."""
+    def test_user_id_alone_does_not_grant_data_access(self, fresh_client):
+        """L1: data tables are scoped to the ACTIVE org (app.current_org_id) only.
+
+        Setting just app.current_user_id (no org context) must NOT expose data
+        rows — the old "any org the user is a member of" OR was removed from the
+        data-table predicate. That user_id access path now lives ONLY on the
+        `memberships` table, so the user can still read their own memberships to
+        enumerate / switch orgs."""
         from app.models.user import User
         _register_org(fresh_client, "user-access")
         fresh_client.post(
@@ -244,15 +249,30 @@ class TestRowLevelSecurity:
             async with async_session_factory() as session:
                 user_res = await session.execute(select(User).limit(1))
                 user = user_res.scalar_one()
+                # Set ONLY the user id — no app.current_org_id.
                 await session.execute(
                     text("SELECT set_config('app.current_user_id', :v, true)"),
                     {"v": str(user.id)},
                 )
-                result = await session.execute(text("SELECT COUNT(*) FROM assets"))
-                return result.scalar()
+                assets = (
+                    await session.execute(text("SELECT COUNT(*) FROM assets"))
+                ).scalar()
+                memberships = (
+                    await session.execute(text("SELECT COUNT(*) FROM memberships"))
+                ).scalar()
+                return assets, memberships
 
-        count = _async_run(_query())
-        assert count >= 1
+        assets, memberships = _async_run(_query())
+        # L1: data tables are invisible without an active-org context.
+        assert assets == 0, (
+            "L1 regression: a data table was visible via app.current_user_id "
+            "alone — the active-org-only predicate is not in effect"
+        )
+        # The memberships table keeps the user_id access path.
+        assert memberships >= 1, (
+            "memberships must stay visible via the user_id clause so a user can "
+            "enumerate their orgs"
+        )
 
 
 # ---------------------------------------------------------------------------

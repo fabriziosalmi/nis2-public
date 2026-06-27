@@ -42,7 +42,9 @@ class FakeDbSession:
             return FakeAsset()
         return None
 
-    async def execute(self, statement):
+    async def execute(self, statement, *args, **kwargs):
+        # Match AsyncSession.execute, which accepts bind `parameters` — log_action
+        # issues `execute(text(...), {params})` to set the RLS org context.
         return FakeResult()
 
     def add(self, instance):

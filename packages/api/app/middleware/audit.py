@@ -74,6 +74,18 @@ async def log_action(
             ip_address = request.client.host
         user_agent = request.headers.get("user-agent")
 
+    # L1: the audit row's organization_id must satisfy the active-org-only RLS
+    # WITH CHECK. A handler may legitimately log an action for an org OTHER than
+    # the caller's currently-active one (creating an org, switching org), so scope
+    # the session to the row's org here. Transaction-scoped (is_local=true) on the
+    # request session; these handlers audit as their last write, so the context
+    # switch has no further effect within the request.
+    if IS_POSTGRES:
+        await db.execute(
+            text("SELECT set_config('app.current_org_id', :v, true)"),
+            {"v": str(org_id)},
+        )
+
     audit_entry = AuditLog(
         organization_id=org_id,
         user_id=user_id,
