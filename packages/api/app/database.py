@@ -286,6 +286,30 @@ async def setup_row_level_security() -> None:
             "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
         )
 
+    # api_keys is a BOOTSTRAP table: get_api_key_org looks a key up BY key_hash to
+    # DISCOVER its org, so that query runs with no app.current_org_id set — and the
+    # org-scoped tenant_isolation policy would hide every row (0 results => every
+    # API-key request 401s under a NOBYPASSRLS role). Add a SELECT-only policy that
+    # permits the global hash lookup. PostgreSQL ORs permissive policies, so SELECT
+    # becomes global while tenant_isolation still scopes INSERT/UPDATE/DELETE to the
+    # caller's org. Hashes (not raw keys) are all that's readable, and the
+    # management endpoints filter by org in the query. Idempotent.
+    async with engine.begin() as conn:
+        try:
+            present = await conn.execute(
+                text(
+                    "SELECT 1 FROM pg_policies "
+                    "WHERE tablename='api_keys' AND policyname='api_keys_lookup'"
+                )
+            )
+            if present.first() is None:
+                await conn.execute(
+                    text("CREATE POLICY api_keys_lookup ON api_keys FOR SELECT USING (true)")
+                )
+                logger.info("RLS: api_keys_lookup (global SELECT) policy applied.")
+        except Exception as exc:
+            logger.warning("RLS: api_keys_lookup policy skipped: %s", exc)
+
     # Defence-in-depth: refuse to run with a SUPERUSER/BYPASSRLS role in prod
     # (shared with the Celery worker boot guard — see assert_db_role_rls_safe).
     await assert_db_role_rls_safe()

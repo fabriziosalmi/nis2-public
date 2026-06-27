@@ -316,6 +316,17 @@ async def get_api_key_org(
     api_key.last_used_at = now
     await db.flush()
 
+    # H5: the JWT path sets app.current_org_id via IdentityMiddleware + get_db,
+    # but an API-key request is not a JWT, so nothing scoped this session. Set the
+    # key's org now (transaction-scoped, like get_db's is_local=true for the pooled
+    # API connection) so the endpoint's tenant-scoped queries return rows under a
+    # NOSUPERUSER NOBYPASSRLS role. No-op on non-Postgres.
+    if IS_POSTGRES:
+        await db.execute(
+            text("SELECT set_config('app.current_org_id', :v, true)"),
+            {"v": str(api_key.organization_id)},
+        )
+
     return api_key, api_key.organization_id
 
 
