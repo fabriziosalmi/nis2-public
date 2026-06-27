@@ -43,6 +43,14 @@ EXEMPT_PATHS = {
     "/api/v1/auth/logout",
 }
 
+# (method, path) pairs that can't be middleware-audited because the request
+# deletes the actor (and possibly their lone org): the audit row's user_id /
+# organization_id FK would dangle, so the INSERT always fails. Account erasure
+# does its own audit-trail handling — it pseudonymises the user's existing rows.
+EXEMPT_METHOD_PATHS = {
+    ("DELETE", "/api/v1/auth/me"),
+}
+
 
 async def log_action(
     db: AsyncSession,
@@ -108,6 +116,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if request.method not in LOG_METHODS:
             return response
         if request.url.path in EXEMPT_PATHS:
+            return response
+        if (request.method, request.url.path) in EXEMPT_METHOD_PATHS:
             return response
         if not (200 <= response.status_code < 300):
             return response

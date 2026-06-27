@@ -87,12 +87,22 @@ class TestCleanupTasksReturnShape:
 class TestPseudonymisationSQL:
     def _erasure_sql(self) -> str:
         import pathlib
-        src = pathlib.Path("app/routers/auth.py").read_text()
-        # Extract the UPDATE audit_logs statement.
+        # The pseudonymisation UPDATE moved into the SECURITY DEFINER
+        # pseudonymize_user_audit_logs() function (database.py) because audit_logs
+        # is append-only for the app role under RLS (M2); auth.py calls it.
+        src = pathlib.Path("app/database.py").read_text()
         start = src.find("UPDATE audit_logs SET")
-        assert start != -1, "Could not find UPDATE audit_logs in auth.py"
-        end = src.find("WHERE user_id = :uid", start)
+        assert start != -1, "Could not find the pseudonymise UPDATE in database.py"
+        end = src.find("WHERE user_id = p_user_id", start)
         return src[start:end]
+
+    def test_auth_calls_pseudonymize_function(self) -> None:
+        import pathlib
+        src = pathlib.Path("app/routers/auth.py").read_text()
+        assert "pseudonymize_user_audit_logs" in src, (
+            "auth.py erasure must call the SECURITY DEFINER pseudonymise function "
+            "(audit_logs is append-only for the app role)"
+        )
 
     def test_user_id_nulled(self) -> None:
         assert "user_id = NULL" in self._erasure_sql()
