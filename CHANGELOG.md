@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.17] - 2026-06-27
+
+Report polish and web / developer-experience fixes on top of 2.5.16.
+
+### 📄 Reports
+
+- **Professional report redesign** (#182): a branded cover header (eyebrow + title + an organisation / scan / date / duration line), the compliance score and severity stats in a single grid, a new **NIS2 Compliance Matrix** section mapping the 10 Art. 21(2) measures (a–j) to a colour-coded coverage status, and per-page document chrome — running header + footer with `X / Y` page numbers on every page. Document chrome and labels localise across en/it/fr/de/es.
+- **Executive-summary rendering fixed** (#181): the summary box used `white-space:pre-wrap`, so WeasyPrint rendered the summary HTML's own newlines + indentation literally (huge vertical gaps, text shoved right); it also referenced CSS variables the report never defined (unbranded headings) and showed `📖` tofu glyphs (no emoji in the PDF font). Now compact, branded, and glyph-clean.
+
+### 🌐 Web & developer experience
+
+- **Form validation no longer crashes** (#180): the app uses Zod 4, but `@hookform/resolvers` had resolved to a Zod-3-only build, so an invalid field threw a runtime `ZodError` overlay instead of an inline message. Upgraded the resolver to v5 (Zod-4-native); invalid input now shows the field error inline.
+- **Autocomplete on auth forms** (#179): added `autocomplete` attributes (`username` / `new-password` / `name`) so browsers stop warning and password managers can autofill the login / register / reset / profile forms.
+- **HMR works in the docker dev stack** (#178): `allowedDevOrigins` lets Next 16 accept the cross-origin `/_next/webpack-hmr` WebSocket through the port-forward (`127.0.0.1:8077`), restoring hot reload.
+
 ## [2.5.16] - 2026-06-27
 
 H5 closed: the application now runs end-to-end under the `nis2_app` `NOSUPERUSER NOBYPASSRLS` role — validated by the full E2E live suite (53/53) and the GDPR-erasure path against that role. Plus M2 audit append-only, L1 active-org RLS scoping, the L12 nonce-CSP production-hydration fix, and L6 accessibility.

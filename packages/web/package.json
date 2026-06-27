@@ -1,6 +1,6 @@
 {
   "name": "@nis2/web",
-  "version": "2.5.16",
+  "version": "2.5.17",
   "private": true,
   "scripts": {
     "dev": "next dev",
