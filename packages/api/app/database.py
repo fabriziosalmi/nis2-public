@@ -341,6 +341,31 @@ async def setup_row_level_security() -> None:
             "GRANT EXECUTE ON FUNCTION purge_old_audit_logs(integer) TO nis2_app",
             "grant purge EXECUTE to nis2_app",
         ),
+        # GDPR Art. 17 erasure pseudonymises a user's audit rows (UPDATE) — also a
+        # legitimate, privileged exception to append-only, so it runs through its
+        # own SECURITY DEFINER function (auth.py calls it instead of a direct
+        # UPDATE, which the REVOKE below would otherwise block under nis2_app).
+        (
+            "CREATE OR REPLACE FUNCTION pseudonymize_user_audit_logs(p_user_id uuid) "
+            "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
+            "SET search_path = public, pg_temp AS $fn$ "
+            "DECLARE updated bigint; "
+            "BEGIN "
+            "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
+            "user_agent = '[erased]', details = NULL WHERE user_id = p_user_id; "
+            "GET DIAGNOSTICS updated = ROW_COUNT; "
+            "RETURN updated; "
+            "END; $fn$",
+            "pseudonymize_user_audit_logs() function",
+        ),
+        (
+            "REVOKE EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) FROM PUBLIC",
+            "lock down pseudonymize function (revoke EXECUTE from PUBLIC)",
+        ),
+        (
+            "GRANT EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) TO nis2_app",
+            "grant pseudonymize EXECUTE to nis2_app",
+        ),
         (
             "REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app",
             "make audit_logs append-only for nis2_app",

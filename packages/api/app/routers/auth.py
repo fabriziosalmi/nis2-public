@@ -826,11 +826,12 @@ async def delete_me(
     #   timestamp survive. Operators managing security incidents MUST raise
     #   AUDIT_LOG_RETENTION_DAYS ≥ 365 to fulfil the NIS2 incident evidence
     #   requirement — see docs/privacy.md §7.2 and config.py.
+    # audit_logs is append-only for the application role (M2), so a direct UPDATE
+    # is denied under nis2_app. Pseudonymise through the SECURITY DEFINER
+    # pseudonymize_user_audit_logs() function — it bypasses the REVOKE + RLS and
+    # scrubs user_id / ip_address / user_agent / details on this user's rows.
     await db.execute(
-        text(
-            "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
-            "user_agent = '[erased]', details = NULL WHERE user_id = :uid"
-        ),
+        text("SELECT pseudonymize_user_audit_logs(:uid)"),
         {"uid": str(user_id)},
     )
 
@@ -850,19 +851,18 @@ async def delete_me(
 
     # 6. Delete lone-tenant orgs and all their tenant-scoped data.
     for org_id in orgs_to_delete:
-        for table in (
-            "findings",
-            "scan_results",
-            "scans",
-            "scan_schedules",
-            "assets",
-            "incidents",
-            "vendors",
-            "business_processes",
-            "api_keys",
-            "memberships",
-            "audit_logs",
-        ):
+        # Scope the session to THIS org so the org-scoped DELETEs below satisfy RLS
+        # under nis2_app — the org being erased may not be the JWT's active org.
+        await _set_session_org_id(db, org_id)
+        # Only the NO-ACTION FK children need an explicit delete before the org.
+        # Every ON DELETE CASCADE child — findings, scans (-> scan_results),
+        # scan_schedules, assets, notification_channels, api_keys, memberships, and
+        # audit_logs — is removed by the organizations delete itself. The RI cascade
+        # is system-enforced, so it bypasses RLS AND the M2 append-only REVOKE on
+        # audit_logs (an explicit DELETE there would be denied). Note: scan_results
+        # has no organization_id column, so the old per-table-by-org delete could
+        # never have worked for it (pre-existing bug).
+        for table in ("business_processes", "incidents", "vendors"):
             await db.execute(
                 text(f"DELETE FROM {table} WHERE organization_id = :oid"),
                 {"oid": str(org_id)},
