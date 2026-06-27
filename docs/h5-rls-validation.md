@@ -56,6 +56,13 @@ start **without** the "rolsuper/rolbypassrls — RLS bypassed" warning. If you s
 `Refusing to start: ... SUPERUSER/BYPASSRLS app role`, the app is still on the
 superuser URL.
 
+> **One-time superuser setup.** The RLS policies and the two `SECURITY DEFINER`
+> audit helpers (`purge_old_audit_logs`, `pseudonymize_user_audit_logs`) are
+> created by `setup_row_level_security` during a superuser/migration boot — run
+> that once before switching the app role. When the app later boots *as*
+> `nis2_app`, those CREATE/REVOKE/GRANT statements no-op (insufficient privilege,
+> caught) because the objects already exist.
+
 ## 3. Acceptance test
 
 The point is to prove isolation holds **even with the app-layer filters removed** —
@@ -82,9 +89,13 @@ i.e. the database itself refuses cross-tenant reads.
 Point `DATABASE_URL` back at the superuser URL and restart. Nothing in the schema
 changed, so this is instant and lossless.
 
-## What to report back
+## Status — VALIDATED (2026-06-27)
 
-Per the acceptance test: do manual scans + reports work under `nis2_app`, and does
-psql confirm 0 cross-tenant rows? Anything that breaks (especially scheduled scans
-or API-key auth) is expected until the remaining #140 chunks land — note which, so
-the per-org sweep / `api_keys` exemption can be prioritised.
+The full switch is proven on the local stack under `nis2_app`: the **E2E live
+suite passes 53/53**, plus register / login / scans / reports / API-key auth /
+GDPR erasure end-to-end. The per-org cross-tenant sweeps (#163 / #170 / #171),
+the `api_keys` RLS exemption (#169 / #174), M2 audit append-only (#172), and the
+bootstrap-write contexts (#174) have all landed — so nothing in the acceptance
+test above is "expected to break" anymore. The only step that still needs the
+superuser is the one-time schema + policy + SECURITY-DEFINER-function setup noted
+in §2.
