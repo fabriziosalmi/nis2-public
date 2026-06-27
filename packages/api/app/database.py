@@ -310,6 +310,49 @@ async def setup_row_level_security() -> None:
         except Exception as exc:
             logger.warning("RLS: api_keys_lookup policy skipped: %s", exc)
 
+    # M2: make audit_logs append-only for the application role. A plain REVOKE
+    # would also break the retention purge in cleanup_tasks, so that purge runs
+    # through purge_old_audit_logs() — a SECURITY DEFINER function owned by this
+    # (privileged) setup role: it bypasses RLS and keeps DELETE even after the app
+    # role loses it. SET search_path guards the definer fn against search-path
+    # hijacking; EXECUTE is revoked from PUBLIC (the CREATE default) then granted
+    # only to the app role. Each statement runs in its own transaction so a no-op
+    # (role absent, or insufficient rights once running AS the app role) doesn't
+    # abort the rest — these must be applied during a superuser/migration boot.
+    _audit_appendonly_stmts = (
+        (
+            "CREATE OR REPLACE FUNCTION purge_old_audit_logs(retention_days integer) "
+            "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
+            "SET search_path = public, pg_temp AS $fn$ "
+            "DECLARE deleted bigint; "
+            "BEGIN "
+            "DELETE FROM audit_logs "
+            "WHERE created_at < now() - make_interval(days => retention_days); "
+            "GET DIAGNOSTICS deleted = ROW_COUNT; "
+            "RETURN deleted; "
+            "END; $fn$",
+            "purge_old_audit_logs() function",
+        ),
+        (
+            "REVOKE EXECUTE ON FUNCTION purge_old_audit_logs(integer) FROM PUBLIC",
+            "lock down purge function (revoke EXECUTE from PUBLIC)",
+        ),
+        (
+            "GRANT EXECUTE ON FUNCTION purge_old_audit_logs(integer) TO nis2_app",
+            "grant purge EXECUTE to nis2_app",
+        ),
+        (
+            "REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app",
+            "make audit_logs append-only for nis2_app",
+        ),
+    )
+    for _stmt, _desc in _audit_appendonly_stmts:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(_stmt))
+        except Exception as exc:
+            logger.warning("M2: %s skipped: %s", _desc, exc)
+
     # Defence-in-depth: refuse to run with a SUPERUSER/BYPASSRLS role in prod
     # (shared with the Celery worker boot guard — see assert_db_role_rls_safe).
     await assert_db_role_rls_safe()

@@ -69,11 +69,14 @@ class TestCleanupTasksReturnShape:
             "cleanup_tasks._cleanup() must return an 'audit_logs' count"
         )
 
-    def test_audit_logs_delete_uses_cutoff(self) -> None:
+    def test_audit_logs_purge_uses_retention(self) -> None:
         import pathlib
         src = pathlib.Path("app/tasks/cleanup_tasks.py").read_text()
         assert "audit_logs" in src
-        assert "cutoff" in src
+        # M2: audit_logs is append-only for the app role, so the retention purge
+        # runs through the SECURITY DEFINER purge_old_audit_logs() function — the
+        # cutoff is computed inside it from the retention setting.
+        assert "purge_old_audit_logs" in src
         assert "audit_log_retention_days" in src
 
 
