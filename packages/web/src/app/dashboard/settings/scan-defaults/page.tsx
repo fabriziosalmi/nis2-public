@@ -58,7 +58,11 @@ export default function ScanDefaultsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadingInitial, setLoadingInitial] = useState(true)
 
-  const { register, handleSubmit, reset, formState: { errors, isDirty }, watch, setValue } = useForm<ScanDefaultsForm>({
+  // @hookform/resolvers v5 types the resolver as Resolver<input, ctx, output>.
+  // This schema uses z.coerce.number(), so its input type (pre-coerce) differs
+  // from its output type (number). Type the form with both so RHF matches the
+  // resolver; coercion still runs at validation time.
+  const { register, handleSubmit, reset, formState: { errors, isDirty }, watch, setValue } = useForm<z.input<typeof scanDefaultsSchema>, unknown, ScanDefaultsForm>({
     resolver: zodResolver(scanDefaultsSchema),
     defaultValues: defaults,
   })
