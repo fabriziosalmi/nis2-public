@@ -101,8 +101,9 @@ async def _check_deadlines() -> dict:
     from app.models.incident import Incident
     from app.models.notification_channel import NotificationChannel
     from app.models.membership import Membership
+    from app.models.organization import Organization
     from app.models.user import User
-    from app.database import async_session_factory
+    from app.database import async_session_factory, set_rls_org_context
     from sqlalchemy import select
 
     now = datetime.now(timezone.utc)
@@ -111,12 +112,26 @@ async def _check_deadlines() -> dict:
     _redis = _get_redis_client()
 
     async with async_session_factory() as db:
-        result = await db.execute(
-            select(Incident).where(Incident.status.notin_(_CLOSED_STATUSES))
-        )
-        incidents = result.scalars().all()
+        # H5: this cross-tenant sweep has no request context, so a single
+        # cross-tenant SELECT returns nothing under a NOBYPASSRLS role. Walk the
+        # orgs, scope the session per-org, and gather each org's open incidents.
+        # The explicit organization_id filter keeps it correct under the current
+        # superuser role too. organizations has no tenant policy → enumerable.
+        org_ids = (await db.execute(select(Organization.id))).scalars().all()
+        incidents = []
+        for _org_id in org_ids:
+            await set_rls_org_context(db, str(_org_id))
+            _res = await db.execute(
+                select(Incident).where(
+                    Incident.status.notin_(_CLOSED_STATUSES),
+                    Incident.organization_id == _org_id,
+                )
+            )
+            incidents.extend(_res.scalars().all())
 
         for incident in incidents:
+            # Re-scope to this incident's org before its org-scoped reads/writes.
+            await set_rls_org_context(db, str(incident.organization_id))
             # Load org's active notification channels once per incident
             chan_result = await db.execute(
                 select(NotificationChannel).where(
