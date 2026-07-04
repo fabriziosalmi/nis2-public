@@ -282,6 +282,42 @@ class ApiClient {
     })
   }
 
+  // -------------------------------------------------- Incident monitor (Art.23)
+  async listIncidentMonitor(onlyOpen = false) {
+    const qs = onlyOpen ? '?only_open=true' : ''
+    return this.request<any>(`/api/v1/incident-monitor${qs}`)
+  }
+
+  async getIncidentMonitor(id: string) {
+    return this.request<any>(`/api/v1/incident-monitor/${id}`)
+  }
+
+  // -------------------------------------------------------------- Governance
+  async listGovernance(params: Record<string, string> = {}) {
+    const qs = new URLSearchParams(params).toString()
+    return this.request<any>(`/api/v1/governance${qs ? `?${qs}` : ''}`)
+  }
+
+  async getGovernanceScore() {
+    return this.request<any>('/api/v1/governance/score')
+  }
+
+  async getRiskSummary() {
+    return this.request<any>('/api/v1/governance/risk-summary')
+  }
+
+  async seedGovernance() {
+    return this.request<any>('/api/v1/governance/seed', { method: 'POST' })
+  }
+
+  async syncRisk() {
+    return this.request<any>('/api/v1/governance/sync-risk', { method: 'POST' })
+  }
+
+  async updateGovernanceItem(id: string, data: any) {
+    return this.request<any>(`/api/v1/governance/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  }
+
   // ------------------------------------------------------------------ Assets
   async listAssets(page = 1) {
     return this.request<any>(`/api/v1/assets?page=${page}`)
