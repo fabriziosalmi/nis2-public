@@ -15,6 +15,8 @@ import {
   Siren,
   ShieldCheck,
   ClipboardCheck,
+  Network,
+  Activity,
   FileText,
   Settings,
   Users,
@@ -49,6 +51,8 @@ const mainNavKeys = [
   { key: "incidents", href: "/dashboard/incidents", icon: Siren },
   { key: "compliance", href: "/dashboard/compliance", icon: ShieldCheck },
   { key: "governance", href: "/dashboard/governance", icon: ClipboardCheck },
+  { key: "vendors", href: "/dashboard/vendors", icon: Network },
+  { key: "bia", href: "/dashboard/bia", icon: Activity },
   { key: "reports", href: "/dashboard/reports", icon: FileText },
 ]
 

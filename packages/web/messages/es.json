@@ -47,7 +47,9 @@
     "settings": "Configuración",
     "criticalCountAnnouncement": "{count, plural, one {# hallazgo crítico requiere} other {# hallazgos críticos requieren}} atención",
     "support": "Soporte",
-    "documentation": "Documentación"
+    "documentation": "Documentación",
+    "vendors": "Proveedores",
+    "bia": "Impacto de negocio"
   },
   "a11y": {
     "skipToContent": "Saltar al contenido principal",
@@ -1018,5 +1020,53 @@
       "terms": "Términos",
       "legal": "Aviso legal"
     }
+  },
+  "vendors": {
+    "title": "Proveedores",
+    "subtitle": "Riesgo de cadena de suministro Art. 18 — tu exposición a terceros",
+    "total": "Proveedores",
+    "art18": "Relevantes Art. 18",
+    "withoutAudit": "Sin auditoría",
+    "avgScore": "Puntuación media",
+    "colName": "Proveedor",
+    "colType": "Tipo",
+    "colCriticality": "Criticidad",
+    "colAccess": "Acceso a datos",
+    "colLocation": "Ubicación",
+    "colScore": "Puntuación",
+    "colCert": "Certificación",
+    "colStatus": "Estado",
+    "crit1": "Crítico",
+    "crit2": "Alto",
+    "crit3": "Medio",
+    "crit4": "Bajo",
+    "noVendors": "Sin proveedores",
+    "noVendorsDesc": "Aún no hay proveedores externos registrados. Mapea tu cadena ICT para seguir la exposición Art. 18.",
+    "none": "Ninguno"
+  },
+  "bia": {
+    "title": "Impacto de negocio",
+    "subtitle": "Continuidad de negocio — RTO / RPO / MTPD por proceso crítico",
+    "totalProcesses": "Procesos",
+    "essentialCount": "Servicios esenciales",
+    "withPlans": "Con BCP + DRP",
+    "colProcess": "Proceso",
+    "colOwner": "Responsable",
+    "colCriticality": "Criticidad",
+    "colRto": "RTO",
+    "colRpo": "RPO",
+    "colMtpd": "MTPD",
+    "colContinuity": "Continuidad",
+    "essential": "Esencial",
+    "bcp": "BCP",
+    "drp": "DRP",
+    "crit1": "Crítico",
+    "crit2": "Alto",
+    "crit3": "Medio",
+    "crit4": "Bajo",
+    "crit5": "Mínimo",
+    "noProcesses": "Sin procesos",
+    "noProcessesDesc": "Aún no hay procesos de negocio mapeados. Defínelos para fijar objetivos de recuperación (RTO/RPO) y detectar brechas.",
+    "hours": "h"
   }
 }

@@ -47,7 +47,9 @@
     "settings": "Impostazioni",
     "criticalCountAnnouncement": "{count, plural, one {# risultato critico richiede} other {# risultati critici richiedono}} attenzione",
     "support": "Supporto",
-    "documentation": "Documentazione"
+    "documentation": "Documentazione",
+    "vendors": "Fornitori",
+    "bia": "Business Impact"
   },
   "a11y": {
     "skipToContent": "Vai al contenuto principale",
@@ -1018,5 +1020,53 @@
       "terms": "Termini",
       "legal": "Note legali"
     }
+  },
+  "vendors": {
+    "title": "Fornitori",
+    "subtitle": "Rischio supply chain Art. 18 — l'esposizione ai terzi",
+    "total": "Fornitori",
+    "art18": "Rilevanti Art. 18",
+    "withoutAudit": "Senza audit",
+    "avgScore": "Punteggio medio",
+    "colName": "Fornitore",
+    "colType": "Tipo",
+    "colCriticality": "Criticità",
+    "colAccess": "Accesso dati",
+    "colLocation": "Sede",
+    "colScore": "Punteggio",
+    "colCert": "Certificazione",
+    "colStatus": "Stato",
+    "crit1": "Critico",
+    "crit2": "Alto",
+    "crit3": "Medio",
+    "crit4": "Basso",
+    "noVendors": "Nessun fornitore",
+    "noVendorsDesc": "Nessun fornitore terzo registrato. Mappa la tua supply chain ICT per tracciare l'esposizione Art. 18.",
+    "none": "Nessuno"
+  },
+  "bia": {
+    "title": "Business Impact",
+    "subtitle": "Continuità operativa — RTO / RPO / MTPD per processo critico",
+    "totalProcesses": "Processi",
+    "essentialCount": "Servizi essenziali",
+    "withPlans": "Con BCP + DRP",
+    "colProcess": "Processo",
+    "colOwner": "Responsabile",
+    "colCriticality": "Criticità",
+    "colRto": "RTO",
+    "colRpo": "RPO",
+    "colMtpd": "MTPD",
+    "colContinuity": "Continuità",
+    "essential": "Essenziale",
+    "bcp": "BCP",
+    "drp": "DRP",
+    "crit1": "Critico",
+    "crit2": "Alto",
+    "crit3": "Medio",
+    "crit4": "Basso",
+    "crit5": "Minimo",
+    "noProcesses": "Nessun processo",
+    "noProcessesDesc": "Nessun processo di business mappato. Definiscili per fissare gli obiettivi di ripristino (RTO/RPO) e rilevare i gap di continuità.",
+    "hours": "h"
   }
 }

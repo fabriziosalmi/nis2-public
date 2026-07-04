@@ -47,7 +47,9 @@
     "settings": "Paramètres",
     "criticalCountAnnouncement": "{count, plural, one {# découverte critique nécessite} other {# découvertes critiques nécessitent}} votre attention",
     "support": "Support",
-    "documentation": "Documentation"
+    "documentation": "Documentation",
+    "vendors": "Fournisseurs",
+    "bia": "Impact métier"
   },
   "a11y": {
     "skipToContent": "Aller au contenu principal",
@@ -1018,5 +1020,53 @@
       "terms": "Conditions",
       "legal": "Mentions légales"
     }
+  },
+  "vendors": {
+    "title": "Fournisseurs",
+    "subtitle": "Risque chaîne d'approvisionnement Art. 18 — votre exposition aux tiers",
+    "total": "Fournisseurs",
+    "art18": "Concernés Art. 18",
+    "withoutAudit": "Sans audit",
+    "avgScore": "Score moyen",
+    "colName": "Fournisseur",
+    "colType": "Type",
+    "colCriticality": "Criticité",
+    "colAccess": "Accès données",
+    "colLocation": "Localisation",
+    "colScore": "Score",
+    "colCert": "Certification",
+    "colStatus": "Statut",
+    "crit1": "Critique",
+    "crit2": "Élevé",
+    "crit3": "Moyen",
+    "crit4": "Faible",
+    "noVendors": "Aucun fournisseur",
+    "noVendorsDesc": "Aucun fournisseur tiers enregistré. Cartographiez votre chaîne ICT pour suivre l'exposition Art. 18.",
+    "none": "Aucun"
+  },
+  "bia": {
+    "title": "Impact métier",
+    "subtitle": "Continuité d'activité — RTO / RPO / MTPD par processus critique",
+    "totalProcesses": "Processus",
+    "essentialCount": "Services essentiels",
+    "withPlans": "Avec PCA + PRA",
+    "colProcess": "Processus",
+    "colOwner": "Responsable",
+    "colCriticality": "Criticité",
+    "colRto": "RTO",
+    "colRpo": "RPO",
+    "colMtpd": "MTPD",
+    "colContinuity": "Continuité",
+    "essential": "Essentiel",
+    "bcp": "PCA",
+    "drp": "PRA",
+    "crit1": "Critique",
+    "crit2": "Élevé",
+    "crit3": "Moyen",
+    "crit4": "Faible",
+    "crit5": "Minime",
+    "noProcesses": "Aucun processus",
+    "noProcessesDesc": "Aucun processus métier cartographié. Définissez-les pour fixer les objectifs de reprise (RTO/RPO) et détecter les lacunes.",
+    "hours": "h"
   }
 }

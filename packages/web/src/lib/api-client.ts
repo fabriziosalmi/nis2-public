@@ -318,6 +318,24 @@ class ApiClient {
     return this.request<any>(`/api/v1/governance/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
   }
 
+  // ------------------------------------------------- Vendors (Art.18 supply chain)
+  async listVendors() {
+    return this.request<any>('/api/v1/vendors')
+  }
+
+  async getVendorStats() {
+    return this.request<any>('/api/v1/vendors/stats')
+  }
+
+  // ----------------------------------------------------------------- BIA
+  async listBia() {
+    return this.request<any>('/api/v1/bia')
+  }
+
+  async getBiaMatrix() {
+    return this.request<any>('/api/v1/bia/matrix')
+  }
+
   // ------------------------------------------------------------------ Assets
   async listAssets(page = 1) {
     return this.request<any>(`/api/v1/assets?page=${page}`)

@@ -47,7 +47,9 @@
     "settings": "Settings",
     "criticalCountAnnouncement": "{count, plural, one {# critical finding} other {# critical findings}} require attention",
     "support": "Support",
-    "documentation": "Documentation"
+    "documentation": "Documentation",
+    "vendors": "Suppliers",
+    "bia": "Business Impact"
   },
   "a11y": {
     "skipToContent": "Skip to main content",
@@ -1018,5 +1020,53 @@
       "terms": "Terms",
       "legal": "Legal"
     }
+  },
+  "vendors": {
+    "title": "Suppliers",
+    "subtitle": "Art. 18 supply-chain risk — your third-party exposure",
+    "total": "Suppliers",
+    "art18": "Art. 18 relevant",
+    "withoutAudit": "Without audit",
+    "avgScore": "Avg. security score",
+    "colName": "Supplier",
+    "colType": "Type",
+    "colCriticality": "Criticality",
+    "colAccess": "Data access",
+    "colLocation": "Location",
+    "colScore": "Score",
+    "colCert": "Certification",
+    "colStatus": "Status",
+    "crit1": "Critical",
+    "crit2": "High",
+    "crit3": "Medium",
+    "crit4": "Low",
+    "noVendors": "No suppliers",
+    "noVendorsDesc": "No third-party suppliers registered yet. Map your ICT supply chain to track Art. 18 exposure.",
+    "none": "None"
+  },
+  "bia": {
+    "title": "Business Impact",
+    "subtitle": "Business continuity — RTO / RPO / MTPD per critical process",
+    "totalProcesses": "Processes",
+    "essentialCount": "Essential services",
+    "withPlans": "With BCP + DRP",
+    "colProcess": "Process",
+    "colOwner": "Owner",
+    "colCriticality": "Criticality",
+    "colRto": "RTO",
+    "colRpo": "RPO",
+    "colMtpd": "MTPD",
+    "colContinuity": "Continuity",
+    "essential": "Essential",
+    "bcp": "BCP",
+    "drp": "DRP",
+    "crit1": "Critical",
+    "crit2": "High",
+    "crit3": "Medium",
+    "crit4": "Low",
+    "crit5": "Minimal",
+    "noProcesses": "No processes",
+    "noProcessesDesc": "No business processes mapped yet. Define them to set recovery objectives (RTO/RPO) and detect continuity gaps.",
+    "hours": "h"
   }
 }

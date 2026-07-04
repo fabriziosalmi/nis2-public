@@ -47,7 +47,9 @@
     "settings": "Einstellungen",
     "criticalCountAnnouncement": "{count, plural, one {# kritisches Ergebnis erfordert} other {# kritische Ergebnisse erfordern}} Aufmerksamkeit",
     "support": "Support",
-    "documentation": "Dokumentation"
+    "documentation": "Dokumentation",
+    "vendors": "Lieferanten",
+    "bia": "Business Impact"
   },
   "a11y": {
     "skipToContent": "Zum Hauptinhalt springen",
@@ -1018,5 +1020,53 @@
       "terms": "Nutzungsbedingungen",
       "legal": "Impressum"
     }
+  },
+  "vendors": {
+    "title": "Lieferanten",
+    "subtitle": "Art.-18-Lieferkettenrisiko — Ihre Drittparteien-Exposition",
+    "total": "Lieferanten",
+    "art18": "Art.-18-relevant",
+    "withoutAudit": "Ohne Audit",
+    "avgScore": "Ø Sicherheitswert",
+    "colName": "Lieferant",
+    "colType": "Typ",
+    "colCriticality": "Kritikalität",
+    "colAccess": "Datenzugriff",
+    "colLocation": "Standort",
+    "colScore": "Wert",
+    "colCert": "Zertifizierung",
+    "colStatus": "Status",
+    "crit1": "Kritisch",
+    "crit2": "Hoch",
+    "crit3": "Mittel",
+    "crit4": "Niedrig",
+    "noVendors": "Keine Lieferanten",
+    "noVendorsDesc": "Noch keine Drittlieferanten erfasst. Kartieren Sie Ihre ICT-Lieferkette für die Art.-18-Exposition.",
+    "none": "Keine"
+  },
+  "bia": {
+    "title": "Business Impact",
+    "subtitle": "Geschäftskontinuität — RTO / RPO / MTPD je kritischem Prozess",
+    "totalProcesses": "Prozesse",
+    "essentialCount": "Wesentliche Dienste",
+    "withPlans": "Mit BCP + DRP",
+    "colProcess": "Prozess",
+    "colOwner": "Verantwortlich",
+    "colCriticality": "Kritikalität",
+    "colRto": "RTO",
+    "colRpo": "RPO",
+    "colMtpd": "MTPD",
+    "colContinuity": "Kontinuität",
+    "essential": "Wesentlich",
+    "bcp": "BCP",
+    "drp": "DRP",
+    "crit1": "Kritisch",
+    "crit2": "Hoch",
+    "crit3": "Mittel",
+    "crit4": "Niedrig",
+    "crit5": "Minimal",
+    "noProcesses": "Keine Prozesse",
+    "noProcessesDesc": "Noch keine Geschäftsprozesse erfasst. Definieren Sie sie für Wiederherstellungsziele (RTO/RPO) und Kontinuitätslücken.",
+    "hours": "h"
   }
 }
