@@ -1,0 +1,8 @@
+Lato — Copyright (c) 2010-2015 by tyPoland Lukasz Dziedzic
+(team@latofonts.com), with Reserved Font Name "Lato".
+Licensed under the SIL Open Font License, Version 1.1.
+Full license: https://scripts.sil.org/OFL
+
+The OFL permits embedding these fonts in documents (e.g. the PDF/HTML
+reports this platform generates) and bundling them with software,
+including for commercial use. The fonts may not be sold on their own.

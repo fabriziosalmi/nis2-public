@@ -713,9 +713,9 @@ def _matrix_pill(status: str) -> str:
 # ---------------------------------------------------------------------------
 # NIS2 dossier sections (v2.5.18): governance (Art.21) / incidents (Art.23) /
 # supply chain (Art.18) / BIA. These turn the PDF from a scan dump into a full
-# NIS2 conformity dossier. Labels are self-contained here (EN + IT, English
-# fallback) so we don't touch report_i18n's five locale blocks; the section
-# CONTENT is org data rendered as-is.
+# NIS2 conformity dossier. Labels are self-contained here (all 5 locales:
+# en/it/fr/de/es, English fallback for anything else) so we don't touch
+# report_i18n's locale blocks; the section CONTENT is org data rendered as-is.
 # ---------------------------------------------------------------------------
 
 _NIS2_LABELS = {
@@ -766,6 +766,81 @@ _NIS2_LABELS = {
         "legend": "Copertura", "leg_ok": "Automatizzato", "leg_partial": "Parziale",
         "leg_manual": "Verifica manuale", "leg_gap": "Lacuna", "no_hosts": "Nessun host ha risposto alla scansione.",
         "confidential": "Riservato — solo per l'organizzazione destinataria",
+    },
+    "fr": {
+        "sec_gov": "Checklist de gouvernance — NIS2 Art. 21",
+        "sec_inc": "Registre des incidents — NIS2 Art. 23",
+        "sec_ven": "Chaîne d'approvisionnement / Fournisseurs — NIS2 Art. 18",
+        "sec_bia": "Analyse d'impact métier (continuité)",
+        "h_item": "Réf.", "h_title": "Exigence", "h_priority": "Priorité",
+        "h_status": "Statut", "h_ref": "Référence", "h_incident": "Incident",
+        "h_type": "Type", "h_severity": "Gravité", "h_detected": "Détecté",
+        "h_deadline": "Délai 72h", "h_supplier": "Fournisseur",
+        "h_criticality": "Criticité", "h_access": "Accès données", "h_score": "Score",
+        "h_process": "Processus", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuité",
+        "gov_summary": "{done}/{total} terminés · score pondéré {score}/100",
+        "essential": "Essentiel",
+        "st_done": "Terminé", "st_in_progress": "En cours",
+        "st_not_started": "Non démarré", "st_not_applicable": "N/A",
+        "cr1": "Critique", "cr2": "Élevé", "cr3": "Moyen", "cr4": "Faible", "cr5": "Minime",
+        "posture": "Posture NIS2 en un coup d'œil",
+        "k_score": "Score technique", "k_gov": "Gouvernance", "k_incidents": "Incidents ouverts",
+        "k_suppliers": "Fournisseurs Art. 18", "k_continuity": "Couverture PCA + PRA",
+        "legend": "Couverture", "leg_ok": "Automatisé", "leg_partial": "Partiel",
+        "leg_manual": "Vérif. manuelle", "leg_gap": "Lacune",
+        "no_hosts": "Aucun hôte n'a répondu à l'analyse.",
+        "confidential": "Confidentiel — réservé à l'organisation destinataire",
+    },
+    "de": {
+        "sec_gov": "Governance-Checkliste — NIS2 Art. 21",
+        "sec_inc": "Vorfallsregister — NIS2 Art. 23",
+        "sec_ven": "Lieferkette / Lieferanten — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Kontinuität)",
+        "h_item": "Pos.", "h_title": "Anforderung", "h_priority": "Priorität",
+        "h_status": "Status", "h_ref": "Referenz", "h_incident": "Vorfall",
+        "h_type": "Typ", "h_severity": "Schweregrad", "h_detected": "Erkannt",
+        "h_deadline": "72h-Frist", "h_supplier": "Lieferant",
+        "h_criticality": "Kritikalität", "h_access": "Datenzugriff", "h_score": "Wert",
+        "h_process": "Prozess", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Kontinuität",
+        "gov_summary": "{done}/{total} erledigt · gewichteter Wert {score}/100",
+        "essential": "Wesentlich",
+        "st_done": "Erledigt", "st_in_progress": "In Bearbeitung",
+        "st_not_started": "Nicht begonnen", "st_not_applicable": "N/z",
+        "cr1": "Kritisch", "cr2": "Hoch", "cr3": "Mittel", "cr4": "Niedrig", "cr5": "Minimal",
+        "posture": "NIS2-Posture auf einen Blick",
+        "k_score": "Technischer Wert", "k_gov": "Governance", "k_incidents": "Offene Vorfälle",
+        "k_suppliers": "Art.-18-Lieferanten", "k_continuity": "BCP+DRP-Abdeckung",
+        "legend": "Abdeckung", "leg_ok": "Automatisiert", "leg_partial": "Teilweise",
+        "leg_manual": "Manuelle Prüfung", "leg_gap": "Lücke",
+        "no_hosts": "Kein Host hat auf den Scan geantwortet.",
+        "confidential": "Vertraulich — nur für die Empfängerorganisation",
+    },
+    "es": {
+        "sec_gov": "Checklist de gobernanza — NIS2 Art. 21",
+        "sec_inc": "Registro de incidentes — NIS2 Art. 23",
+        "sec_ven": "Cadena de suministro / Proveedores — NIS2 Art. 18",
+        "sec_bia": "Análisis de impacto en el negocio (continuidad)",
+        "h_item": "Ref.", "h_title": "Requisito", "h_priority": "Prioridad",
+        "h_status": "Estado", "h_ref": "Referencia", "h_incident": "Incidente",
+        "h_type": "Tipo", "h_severity": "Gravedad", "h_detected": "Detectado",
+        "h_deadline": "Plazo 72h", "h_supplier": "Proveedor",
+        "h_criticality": "Criticidad", "h_access": "Acceso a datos", "h_score": "Puntuación",
+        "h_process": "Proceso", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuidad",
+        "gov_summary": "{done}/{total} completados · puntuación ponderada {score}/100",
+        "essential": "Esencial",
+        "st_done": "Completado", "st_in_progress": "En curso",
+        "st_not_started": "Sin iniciar", "st_not_applicable": "N/D",
+        "cr1": "Crítico", "cr2": "Alto", "cr3": "Medio", "cr4": "Bajo", "cr5": "Mínimo",
+        "posture": "Postura NIS2 de un vistazo",
+        "k_score": "Puntuación técnica", "k_gov": "Gobernanza", "k_incidents": "Incidentes abiertos",
+        "k_suppliers": "Proveedores Art. 18", "k_continuity": "Cobertura BCP + DRP",
+        "legend": "Cobertura", "leg_ok": "Automatizado", "leg_partial": "Parcial",
+        "leg_manual": "Verif. manual", "leg_gap": "Brecha",
+        "no_hosts": "Ningún host respondió al escaneo.",
+        "confidential": "Confidencial — solo para la organización destinataria",
     },
 }
 
@@ -879,6 +954,36 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
         )
 
     return out
+
+
+_FONT_CSS_CACHE: str | None = None
+
+
+def _font_face_css() -> str:
+    """Embed Lato (SIL OFL) as base64 @font-face so the report renders in a
+    premium, consistent typeface everywhere — independent of the host's system
+    fonts (the container ships only DejaVu). Read once and cached. Returns "" if
+    the font asset is missing, so generation falls back to the sans-serif stack
+    rather than failing."""
+    global _FONT_CSS_CACHE
+    if _FONT_CSS_CACHE is not None:
+        return _FONT_CSS_CACHE
+    import base64
+    from pathlib import Path
+
+    fdir = Path(__file__).parent / "fonts"
+    faces = []
+    for fname, style in (("Lato-Regular.ttf", "normal"), ("Lato-Italic.ttf", "italic")):
+        try:
+            b64 = base64.b64encode((fdir / fname).read_bytes()).decode("ascii")
+        except OSError:
+            continue
+        faces.append(
+            "@font-face{font-family:'ReportSans';font-style:%s;font-weight:400;"
+            "src:url(data:font/ttf;base64,%s) format('truetype')}" % (style, b64)
+        )
+    _FONT_CSS_CACHE = "".join(faces)
+    return _FONT_CSS_CACHE
 
 
 def _score_color(v: float) -> str:
@@ -1087,6 +1192,7 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
 <meta charset="utf-8">
 <title>{_h(_t(locale, "html_title_prefix"))} — {_h(scan.name)}</title>
 <style>
+{_font_face_css()}
 @page{{size:A4;margin:2.3cm 1.8cm 1.9cm;
   @top-right{{content:"{_h(_t(locale, 'report_title_h1'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
   @bottom-left{{content:"{_h(_t(locale, 'footer_generated_by'))}";font-size:7.5px;color:#94a3b8}}
@@ -1095,7 +1201,7 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
 }}
 :root{{--ink:#0f172a;--slate:#334155;--muted:#64748b;--primary:#0284c7;--line:#e2e8f0;--text-muted:#64748b}}
 *{{box-sizing:border-box}}
-body{{font-family:'Helvetica Neue',Arial,sans-serif;color:var(--slate);line-height:1.55;font-size:11px;margin:0}}
+body{{font-family:'ReportSans','Helvetica Neue',Arial,sans-serif;color:var(--slate);line-height:1.55;font-size:11px;margin:0}}
 .cover{{border-bottom:3px solid var(--ink);padding-bottom:13px;margin-bottom:2px}}
 .eyebrow{{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--primary);font-weight:700}}
 h1{{color:var(--ink);font-size:25px;margin:5px 0 9px;font-weight:800;letter-spacing:-.4px}}

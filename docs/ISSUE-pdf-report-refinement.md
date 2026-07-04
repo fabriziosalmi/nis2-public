@@ -13,9 +13,12 @@ render: demo seed, Gamma Power scan, IT locale (4 pages).
 > score donut, "Posture at a Glance" hero band (5 pillars), Art.21 a–j heatmap +
 > legend + row letters, cover confidentiality line; thead/tbody header repetition,
 > `break-inside`/`break-after` control, empty-state on the assets table, fixed
-> 6-up KPI band. **Remaining:** premium embedded font, additional SVG charts
-> (severity bar), full a11y/contrast pass, **fr/de/es localization of the new
-> section labels** (currently EN fallback), PDF/A + metadata, trust footer.
+> 6-up KPI band. **STATUS 2 (commit pending):** premium embedded font (Lato,
+> SIL OFL, base64 @font-face → subset-embedded in the PDF) + full fr/de/es
+> localization of the new section labels (zero English leakage, verified).
+> **Remaining:** additional SVG charts (severity bar), full a11y/contrast pass,
+> PDF/A + metadata, trust footer, and localizing the *scanner-generated* status
+> text + executive summary (data-language, separate from report chrome).
 
 **Baseline (already shipped in this branch).** Cover + score band + executive
 summary + NIS2 Art.21 matrix + full governance checklist + Art.23 incident
