@@ -26,6 +26,7 @@ from app.routers import (
     findings,
     governance,
     health,
+    incident_monitor,
     incidents,
     organizations,
     remediation,
@@ -158,6 +159,7 @@ def create_app() -> FastAPI:
     application.include_router(reports.router, prefix="/api/v1")
     application.include_router(schedules.router, prefix="/api/v1")
     application.include_router(incidents.router, prefix="/api/v1")
+    application.include_router(incident_monitor.router, prefix="/api/v1")
     application.include_router(governance.router, prefix="/api/v1")
     application.include_router(api_keys.router, prefix="/api/v1")
     application.include_router(audit.router, prefix="/api/v1")

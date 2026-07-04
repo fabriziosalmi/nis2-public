@@ -237,6 +237,56 @@ async def _generate_report(
         org = await db.get(Organization, scan.organization_id)
         org_name = org.name if org else None
 
+        # v2.5.18: the report is a full NIS2 dossier, not just a scan dump.
+        # Pull the org-scoped governance / incident / supply-chain / BIA data
+        # while the session is open and flatten to plain dicts (the format
+        # renderers run after the session closes). PDF/HTML only.
+        nis2_ctx: dict | None = None
+        if format in ("pdf", "html"):
+            from app.routers.governance import GovernanceItem
+            from app.models.incident import Incident
+            from app.models.vendor import Vendor
+            from app.models.bia import BusinessProcess
+
+            oid = scan.organization_id
+            gov = (await db.execute(
+                select(GovernanceItem).where(GovernanceItem.organization_id == oid)
+                .order_by(GovernanceItem.sort_order)
+            )).scalars().all()
+            incs = (await db.execute(
+                select(Incident).where(Incident.organization_id == oid)
+                .order_by(Incident.detected_at.desc())
+            )).scalars().all()
+            vends = (await db.execute(
+                select(Vendor).where(Vendor.organization_id == oid)
+                .order_by(Vendor.criticality, Vendor.name)
+            )).scalars().all()
+            procs = (await db.execute(
+                select(BusinessProcess).where(BusinessProcess.organization_id == oid)
+                .order_by(BusinessProcess.criticality_level, BusinessProcess.name)
+            )).scalars().all()
+            nis2_ctx = {
+                "governance": [
+                    {"item_id": g.item_id, "title": g.title, "priority": g.priority,
+                     "status": g.status, "ref": g.nis2_reference} for g in gov
+                ],
+                "incidents": [
+                    {"title": i.title, "type": i.incident_type, "severity": i.severity,
+                     "status": i.status, "detected": i.detected_at,
+                     "notif_deadline": i.notification_deadline} for i in incs
+                ],
+                "vendors": [
+                    {"name": v.name, "criticality": v.criticality, "type": v.vendor_type,
+                     "access": v.data_access_level, "score": v.security_score,
+                     "art18": v.acn_rilevanza_art18} for v in vends
+                ],
+                "bia": [
+                    {"name": p.name, "crit": p.criticality_level, "rto": p.rto_hours,
+                     "rpo": p.rpo_hours, "mtpd": p.mtpd_hours, "bcp": p.has_bcp,
+                     "drp": p.has_drp, "essential": p.acn_servizio_essenziale} for p in procs
+                ],
+            }
+
     # Create the org-specific directory first to make sure it exists
     org_reports_dir = os.path.join(REPORTS_DIR, str(org_id))
     os.makedirs(org_reports_dir, exist_ok=True)
@@ -270,7 +320,7 @@ async def _generate_report(
             f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}"
         )
     if format in ("pdf", "html"):
-        result = gen(scan, results, findings, base, loc, org_name)
+        result = gen(scan, results, findings, base, loc, org_name, nis2_ctx)
     else:
         result = gen(scan, results, findings, base, loc)
     # Stash the org_id on the result so the API's /status and
@@ -660,14 +710,434 @@ def _matrix_pill(status: str) -> str:
     return "manual"
 
 
-def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
+# ---------------------------------------------------------------------------
+# NIS2 dossier sections (v2.5.18): governance (Art.21) / incidents (Art.23) /
+# supply chain (Art.18) / BIA. These turn the PDF from a scan dump into a full
+# NIS2 conformity dossier. Labels are self-contained here (all 5 locales:
+# en/it/fr/de/es, English fallback for anything else) so we don't touch
+# report_i18n's locale blocks; the section CONTENT is org data rendered as-is.
+# ---------------------------------------------------------------------------
+
+_NIS2_LABELS = {
+    "en": {
+        "sec_gov": "Governance Checklist — NIS2 Art. 21",
+        "sec_inc": "Incident Register — NIS2 Art. 23",
+        "sec_ven": "Supply Chain / Suppliers — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Continuity)",
+        "h_item": "Item", "h_title": "Requirement", "h_priority": "Priority",
+        "h_status": "Status", "h_ref": "Reference", "h_incident": "Incident",
+        "h_type": "Type", "h_severity": "Severity", "h_detected": "Detected",
+        "h_deadline": "72h deadline", "h_supplier": "Supplier",
+        "h_criticality": "Criticality", "h_access": "Data access", "h_score": "Score",
+        "h_process": "Process", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuity",
+        "gov_summary": "{done}/{total} completed · weighted score {score}/100",
+        "essential": "Essential",
+        "st_done": "Done", "st_in_progress": "In progress",
+        "st_not_started": "Not started", "st_not_applicable": "N/A",
+        "cr1": "Critical", "cr2": "High", "cr3": "Medium", "cr4": "Low", "cr5": "Minimal",
+        "posture": "NIS2 Posture at a Glance",
+        "k_score": "Technical score", "k_gov": "Governance", "k_incidents": "Open incidents",
+        "k_suppliers": "Art. 18 suppliers", "k_continuity": "BCP + DRP coverage",
+        "legend": "Coverage", "leg_ok": "Automated", "leg_partial": "Partial",
+        "leg_manual": "Manual check", "leg_gap": "Gap", "no_hosts": "No hosts responded to the scan.",
+        "confidential": "Confidential — for the recipient organization only",
+    },
+    "it": {
+        "sec_gov": "Checklist di Governance — NIS2 Art. 21",
+        "sec_inc": "Registro Incidenti — NIS2 Art. 23",
+        "sec_ven": "Catena di Fornitura / Fornitori — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Continuità)",
+        "h_item": "Voce", "h_title": "Requisito", "h_priority": "Priorità",
+        "h_status": "Stato", "h_ref": "Riferimento", "h_incident": "Incidente",
+        "h_type": "Tipo", "h_severity": "Gravità", "h_detected": "Rilevato",
+        "h_deadline": "Scadenza 72h", "h_supplier": "Fornitore",
+        "h_criticality": "Criticità", "h_access": "Accesso dati", "h_score": "Punteggio",
+        "h_process": "Processo", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuità",
+        "gov_summary": "{done}/{total} completati · punteggio ponderato {score}/100",
+        "essential": "Essenziale",
+        "st_done": "Completato", "st_in_progress": "In corso",
+        "st_not_started": "Non iniziato", "st_not_applicable": "N/A",
+        "cr1": "Critico", "cr2": "Alto", "cr3": "Medio", "cr4": "Basso", "cr5": "Minimo",
+        "posture": "Postura NIS2 in sintesi",
+        "k_score": "Punteggio tecnico", "k_gov": "Governance", "k_incidents": "Incidenti aperti",
+        "k_suppliers": "Fornitori Art. 18", "k_continuity": "Copertura BCP + DRP",
+        "legend": "Copertura", "leg_ok": "Automatizzato", "leg_partial": "Parziale",
+        "leg_manual": "Verifica manuale", "leg_gap": "Lacuna", "no_hosts": "Nessun host ha risposto alla scansione.",
+        "confidential": "Riservato — solo per l'organizzazione destinataria",
+    },
+    "fr": {
+        "sec_gov": "Checklist de gouvernance — NIS2 Art. 21",
+        "sec_inc": "Registre des incidents — NIS2 Art. 23",
+        "sec_ven": "Chaîne d'approvisionnement / Fournisseurs — NIS2 Art. 18",
+        "sec_bia": "Analyse d'impact métier (continuité)",
+        "h_item": "Réf.", "h_title": "Exigence", "h_priority": "Priorité",
+        "h_status": "Statut", "h_ref": "Référence", "h_incident": "Incident",
+        "h_type": "Type", "h_severity": "Gravité", "h_detected": "Détecté",
+        "h_deadline": "Délai 72h", "h_supplier": "Fournisseur",
+        "h_criticality": "Criticité", "h_access": "Accès données", "h_score": "Score",
+        "h_process": "Processus", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuité",
+        "gov_summary": "{done}/{total} terminés · score pondéré {score}/100",
+        "essential": "Essentiel",
+        "st_done": "Terminé", "st_in_progress": "En cours",
+        "st_not_started": "Non démarré", "st_not_applicable": "N/A",
+        "cr1": "Critique", "cr2": "Élevé", "cr3": "Moyen", "cr4": "Faible", "cr5": "Minime",
+        "posture": "Posture NIS2 en un coup d'œil",
+        "k_score": "Score technique", "k_gov": "Gouvernance", "k_incidents": "Incidents ouverts",
+        "k_suppliers": "Fournisseurs Art. 18", "k_continuity": "Couverture PCA + PRA",
+        "legend": "Couverture", "leg_ok": "Automatisé", "leg_partial": "Partiel",
+        "leg_manual": "Vérif. manuelle", "leg_gap": "Lacune",
+        "no_hosts": "Aucun hôte n'a répondu à l'analyse.",
+        "confidential": "Confidentiel — réservé à l'organisation destinataire",
+    },
+    "de": {
+        "sec_gov": "Governance-Checkliste — NIS2 Art. 21",
+        "sec_inc": "Vorfallsregister — NIS2 Art. 23",
+        "sec_ven": "Lieferkette / Lieferanten — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Kontinuität)",
+        "h_item": "Pos.", "h_title": "Anforderung", "h_priority": "Priorität",
+        "h_status": "Status", "h_ref": "Referenz", "h_incident": "Vorfall",
+        "h_type": "Typ", "h_severity": "Schweregrad", "h_detected": "Erkannt",
+        "h_deadline": "72h-Frist", "h_supplier": "Lieferant",
+        "h_criticality": "Kritikalität", "h_access": "Datenzugriff", "h_score": "Wert",
+        "h_process": "Prozess", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Kontinuität",
+        "gov_summary": "{done}/{total} erledigt · gewichteter Wert {score}/100",
+        "essential": "Wesentlich",
+        "st_done": "Erledigt", "st_in_progress": "In Bearbeitung",
+        "st_not_started": "Nicht begonnen", "st_not_applicable": "N/z",
+        "cr1": "Kritisch", "cr2": "Hoch", "cr3": "Mittel", "cr4": "Niedrig", "cr5": "Minimal",
+        "posture": "NIS2-Posture auf einen Blick",
+        "k_score": "Technischer Wert", "k_gov": "Governance", "k_incidents": "Offene Vorfälle",
+        "k_suppliers": "Art.-18-Lieferanten", "k_continuity": "BCP+DRP-Abdeckung",
+        "legend": "Abdeckung", "leg_ok": "Automatisiert", "leg_partial": "Teilweise",
+        "leg_manual": "Manuelle Prüfung", "leg_gap": "Lücke",
+        "no_hosts": "Kein Host hat auf den Scan geantwortet.",
+        "confidential": "Vertraulich — nur für die Empfängerorganisation",
+    },
+    "es": {
+        "sec_gov": "Checklist de gobernanza — NIS2 Art. 21",
+        "sec_inc": "Registro de incidentes — NIS2 Art. 23",
+        "sec_ven": "Cadena de suministro / Proveedores — NIS2 Art. 18",
+        "sec_bia": "Análisis de impacto en el negocio (continuidad)",
+        "h_item": "Ref.", "h_title": "Requisito", "h_priority": "Prioridad",
+        "h_status": "Estado", "h_ref": "Referencia", "h_incident": "Incidente",
+        "h_type": "Tipo", "h_severity": "Gravedad", "h_detected": "Detectado",
+        "h_deadline": "Plazo 72h", "h_supplier": "Proveedor",
+        "h_criticality": "Criticidad", "h_access": "Acceso a datos", "h_score": "Puntuación",
+        "h_process": "Proceso", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuidad",
+        "gov_summary": "{done}/{total} completados · puntuación ponderada {score}/100",
+        "essential": "Esencial",
+        "st_done": "Completado", "st_in_progress": "En curso",
+        "st_not_started": "Sin iniciar", "st_not_applicable": "N/D",
+        "cr1": "Crítico", "cr2": "Alto", "cr3": "Medio", "cr4": "Bajo", "cr5": "Mínimo",
+        "posture": "Postura NIS2 de un vistazo",
+        "k_score": "Puntuación técnica", "k_gov": "Gobernanza", "k_incidents": "Incidentes abiertos",
+        "k_suppliers": "Proveedores Art. 18", "k_continuity": "Cobertura BCP + DRP",
+        "legend": "Cobertura", "leg_ok": "Automatizado", "leg_partial": "Parcial",
+        "leg_manual": "Verif. manual", "leg_gap": "Brecha",
+        "no_hosts": "Ningún host respondió al escaneo.",
+        "confidential": "Confidencial — solo para la organización destinataria",
+    },
+}
+
+
+# Trust chrome — page confidentiality marker + closing disclaimer/methodology
+# footnote (auditors expect the "not a legal opinion" caveat). Appended here to
+# keep the big label dicts above readable.
+_NIS2_LABELS["en"].update({
+    "conf_page": "Confidential",
+    "disclaimer": "This report is an automated NIS2 posture signal. It supports — but does not "
+    "replace — a CISO, an internal audit programme, or a legal review of your NIS2 obligations. "
+    "Coverage statuses are indicative and should be validated by a qualified assessor.",
+})
+_NIS2_LABELS["it"].update({
+    "conf_page": "Riservato",
+    "disclaimer": "Questo report è un segnale automatico sulla postura NIS2. Supporta — ma non "
+    "sostituisce — un CISO, un programma di audit interno o una valutazione legale degli obblighi "
+    "NIS2. Gli stati di copertura sono indicativi e vanno validati da un valutatore qualificato.",
+})
+_NIS2_LABELS["fr"].update({
+    "conf_page": "Confidentiel",
+    "disclaimer": "Ce rapport est un indicateur automatisé de posture NIS2. Il complète — sans les "
+    "remplacer — un RSSI, un programme d'audit interne ou une analyse juridique de vos obligations "
+    "NIS2. Les statuts de couverture sont indicatifs et doivent être validés par un évaluateur qualifié.",
+})
+_NIS2_LABELS["de"].update({
+    "conf_page": "Vertraulich",
+    "disclaimer": "Dieser Bericht ist ein automatisiertes NIS2-Posture-Signal. Er unterstützt — "
+    "ersetzt aber nicht — einen CISO, ein internes Audit-Programm oder eine rechtliche Prüfung Ihrer "
+    "NIS2-Pflichten. Die Abdeckungsstatus sind indikativ und von einem qualifizierten Prüfer zu validieren.",
+})
+_NIS2_LABELS["es"].update({
+    "conf_page": "Confidencial",
+    "disclaimer": "Este informe es una señal automatizada de la postura NIS2. Complementa — pero no "
+    "sustituye — a un CISO, un programa de auditoría interna o una revisión legal de sus obligaciones "
+    "NIS2. Los estados de cobertura son indicativos y deben ser validados por un evaluador cualificado.",
+})
+
+
+def _nl(locale: str | None, key: str) -> str:
+    loc = locale if locale in _NIS2_LABELS else "en"
+    return _NIS2_LABELS[loc].get(key) or _NIS2_LABELS["en"].get(key, key)
+
+
+def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
+    """Render the governance / incident / supply-chain / BIA HTML blocks from
+    the org-scoped context bundle built in `_generate_report`. Returns "" when
+    there is nothing to show, so a bare scan report is unchanged."""
+    if not ctx:
+        return ""
+
+    sev_colors = {"CRITICAL": "#b91c1c", "HIGH": "#c2410c", "MEDIUM": "#b45309", "LOW": "#1d4ed8"}
+    prio_colors = {"CRITICAL": "#b91c1c", "HIGH": "#c2410c", "MEDIUM": "#b45309"}
+    crit_colors = {1: "#b91c1c", 2: "#c2410c", 3: "#b45309", 4: "#1d4ed8", 5: "#1d4ed8"}
+
+    def _dt(v) -> str:
+        return v.strftime("%Y-%m-%d %H:%M") if v else "—"
+
+    out = ""
+
+    gov = ctx.get("governance") or []
+    if gov:
+        weights = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1}
+        tot = sum(weights.get(g["priority"], 1) for g in gov)
+        earned = sum(weights.get(g["priority"], 1) for g in gov if g["status"] == "done")
+        gscore = round(earned / tot * 100) if tot else 0
+        gdone = sum(1 for g in gov if g["status"] == "done")
+        rows = ""
+        for g in gov:
+            pc = prio_colors.get(g["priority"], "#6b7280")
+            st_lbl = _nl(locale, "st_" + g["status"])
+            rows += (
+                f"<tr><td><code>{_h(g['item_id'])}</code></td>"
+                f"<td>{_h(g['title'])}</td>"
+                f'<td><span class="badge" style="background:{pc}">{_h(g["priority"])}</span></td>'
+                f"<td>{_h(g['ref'])}</td><td>{_h(st_lbl)}</td></tr>\n"
+            )
+        summary = _nl(locale, "gov_summary").format(done=gdone, total=len(gov), score=gscore)
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_gov"))}</h2>'
+            f'<p style="color:#64748b;margin:0 0 8px;font-size:10.5px">{_h(summary)}</p>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_item"))}</th><th>{_h(_nl(locale, "h_title"))}</th>'
+            f'<th>{_h(_nl(locale, "h_priority"))}</th><th>{_h(_nl(locale, "h_ref"))}</th>'
+            f'<th>{_h(_nl(locale, "h_status"))}</th></tr></thead><tbody>{rows}</tbody></table>'
+        )
+
+    incs = ctx.get("incidents") or []
+    if incs:
+        rows = ""
+        for i in incs:
+            sev = (i["severity"] or "").upper()
+            sc2 = sev_colors.get(sev, "#6b7280")
+            rows += (
+                f"<tr><td>{_h(i['title'])}</td><td>{_h(i['type'])}</td>"
+                f'<td><span class="badge" style="background:{sc2}">{_h(sev)}</span></td>'
+                f"<td>{_h(i['status'])}</td><td>{_h(_dt(i['detected']))}</td>"
+                f"<td>{_h(_dt(i['notif_deadline']))}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_inc"))}</h2>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_incident"))}</th><th>{_h(_nl(locale, "h_type"))}</th>'
+            f'<th>{_h(_nl(locale, "h_severity"))}</th><th>{_h(_nl(locale, "h_status"))}</th>'
+            f'<th>{_h(_nl(locale, "h_detected"))}</th><th>{_h(_nl(locale, "h_deadline"))}</th></tr></thead><tbody>{rows}</tbody></table>'
+        )
+
+    vends = ctx.get("vendors") or []
+    if vends:
+        rows = ""
+        for v in vends:
+            cc = crit_colors.get(v["criticality"], "#6b7280")
+            cr_lbl = _nl(locale, "cr" + str(v["criticality"]))
+            art18 = ' <span class="pill ok">Art. 18</span>' if v["art18"] else ""
+            score = v["score"] if v["score"] is not None else "—"
+            rows += (
+                f"<tr><td>{_h(v['name'])}{art18}</td>"
+                f'<td><span class="badge" style="background:{cc}">{_h(cr_lbl)}</span></td>'
+                f"<td>{_h(v['type'])}</td><td>{_h(v['access'])}</td><td>{_h(score)}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_ven"))}</h2>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_supplier"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<th>{_h(_nl(locale, "h_type"))}</th><th>{_h(_nl(locale, "h_access"))}</th>'
+            f'<th>{_h(_nl(locale, "h_score"))}</th></tr></thead><tbody>{rows}</tbody></table>'
+        )
+
+    procs = ctx.get("bia") or []
+    if procs:
+        rows = ""
+        for p in procs:
+            cc = crit_colors.get(p["crit"], "#6b7280")
+            cr_lbl = _nl(locale, "cr" + str(p["crit"]))
+            ess = ' <span class="pill ok">' + _h(_nl(locale, "essential")) + "</span>" if p["essential"] else ""
+            cont = ("BCP" if p["bcp"] else "—") + " / " + ("DRP" if p["drp"] else "—")
+            hh = lambda x: f"{x}h" if x is not None else "—"  # noqa: E731
+            rows += (
+                f"<tr><td>{_h(p['name'])}{ess}</td>"
+                f'<td><span class="badge" style="background:{cc}">{_h(cr_lbl)}</span></td>'
+                f"<td>{_h(hh(p['rto']))}</td><td>{_h(hh(p['rpo']))}</td>"
+                f"<td>{_h(hh(p['mtpd']))}</td><td>{_h(cont)}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_bia"))}</h2>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_process"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<th>{_h(_nl(locale, "h_rto"))}</th><th>{_h(_nl(locale, "h_rpo"))}</th>'
+            f'<th>{_h(_nl(locale, "h_mtpd"))}</th><th>{_h(_nl(locale, "h_continuity"))}</th></tr></thead><tbody>{rows}</tbody></table>'
+        )
+
+    return out
+
+
+_FONT_CSS_CACHE: str | None = None
+
+
+def _font_face_css() -> str:
+    """Embed Lato (SIL OFL) as base64 @font-face so the report renders in a
+    premium, consistent typeface everywhere — independent of the host's system
+    fonts (the container ships only DejaVu). Read once and cached. Returns "" if
+    the font asset is missing, so generation falls back to the sans-serif stack
+    rather than failing."""
+    global _FONT_CSS_CACHE
+    if _FONT_CSS_CACHE is not None:
+        return _FONT_CSS_CACHE
+    import base64
+    from pathlib import Path
+
+    fdir = Path(__file__).parent / "fonts"
+    faces = []
+    for fname, style in (("Lato-Regular.ttf", "normal"), ("Lato-Italic.ttf", "italic")):
+        try:
+            b64 = base64.b64encode((fdir / fname).read_bytes()).decode("ascii")
+        except OSError:
+            continue
+        faces.append(
+            "@font-face{font-family:'ReportSans';font-style:%s;font-weight:400;"
+            "src:url(data:font/ttf;base64,%s) format('truetype')}" % (style, b64)
+        )
+    _FONT_CSS_CACHE = "".join(faces)
+    return _FONT_CSS_CACHE
+
+
+def _score_color(v: float) -> str:
+    return "#15803d" if v > 80 else "#b45309" if v > 60 else "#b91c1c"
+
+
+def _svg_ring(pct: float, color: str, size: int = 92, stroke: int = 11) -> str:
+    """A donut ring as inline SVG (WeasyPrint renders the arc reliably; the
+    centred number is an HTML overlay in `_donut_html`, which is more robust
+    across WeasyPrint's partial SVG-text support)."""
+    import math
+
+    pct = max(0.0, min(100.0, float(pct)))
+    r = 50 - stroke / 2
+    circ = 2 * math.pi * r
+    dash = circ * pct / 100.0
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100">'
+        f'<circle cx="50" cy="50" r="{r:.1f}" fill="none" stroke="#e6ebf2" stroke-width="{stroke}"/>'
+        f'<circle cx="50" cy="50" r="{r:.1f}" fill="none" stroke="{color}" stroke-width="{stroke}" '
+        f'stroke-linecap="round" stroke-dasharray="{dash:.2f} {circ - dash:.2f}" transform="rotate(-90 50 50)"/>'
+        "</svg>"
+    )
+
+
+def _donut_html(pct: float, color: str, num, size: int = 82, numsize: int = 24) -> str:
+    return (
+        f'<div class="donut" style="width:{size}px;height:{size}px;line-height:{size}px">'
+        f"{_svg_ring(pct, color, size)}"
+        f'<div class="donut-num" style="color:{color};font-size:{numsize}px;line-height:{size}px">{_h(num)}</div>'
+        "</div>"
+    )
+
+
+def _gov_score(gov: list) -> tuple[int, int, int]:
+    weights = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1}
+    tot = sum(weights.get(g["priority"], 1) for g in gov)
+    earned = sum(weights.get(g["priority"], 1) for g in gov if g["status"] == "done")
+    score = round(earned / tot * 100) if tot else 0
+    done = sum(1 for g in gov if g["status"] == "done")
+    return done, len(gov), score
+
+
+def _posture_hero(scan, ctx: dict | None, locale: str) -> str:
+    """One-band executive KPI hero — the five NIS2 pillars at a glance. This is
+    the page people screenshot / the closing beat of the demo video."""
+    ctx = ctx or {}
+    gov = ctx.get("governance") or []
+    incs = ctx.get("incidents") or []
+    vends = ctx.get("vendors") or []
+    procs = ctx.get("bia") or []
+
     score = scan.total_score or 0
-    sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
+    _, _, gscore = _gov_score(gov)
+    open_inc = sum(1 for i in incs if i.get("status") not in ("closed", "recovered"))
+    art18 = sum(1 for v in vends if v.get("art18"))
+    with_plans = sum(1 for p in procs if p.get("bcp") and p.get("drp"))
+    cont = round(with_plans / len(procs) * 100) if procs else 0
+
+    def tile(viz: str, label: str) -> str:
+        return f'<div class="kpi">{viz}<div class="kpi-label">{_h(label)}</div></div>'
+
+    inc_col = "#b91c1c" if open_inc else "#15803d"
+    tiles = (
+        tile(_donut_html(score, _score_color(score), score, 84, 25), _nl(locale, "k_score"))
+        + tile(_donut_html(gscore, _score_color(gscore), gscore, 84, 25), _nl(locale, "k_gov"))
+        + tile(f'<div class="kpi-num" style="color:{inc_col}">{open_inc}</div>', _nl(locale, "k_incidents"))
+        + tile(f'<div class="kpi-num" style="color:#0284c7">{art18}</div>', _nl(locale, "k_suppliers"))
+        + tile(_donut_html(cont, _score_color(cont), f"{cont}%", 84, 21), _nl(locale, "k_continuity"))
+    )
+    return (
+        f'<div class="hero avoid"><div class="hero-title">{_h(_nl(locale, "posture"))}</div>'
+        f'<div class="kpis">{tiles}</div></div>'
+    )
+
+
+def _matrix_heatmap(cm: dict, locale: str) -> str:
+    """Art. 21(2) a–j coverage as a colour strip + legend, above the detail table."""
+    if not (isinstance(cm, dict) and cm):
+        return ""
+    colors = {"ok": "#15803d", "partial": "#1d4ed8", "manual": "#b45309", "gap": "#b91c1c"}
+    cells = ""
+    for measure in sorted(cm.keys()):
+        val = cm[measure]
+        status = str(val.get("status", "")) if isinstance(val, dict) else str(val)
+        col = colors.get(_matrix_pill(status), "#94a3b8")
+        letter = measure.split("_")[-1]
+        cells += f'<div class="heat-cell" style="background:{col}">{_h(letter)}</div>'
+    legs = ""
+    for cls, key in (("ok", "leg_ok"), ("partial", "leg_partial"), ("manual", "leg_manual"), ("gap", "leg_gap")):
+        legs += f'<span class="leg"><span class="sw" style="background:{colors[cls]}"></span>{_h(_nl(locale, key))}</span>'
+    return f'<div class="heat">{cells}</div><div class="legend">{legs}</div>'
+
+
+def _severity_bar(scan) -> str:
+    """Compact stacked bar of the finding severity distribution (WeasyPrint-safe
+    inline-block segments). Returns "" when there are no findings."""
+    c = scan.findings_critical or 0
+    h = scan.findings_high or 0
+    m = scan.findings_medium or 0
+    lo = scan.findings_low or 0
+    total = c + h + m + lo
+    if total == 0:
+        return ""
+    segs = ""
+    for col, n in (("#b91c1c", c), ("#c2410c", h), ("#b45309", m), ("#1d4ed8", lo)):
+        if n > 0:
+            segs += f'<span class="seg" style="width:{n / total * 100:.2f}%;background:{col}"></span>'
+    return f'<div class="sevbar">{segs}</div>'
+
+
+def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
+    score = scan.total_score or 0
+    sc = "#15803d" if score > 80 else "#b45309" if score > 60 else "#b91c1c"
     sev_colors = {
-        "CRITICAL": "#dc2626",
-        "HIGH": "#ea580c",
-        "MEDIUM": "#ca8a04",
-        "LOW": "#2563eb",
+        "CRITICAL": "#b91c1c",
+        "HIGH": "#c2410c",
+        "MEDIUM": "#b45309",
+        "LOW": "#1d4ed8",
     }
     date_str = (
         (scan.completed_at or scan.created_at).strftime("%Y-%m-%d %H:%M UTC")
@@ -698,6 +1168,13 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
             f"<td>{_h(st)}</td>"
             f"<td>{_h(ports)}</td></tr>\n"
         )
+    if not a_rows:
+        # Empty-state row instead of a bare header with no body (which reads
+        # as a broken table in the customer-facing PDF).
+        a_rows = (
+            f'<tr><td colspan="4" style="text-align:center;color:#94a3b8;'
+            f'padding:14px 10px">{_h(_nl(locale, "no_hosts"))}</td></tr>'
+        )
 
     # Executive summary — RENDERED, not escaped. The scanner's SummaryGenerator
     # emits HTML (<div>/<strong>/<a>/<ul>…); html.escape()'ing it here showed the
@@ -723,15 +1200,30 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
     if isinstance(cm, dict) and cm:
         cm_rows = ""
         for measure in sorted(cm.keys()):
-            status = str(cm[measure])
+            # Each value is either a plain status string or a
+            # {"status": ..., "description": ...} object (the richer
+            # scanner/seed format). Render the human description as the
+            # measure name and the status text in the pill — never the
+            # raw dict repr, which pre-v2.5.18 leaked "{'status': ...}"
+            # into the customer-facing PDF.
+            val = cm[measure]
+            if isinstance(val, dict):
+                status = str(val.get("status", "")).strip() or "—"
+                desc = str(val.get("description", "")).strip()
+            else:
+                status = str(val)
+                desc = ""
+            letter = measure.split("_")[-1]
+            name = desc or measure
             cm_rows += (
-                f"<tr><td>{_h(measure)}</td>"
+                f'<tr><td><strong>{_h(letter)})</strong>&nbsp; {_h(name)}</td>'
                 f'<td><span class="pill {_matrix_pill(status)}">{_h(status)}</span></td></tr>\n'
             )
         cm_block = (
             f'<h2>{_h(_t(locale, "compliance_matrix"))}</h2>'
-            f'<table class="matrix"><tr><th>{_h(_t(locale, "h_measure"))}</th>'
-            f'<th>{_h(_t(locale, "h_coverage"))}</th></tr>{cm_rows}</table>'
+            f"{_matrix_heatmap(cm, locale)}"
+            f'<table class="matrix"><thead><tr><th>{_h(_t(locale, "h_measure"))}</th>'
+            f'<th>{_h(_t(locale, "h_coverage"))}</th></tr></thead><tbody>{cm_rows}</tbody></table>'
         )
 
     # Optional organisation line on the cover (only when we resolved the name).
@@ -751,8 +1243,14 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
 <head>
 <meta charset="utf-8">
 <title>{_h(_t(locale, "html_title_prefix"))} — {_h(scan.name)}</title>
+<meta name="author" content="NIS2 Compliance Platform">
+<meta name="description" content="{_h(_t(locale, 'report_title_h1'))} — {_h(org_name or '')} — {_h(scan.name)}">
+<meta name="keywords" content="NIS2, {_h(org_name or '')}, Art. 21, Art. 23, Art. 18, compliance, cybersecurity">
+<meta name="generator" content="NIS2 Compliance Platform">
 <style>
+{_font_face_css()}
 @page{{size:A4;margin:2.3cm 1.8cm 1.9cm;
+  @top-left{{content:"{_h(_nl(locale, 'conf_page'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
   @top-right{{content:"{_h(_t(locale, 'report_title_h1'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
   @bottom-left{{content:"{_h(_t(locale, 'footer_generated_by'))}";font-size:7.5px;color:#94a3b8}}
   @bottom-center{{content:"{_h(date_str)}";font-size:7.5px;color:#cbd5e1}}
@@ -760,18 +1258,35 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
 }}
 :root{{--ink:#0f172a;--slate:#334155;--muted:#64748b;--primary:#0284c7;--line:#e2e8f0;--text-muted:#64748b}}
 *{{box-sizing:border-box}}
-body{{font-family:'Helvetica Neue',Arial,sans-serif;color:var(--slate);line-height:1.55;font-size:11px;margin:0}}
+body{{font-family:'ReportSans','Helvetica Neue',Arial,sans-serif;color:var(--slate);line-height:1.55;font-size:11px;margin:0}}
 .cover{{border-bottom:3px solid var(--ink);padding-bottom:13px;margin-bottom:2px}}
 .eyebrow{{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--primary);font-weight:700}}
 h1{{color:var(--ink);font-size:25px;margin:5px 0 9px;font-weight:800;letter-spacing:-.4px}}
 .cover-meta{{font-size:10px;color:var(--muted)}}.cover-meta strong{{color:var(--slate);font-weight:600}}
-h2{{color:var(--ink);font-size:15px;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);font-weight:700}}
-.topgrid{{display:flex;gap:14px;margin:16px 0 4px;align-items:stretch}}
-.score-box{{text-align:center;padding:12px 22px;border:2px solid {sc};border-radius:12px;display:flex;flex-direction:column;justify-content:center;min-width:118px}}
-.score{{font-size:40px;font-weight:800;color:{sc};line-height:1}}.score-label{{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px}}
-.stats{{display:flex;gap:9px;flex:1;flex-wrap:wrap}}
-.stat{{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:9px 6px;flex:1;text-align:center;min-width:70px;display:flex;flex-direction:column;justify-content:center}}
-.stat-value{{font-size:20px;font-weight:700;color:var(--ink)}}.stat-label{{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+h2{{color:var(--ink);font-size:15px;margin:22px 0 9px;padding-bottom:6px;border-bottom:1px solid var(--line);font-weight:700;break-after:avoid}}
+thead{{display:table-header-group}}
+tr,td,th{{break-inside:avoid}}
+.avoid{{break-inside:avoid}}
+.confidential{{margin-top:7px;font-size:8px;letter-spacing:.4px;text-transform:uppercase;color:#94a3b8}}
+.topgrid{{display:flex;gap:16px;margin:16px 0 4px;align-items:center}}
+.score-box{{text-align:center;padding:10px 16px;border:2px solid {sc};border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center}}
+.score-label{{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px}}
+.statgrid{{display:flex;gap:8px;flex:1}}
+.stat{{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:9px 4px;flex:1;text-align:center}}
+.stat-value{{font-size:20px;font-weight:700;color:var(--ink)}}.stat-label{{font-size:7.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+.donut{{position:relative;display:inline-block;text-align:center}}
+.donut-num{{position:absolute;top:0;left:0;right:0;bottom:0;font-weight:800;text-align:center}}
+.hero{{margin:14px 0 6px;padding:14px 16px 16px;background:#f8fafc;border:1px solid var(--line);border-radius:12px}}
+.hero-title{{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--primary);font-weight:700;margin-bottom:10px}}
+.kpis{{display:flex;gap:10px}}
+.kpi{{flex:1;text-align:center}}
+.kpi-num{{font-size:34px;font-weight:800;line-height:84px}}
+.kpi-label{{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+.heat{{margin:4px 0 2px}}
+.heat-cell{{display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:6px;color:#fff;font-weight:700;font-size:12px;margin-right:5px}}
+.legend{{font-size:8.5px;color:var(--muted);margin:2px 0 6px}}.leg{{margin-right:12px}}.sw{{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:middle;margin-right:3px}}
+.sevbar{{height:12px;border-radius:6px;overflow:hidden;font-size:0;margin:2px 0 12px}}.seg{{display:inline-block;height:12px;vertical-align:top}}
+.disclaimer{{margin-top:24px;padding-top:12px;border-top:1px solid var(--line);font-size:8.5px;color:var(--muted);line-height:1.5}}
 table{{width:100%;border-collapse:collapse;margin:8px 0}}
 th{{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;text-align:left;border-bottom:2px solid var(--line)}}
 td{{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:10.5px;vertical-align:top}}
@@ -789,24 +1304,29 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 <div class="eyebrow">NIS2 Compliance Platform</div>
 <h1>{_h(_t(locale, "report_title_h1"))}</h1>
 <div class="cover-meta">{org_line}<strong>{_h(_t(locale, "field_scan"))}:</strong> {_h(scan.name)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_date"))}:</strong> {_h(date_str)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_duration"))}:</strong> {scan.duration_seconds or 0}s</div>
+<div class="confidential">{_h(_nl(locale, "confidential"))}</div>
 </div>
 <div class="topgrid">
-<div class="score-box"><div class="score">{score}</div><div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
-<div class="stats">
+<div class="score-box">{_donut_html(score, sc, score, 104, 33)}<div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
+<div class="statgrid">
 <div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_scanned"))}</div></div>
 <div class="stat"><div class="stat-value">{scan.hosts_alive or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_active"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#dc2626">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#ea580c">{scan.findings_high or 0}</div><div class="stat-label">{_h(_t(locale, "high"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#b91c1c">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#c2410c">{scan.findings_high or 0}</div><div class="stat-label">{_h(_t(locale, "high"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#b45309">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#1d4ed8">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
 </div>
 </div>
+{_posture_hero(scan, nis2_ctx, locale)}
 {exec_block}
 {cm_block}
+{_nis2_sections_html(nis2_ctx, locale)}
 <h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
-<table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
+{_severity_bar(scan)}
+<table><thead><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr></thead><tbody>{f_rows}</tbody></table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
-<table><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr>{a_rows}</table>
+<table><thead><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr></thead><tbody>{a_rows}</tbody></table>
+<div class="disclaimer">{_h(_nl(locale, "disclaimer"))}</div>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
@@ -822,8 +1342,8 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 # ---------------------------------------------------------------------------
 
 
-def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
-    html_result = _gen_html(scan, results, findings, base, locale, org_name)
+def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
+    html_result = _gen_html(scan, results, findings, base, locale, org_name, nis2_ctx)
     html_path = html_result["file_path"]
     pdf_path = os.path.join(REPORTS_DIR, f"{base}.pdf")
 
@@ -836,7 +1356,20 @@ def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | 
     from weasyprint import HTML
 
     with open(html_path) as f:
-        HTML(string=f.read()).write_pdf(pdf_path)
+        doc = HTML(string=f.read())
+    # Archival PDF/A-2b + tagged (accessible) PDF. Requires embedded fonts (Lato
+    # + DejaVu, both embedded) and no transparency (the report uses none) — both
+    # hold here. Title/Author/Subject/Keywords come from the HTML <title>/<meta>.
+    # Fall back to a standard PDF if the variant can't be produced, so report
+    # generation never fails on an archival-format edge case.
+    try:
+        doc.write_pdf(pdf_path, pdf_variant="pdf/a-2b", pdf_tags=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        import logging
+        logging.getLogger(__name__).warning(
+            "PDF/A-2b generation failed (%s); writing standard PDF", exc
+        )
+        doc.write_pdf(pdf_path)
     return _result(pdf_path, f"{base}.pdf", "application/pdf", "pdf")
 
 

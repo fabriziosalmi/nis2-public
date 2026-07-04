@@ -12,7 +12,11 @@ import {
   Radar,
   Server,
   AlertTriangle,
+  Siren,
   ShieldCheck,
+  ClipboardCheck,
+  Network,
+  Activity,
   FileText,
   Settings,
   Users,
@@ -44,7 +48,11 @@ const mainNavKeys = [
   { key: "scans", href: "/dashboard/scans", icon: Radar },
   { key: "assets", href: "/dashboard/assets", icon: Server },
   { key: "findings", href: "/dashboard/findings", icon: AlertTriangle },
+  { key: "incidents", href: "/dashboard/incidents", icon: Siren },
   { key: "compliance", href: "/dashboard/compliance", icon: ShieldCheck },
+  { key: "governance", href: "/dashboard/governance", icon: ClipboardCheck },
+  { key: "vendors", href: "/dashboard/vendors", icon: Network },
+  { key: "bia", href: "/dashboard/bia", icon: Activity },
   { key: "reports", href: "/dashboard/reports", icon: FileText },
 ]
 
