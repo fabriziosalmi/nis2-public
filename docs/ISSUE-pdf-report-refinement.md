@@ -9,6 +9,14 @@ premium typography, at-a-glance posture, accessible colour, archival-grade PDF.
 the WeasyPrint pipeline) + `packages/api/app/utils/report_i18n.py`. Reference
 render: demo seed, Gamma Power scan, IT locale (4 pages).
 
+> **STATUS 2026-07-04 — P0 + video-facing P1 SHIPPED** (commit `22909b8`):
+> score donut, "Posture at a Glance" hero band (5 pillars), Art.21 a–j heatmap +
+> legend + row letters, cover confidentiality line; thead/tbody header repetition,
+> `break-inside`/`break-after` control, empty-state on the assets table, fixed
+> 6-up KPI band. **Remaining:** premium embedded font, additional SVG charts
+> (severity bar), full a11y/contrast pass, **fr/de/es localization of the new
+> section labels** (currently EN fallback), PDF/A + metadata, trust footer.
+
 **Baseline (already shipped in this branch).** Cover + score band + executive
 summary + NIS2 Art.21 matrix + full governance checklist + Art.23 incident
 register + Art.18 supply chain + BIA + findings + assets. Matrix no longer leaks
