@@ -237,6 +237,56 @@ async def _generate_report(
         org = await db.get(Organization, scan.organization_id)
         org_name = org.name if org else None
 
+        # v2.5.18: the report is a full NIS2 dossier, not just a scan dump.
+        # Pull the org-scoped governance / incident / supply-chain / BIA data
+        # while the session is open and flatten to plain dicts (the format
+        # renderers run after the session closes). PDF/HTML only.
+        nis2_ctx: dict | None = None
+        if format in ("pdf", "html"):
+            from app.routers.governance import GovernanceItem
+            from app.models.incident import Incident
+            from app.models.vendor import Vendor
+            from app.models.bia import BusinessProcess
+
+            oid = scan.organization_id
+            gov = (await db.execute(
+                select(GovernanceItem).where(GovernanceItem.organization_id == oid)
+                .order_by(GovernanceItem.sort_order)
+            )).scalars().all()
+            incs = (await db.execute(
+                select(Incident).where(Incident.organization_id == oid)
+                .order_by(Incident.detected_at.desc())
+            )).scalars().all()
+            vends = (await db.execute(
+                select(Vendor).where(Vendor.organization_id == oid)
+                .order_by(Vendor.criticality, Vendor.name)
+            )).scalars().all()
+            procs = (await db.execute(
+                select(BusinessProcess).where(BusinessProcess.organization_id == oid)
+                .order_by(BusinessProcess.criticality_level, BusinessProcess.name)
+            )).scalars().all()
+            nis2_ctx = {
+                "governance": [
+                    {"item_id": g.item_id, "title": g.title, "priority": g.priority,
+                     "status": g.status, "ref": g.nis2_reference} for g in gov
+                ],
+                "incidents": [
+                    {"title": i.title, "type": i.incident_type, "severity": i.severity,
+                     "status": i.status, "detected": i.detected_at,
+                     "notif_deadline": i.notification_deadline} for i in incs
+                ],
+                "vendors": [
+                    {"name": v.name, "criticality": v.criticality, "type": v.vendor_type,
+                     "access": v.data_access_level, "score": v.security_score,
+                     "art18": v.acn_rilevanza_art18} for v in vends
+                ],
+                "bia": [
+                    {"name": p.name, "crit": p.criticality_level, "rto": p.rto_hours,
+                     "rpo": p.rpo_hours, "mtpd": p.mtpd_hours, "bcp": p.has_bcp,
+                     "drp": p.has_drp, "essential": p.acn_servizio_essenziale} for p in procs
+                ],
+            }
+
     # Create the org-specific directory first to make sure it exists
     org_reports_dir = os.path.join(REPORTS_DIR, str(org_id))
     os.makedirs(org_reports_dir, exist_ok=True)
@@ -270,7 +320,7 @@ async def _generate_report(
             f"Unsupported format: {format}. Supported: {', '.join(generators.keys())}"
         )
     if format in ("pdf", "html"):
-        result = gen(scan, results, findings, base, loc, org_name)
+        result = gen(scan, results, findings, base, loc, org_name, nis2_ctx)
     else:
         result = gen(scan, results, findings, base, loc)
     # Stash the org_id on the result so the API's /status and
@@ -660,7 +710,166 @@ def _matrix_pill(status: str) -> str:
     return "manual"
 
 
-def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
+# ---------------------------------------------------------------------------
+# NIS2 dossier sections (v2.5.18): governance (Art.21) / incidents (Art.23) /
+# supply chain (Art.18) / BIA. These turn the PDF from a scan dump into a full
+# NIS2 conformity dossier. Labels are self-contained here (EN + IT, English
+# fallback) so we don't touch report_i18n's five locale blocks; the section
+# CONTENT is org data rendered as-is.
+# ---------------------------------------------------------------------------
+
+_NIS2_LABELS = {
+    "en": {
+        "sec_gov": "Governance Checklist — NIS2 Art. 21",
+        "sec_inc": "Incident Register — NIS2 Art. 23",
+        "sec_ven": "Supply Chain / Suppliers — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Continuity)",
+        "h_item": "Item", "h_title": "Requirement", "h_priority": "Priority",
+        "h_status": "Status", "h_ref": "Reference", "h_incident": "Incident",
+        "h_type": "Type", "h_severity": "Severity", "h_detected": "Detected",
+        "h_deadline": "72h deadline", "h_supplier": "Supplier",
+        "h_criticality": "Criticality", "h_access": "Data access", "h_score": "Score",
+        "h_process": "Process", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuity",
+        "gov_summary": "{done}/{total} completed · weighted score {score}/100",
+        "essential": "Essential",
+        "st_done": "Done", "st_in_progress": "In progress",
+        "st_not_started": "Not started", "st_not_applicable": "N/A",
+        "cr1": "Critical", "cr2": "High", "cr3": "Medium", "cr4": "Low", "cr5": "Minimal",
+    },
+    "it": {
+        "sec_gov": "Checklist di Governance — NIS2 Art. 21",
+        "sec_inc": "Registro Incidenti — NIS2 Art. 23",
+        "sec_ven": "Catena di Fornitura / Fornitori — NIS2 Art. 18",
+        "sec_bia": "Business Impact Analysis (Continuità)",
+        "h_item": "Voce", "h_title": "Requisito", "h_priority": "Priorità",
+        "h_status": "Stato", "h_ref": "Riferimento", "h_incident": "Incidente",
+        "h_type": "Tipo", "h_severity": "Gravità", "h_detected": "Rilevato",
+        "h_deadline": "Scadenza 72h", "h_supplier": "Fornitore",
+        "h_criticality": "Criticità", "h_access": "Accesso dati", "h_score": "Punteggio",
+        "h_process": "Processo", "h_rto": "RTO", "h_rpo": "RPO", "h_mtpd": "MTPD",
+        "h_continuity": "Continuità",
+        "gov_summary": "{done}/{total} completati · punteggio ponderato {score}/100",
+        "essential": "Essenziale",
+        "st_done": "Completato", "st_in_progress": "In corso",
+        "st_not_started": "Non iniziato", "st_not_applicable": "N/A",
+        "cr1": "Critico", "cr2": "Alto", "cr3": "Medio", "cr4": "Basso", "cr5": "Minimo",
+    },
+}
+
+
+def _nl(locale: str | None, key: str) -> str:
+    loc = locale if locale in _NIS2_LABELS else "en"
+    return _NIS2_LABELS[loc].get(key) or _NIS2_LABELS["en"].get(key, key)
+
+
+def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
+    """Render the governance / incident / supply-chain / BIA HTML blocks from
+    the org-scoped context bundle built in `_generate_report`. Returns "" when
+    there is nothing to show, so a bare scan report is unchanged."""
+    if not ctx:
+        return ""
+
+    sev_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04", "LOW": "#2563eb"}
+    prio_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04"}
+    crit_colors = {1: "#dc2626", 2: "#ea580c", 3: "#ca8a04", 4: "#2563eb", 5: "#2563eb"}
+
+    def _dt(v) -> str:
+        return v.strftime("%Y-%m-%d %H:%M") if v else "—"
+
+    out = ""
+
+    gov = ctx.get("governance") or []
+    if gov:
+        weights = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1}
+        tot = sum(weights.get(g["priority"], 1) for g in gov)
+        earned = sum(weights.get(g["priority"], 1) for g in gov if g["status"] == "done")
+        gscore = round(earned / tot * 100) if tot else 0
+        gdone = sum(1 for g in gov if g["status"] == "done")
+        rows = ""
+        for g in gov:
+            pc = prio_colors.get(g["priority"], "#6b7280")
+            st_lbl = _nl(locale, "st_" + g["status"])
+            rows += (
+                f"<tr><td><code>{_h(g['item_id'])}</code></td>"
+                f"<td>{_h(g['title'])}</td>"
+                f'<td><span class="badge" style="background:{pc}">{_h(g["priority"])}</span></td>'
+                f"<td>{_h(g['ref'])}</td><td>{_h(st_lbl)}</td></tr>\n"
+            )
+        summary = _nl(locale, "gov_summary").format(done=gdone, total=len(gov), score=gscore)
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_gov"))}</h2>'
+            f'<p style="color:#64748b;margin:0 0 8px;font-size:10.5px">{_h(summary)}</p>'
+            f'<table><tr><th>{_h(_nl(locale, "h_item"))}</th><th>{_h(_nl(locale, "h_title"))}</th>'
+            f'<th>{_h(_nl(locale, "h_priority"))}</th><th>{_h(_nl(locale, "h_ref"))}</th>'
+            f'<th>{_h(_nl(locale, "h_status"))}</th></tr>{rows}</table>'
+        )
+
+    incs = ctx.get("incidents") or []
+    if incs:
+        rows = ""
+        for i in incs:
+            sev = (i["severity"] or "").upper()
+            sc2 = sev_colors.get(sev, "#6b7280")
+            rows += (
+                f"<tr><td>{_h(i['title'])}</td><td>{_h(i['type'])}</td>"
+                f'<td><span class="badge" style="background:{sc2}">{_h(sev)}</span></td>'
+                f"<td>{_h(i['status'])}</td><td>{_h(_dt(i['detected']))}</td>"
+                f"<td>{_h(_dt(i['notif_deadline']))}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_inc"))}</h2>'
+            f'<table><tr><th>{_h(_nl(locale, "h_incident"))}</th><th>{_h(_nl(locale, "h_type"))}</th>'
+            f'<th>{_h(_nl(locale, "h_severity"))}</th><th>{_h(_nl(locale, "h_status"))}</th>'
+            f'<th>{_h(_nl(locale, "h_detected"))}</th><th>{_h(_nl(locale, "h_deadline"))}</th></tr>{rows}</table>'
+        )
+
+    vends = ctx.get("vendors") or []
+    if vends:
+        rows = ""
+        for v in vends:
+            cc = crit_colors.get(v["criticality"], "#6b7280")
+            cr_lbl = _nl(locale, "cr" + str(v["criticality"]))
+            art18 = ' <span class="pill ok">Art. 18</span>' if v["art18"] else ""
+            score = v["score"] if v["score"] is not None else "—"
+            rows += (
+                f"<tr><td>{_h(v['name'])}{art18}</td>"
+                f'<td><span class="badge" style="background:{cc}">{_h(cr_lbl)}</span></td>'
+                f"<td>{_h(v['type'])}</td><td>{_h(v['access'])}</td><td>{_h(score)}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_ven"))}</h2>'
+            f'<table><tr><th>{_h(_nl(locale, "h_supplier"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<th>{_h(_nl(locale, "h_type"))}</th><th>{_h(_nl(locale, "h_access"))}</th>'
+            f'<th>{_h(_nl(locale, "h_score"))}</th></tr>{rows}</table>'
+        )
+
+    procs = ctx.get("bia") or []
+    if procs:
+        rows = ""
+        for p in procs:
+            cc = crit_colors.get(p["crit"], "#6b7280")
+            cr_lbl = _nl(locale, "cr" + str(p["crit"]))
+            ess = ' <span class="pill ok">' + _h(_nl(locale, "essential")) + "</span>" if p["essential"] else ""
+            cont = ("BCP" if p["bcp"] else "—") + " / " + ("DRP" if p["drp"] else "—")
+            hh = lambda x: f"{x}h" if x is not None else "—"  # noqa: E731
+            rows += (
+                f"<tr><td>{_h(p['name'])}{ess}</td>"
+                f'<td><span class="badge" style="background:{cc}">{_h(cr_lbl)}</span></td>'
+                f"<td>{_h(hh(p['rto']))}</td><td>{_h(hh(p['rpo']))}</td>"
+                f"<td>{_h(hh(p['mtpd']))}</td><td>{_h(cont)}</td></tr>\n"
+            )
+        out += (
+            f'<h2>{_h(_nl(locale, "sec_bia"))}</h2>'
+            f'<table><tr><th>{_h(_nl(locale, "h_process"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<th>{_h(_nl(locale, "h_rto"))}</th><th>{_h(_nl(locale, "h_rpo"))}</th>'
+            f'<th>{_h(_nl(locale, "h_mtpd"))}</th><th>{_h(_nl(locale, "h_continuity"))}</th></tr>{rows}</table>'
+        )
+
+    return out
+
+
+def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
     score = scan.total_score or 0
     sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
     sev_colors = {
@@ -723,9 +932,22 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
     if isinstance(cm, dict) and cm:
         cm_rows = ""
         for measure in sorted(cm.keys()):
-            status = str(cm[measure])
+            # Each value is either a plain status string or a
+            # {"status": ..., "description": ...} object (the richer
+            # scanner/seed format). Render the human description as the
+            # measure name and the status text in the pill — never the
+            # raw dict repr, which pre-v2.5.18 leaked "{'status': ...}"
+            # into the customer-facing PDF.
+            val = cm[measure]
+            if isinstance(val, dict):
+                status = str(val.get("status", "")).strip() or "—"
+                desc = str(val.get("description", "")).strip()
+            else:
+                status = str(val)
+                desc = ""
+            name = desc or measure
             cm_rows += (
-                f"<tr><td>{_h(measure)}</td>"
+                f"<tr><td>{_h(name)}</td>"
                 f'<td><span class="pill {_matrix_pill(status)}">{_h(status)}</span></td></tr>\n'
             )
         cm_block = (
@@ -803,6 +1025,7 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 </div>
 {exec_block}
 {cm_block}
+{_nis2_sections_html(nis2_ctx, locale)}
 <h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
 <table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
@@ -822,8 +1045,8 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 # ---------------------------------------------------------------------------
 
 
-def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | None = None) -> dict:
-    html_result = _gen_html(scan, results, findings, base, locale, org_name)
+def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
+    html_result = _gen_html(scan, results, findings, base, locale, org_name, nis2_ctx)
     html_path = html_result["file_path"]
     pdf_path = os.path.join(REPORTS_DIR, f"{base}.pdf")
 
