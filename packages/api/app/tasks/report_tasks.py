@@ -845,6 +845,41 @@ _NIS2_LABELS = {
 }
 
 
+# Trust chrome — page confidentiality marker + closing disclaimer/methodology
+# footnote (auditors expect the "not a legal opinion" caveat). Appended here to
+# keep the big label dicts above readable.
+_NIS2_LABELS["en"].update({
+    "conf_page": "Confidential",
+    "disclaimer": "This report is an automated NIS2 posture signal. It supports — but does not "
+    "replace — a CISO, an internal audit programme, or a legal review of your NIS2 obligations. "
+    "Coverage statuses are indicative and should be validated by a qualified assessor.",
+})
+_NIS2_LABELS["it"].update({
+    "conf_page": "Riservato",
+    "disclaimer": "Questo report è un segnale automatico sulla postura NIS2. Supporta — ma non "
+    "sostituisce — un CISO, un programma di audit interno o una valutazione legale degli obblighi "
+    "NIS2. Gli stati di copertura sono indicativi e vanno validati da un valutatore qualificato.",
+})
+_NIS2_LABELS["fr"].update({
+    "conf_page": "Confidentiel",
+    "disclaimer": "Ce rapport est un indicateur automatisé de posture NIS2. Il complète — sans les "
+    "remplacer — un RSSI, un programme d'audit interne ou une analyse juridique de vos obligations "
+    "NIS2. Les statuts de couverture sont indicatifs et doivent être validés par un évaluateur qualifié.",
+})
+_NIS2_LABELS["de"].update({
+    "conf_page": "Vertraulich",
+    "disclaimer": "Dieser Bericht ist ein automatisiertes NIS2-Posture-Signal. Er unterstützt — "
+    "ersetzt aber nicht — einen CISO, ein internes Audit-Programm oder eine rechtliche Prüfung Ihrer "
+    "NIS2-Pflichten. Die Abdeckungsstatus sind indikativ und von einem qualifizierten Prüfer zu validieren.",
+})
+_NIS2_LABELS["es"].update({
+    "conf_page": "Confidencial",
+    "disclaimer": "Este informe es una señal automatizada de la postura NIS2. Complementa — pero no "
+    "sustituye — a un CISO, un programa de auditoría interna o una revisión legal de sus obligaciones "
+    "NIS2. Los estados de cobertura son indicativos y deben ser validados por un evaluador cualificado.",
+})
+
+
 def _nl(locale: str | None, key: str) -> str:
     loc = locale if locale in _NIS2_LABELS else "en"
     return _NIS2_LABELS[loc].get(key) or _NIS2_LABELS["en"].get(key, key)
@@ -857,9 +892,9 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
     if not ctx:
         return ""
 
-    sev_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04", "LOW": "#2563eb"}
-    prio_colors = {"CRITICAL": "#dc2626", "HIGH": "#ea580c", "MEDIUM": "#ca8a04"}
-    crit_colors = {1: "#dc2626", 2: "#ea580c", 3: "#ca8a04", 4: "#2563eb", 5: "#2563eb"}
+    sev_colors = {"CRITICAL": "#b91c1c", "HIGH": "#c2410c", "MEDIUM": "#b45309", "LOW": "#1d4ed8"}
+    prio_colors = {"CRITICAL": "#b91c1c", "HIGH": "#c2410c", "MEDIUM": "#b45309"}
+    crit_colors = {1: "#b91c1c", 2: "#c2410c", 3: "#b45309", 4: "#1d4ed8", 5: "#1d4ed8"}
 
     def _dt(v) -> str:
         return v.strftime("%Y-%m-%d %H:%M") if v else "—"
@@ -987,7 +1022,7 @@ def _font_face_css() -> str:
 
 
 def _score_color(v: float) -> str:
-    return "#16a34a" if v > 80 else "#ca8a04" if v > 60 else "#dc2626"
+    return "#15803d" if v > 80 else "#b45309" if v > 60 else "#b91c1c"
 
 
 def _svg_ring(pct: float, color: str, size: int = 92, stroke: int = 11) -> str:
@@ -1046,7 +1081,7 @@ def _posture_hero(scan, ctx: dict | None, locale: str) -> str:
     def tile(viz: str, label: str) -> str:
         return f'<div class="kpi">{viz}<div class="kpi-label">{_h(label)}</div></div>'
 
-    inc_col = "#dc2626" if open_inc else "#16a34a"
+    inc_col = "#b91c1c" if open_inc else "#15803d"
     tiles = (
         tile(_donut_html(score, _score_color(score), score, 84, 25), _nl(locale, "k_score"))
         + tile(_donut_html(gscore, _score_color(gscore), gscore, 84, 25), _nl(locale, "k_gov"))
@@ -1064,7 +1099,7 @@ def _matrix_heatmap(cm: dict, locale: str) -> str:
     """Art. 21(2) a–j coverage as a colour strip + legend, above the detail table."""
     if not (isinstance(cm, dict) and cm):
         return ""
-    colors = {"ok": "#16a34a", "partial": "#2563eb", "manual": "#ca8a04", "gap": "#dc2626"}
+    colors = {"ok": "#15803d", "partial": "#1d4ed8", "manual": "#b45309", "gap": "#b91c1c"}
     cells = ""
     for measure in sorted(cm.keys()):
         val = cm[measure]
@@ -1078,14 +1113,31 @@ def _matrix_heatmap(cm: dict, locale: str) -> str:
     return f'<div class="heat">{cells}</div><div class="legend">{legs}</div>'
 
 
+def _severity_bar(scan) -> str:
+    """Compact stacked bar of the finding severity distribution (WeasyPrint-safe
+    inline-block segments). Returns "" when there are no findings."""
+    c = scan.findings_critical or 0
+    h = scan.findings_high or 0
+    m = scan.findings_medium or 0
+    lo = scan.findings_low or 0
+    total = c + h + m + lo
+    if total == 0:
+        return ""
+    segs = ""
+    for col, n in (("#b91c1c", c), ("#c2410c", h), ("#b45309", m), ("#1d4ed8", lo)):
+        if n > 0:
+            segs += f'<span class="seg" style="width:{n / total * 100:.2f}%;background:{col}"></span>'
+    return f'<div class="sevbar">{segs}</div>'
+
+
 def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
     score = scan.total_score or 0
-    sc = "#16a34a" if score > 80 else "#ca8a04" if score > 60 else "#dc2626"
+    sc = "#15803d" if score > 80 else "#b45309" if score > 60 else "#b91c1c"
     sev_colors = {
-        "CRITICAL": "#dc2626",
-        "HIGH": "#ea580c",
-        "MEDIUM": "#ca8a04",
-        "LOW": "#2563eb",
+        "CRITICAL": "#b91c1c",
+        "HIGH": "#c2410c",
+        "MEDIUM": "#b45309",
+        "LOW": "#1d4ed8",
     }
     date_str = (
         (scan.completed_at or scan.created_at).strftime("%Y-%m-%d %H:%M UTC")
@@ -1191,9 +1243,14 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
 <head>
 <meta charset="utf-8">
 <title>{_h(_t(locale, "html_title_prefix"))} — {_h(scan.name)}</title>
+<meta name="author" content="NIS2 Compliance Platform">
+<meta name="description" content="{_h(_t(locale, 'report_title_h1'))} — {_h(org_name or '')} — {_h(scan.name)}">
+<meta name="keywords" content="NIS2, {_h(org_name or '')}, Art. 21, Art. 23, Art. 18, compliance, cybersecurity">
+<meta name="generator" content="NIS2 Compliance Platform">
 <style>
 {_font_face_css()}
 @page{{size:A4;margin:2.3cm 1.8cm 1.9cm;
+  @top-left{{content:"{_h(_nl(locale, 'conf_page'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
   @top-right{{content:"{_h(_t(locale, 'report_title_h1'))}";font-size:7.5px;color:#cbd5e1;letter-spacing:.4px}}
   @bottom-left{{content:"{_h(_t(locale, 'footer_generated_by'))}";font-size:7.5px;color:#94a3b8}}
   @bottom-center{{content:"{_h(date_str)}";font-size:7.5px;color:#cbd5e1}}
@@ -1228,6 +1285,8 @@ tr,td,th{{break-inside:avoid}}
 .heat{{margin:4px 0 2px}}
 .heat-cell{{display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:6px;color:#fff;font-weight:700;font-size:12px;margin-right:5px}}
 .legend{{font-size:8.5px;color:var(--muted);margin:2px 0 6px}}.leg{{margin-right:12px}}.sw{{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:middle;margin-right:3px}}
+.sevbar{{height:12px;border-radius:6px;overflow:hidden;font-size:0;margin:2px 0 12px}}.seg{{display:inline-block;height:12px;vertical-align:top}}
+.disclaimer{{margin-top:24px;padding-top:12px;border-top:1px solid var(--line);font-size:8.5px;color:var(--muted);line-height:1.5}}
 table{{width:100%;border-collapse:collapse;margin:8px 0}}
 th{{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;text-align:left;border-bottom:2px solid var(--line)}}
 td{{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:10.5px;vertical-align:top}}
@@ -1252,10 +1311,10 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 <div class="statgrid">
 <div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_scanned"))}</div></div>
 <div class="stat"><div class="stat-value">{scan.hosts_alive or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_active"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#dc2626">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#ea580c">{scan.findings_high or 0}</div><div class="stat-label">{_h(_t(locale, "high"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#ca8a04">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
-<div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#b91c1c">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#c2410c">{scan.findings_high or 0}</div><div class="stat-label">{_h(_t(locale, "high"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#b45309">{scan.findings_medium or 0}</div><div class="stat-label">{_h(_t(locale, "medium"))}</div></div>
+<div class="stat"><div class="stat-value" style="color:#1d4ed8">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
 </div>
 </div>
 {_posture_hero(scan, nis2_ctx, locale)}
@@ -1263,9 +1322,11 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 {cm_block}
 {_nis2_sections_html(nis2_ctx, locale)}
 <h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
+{_severity_bar(scan)}
 <table><thead><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr></thead><tbody>{f_rows}</tbody></table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
 <table><thead><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr></thead><tbody>{a_rows}</tbody></table>
+<div class="disclaimer">{_h(_nl(locale, "disclaimer"))}</div>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
@@ -1295,7 +1356,20 @@ def _gen_pdf(scan, results, findings, base, locale: str = "en", org_name: str | 
     from weasyprint import HTML
 
     with open(html_path) as f:
-        HTML(string=f.read()).write_pdf(pdf_path)
+        doc = HTML(string=f.read())
+    # Archival PDF/A-2b + tagged (accessible) PDF. Requires embedded fonts (Lato
+    # + DejaVu, both embedded) and no transparency (the report uses none) — both
+    # hold here. Title/Author/Subject/Keywords come from the HTML <title>/<meta>.
+    # Fall back to a standard PDF if the variant can't be produced, so report
+    # generation never fails on an archival-format edge case.
+    try:
+        doc.write_pdf(pdf_path, pdf_variant="pdf/a-2b", pdf_tags=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        import logging
+        logging.getLogger(__name__).warning(
+            "PDF/A-2b generation failed (%s); writing standard PDF", exc
+        )
+        doc.write_pdf(pdf_path)
     return _result(pdf_path, f"{base}.pdf", "application/pdf", "pdf")
 
 

@@ -16,9 +16,14 @@ render: demo seed, Gamma Power scan, IT locale (4 pages).
 > 6-up KPI band. **STATUS 2 (commit pending):** premium embedded font (Lato,
 > SIL OFL, base64 @font-face → subset-embedded in the PDF) + full fr/de/es
 > localization of the new section labels (zero English leakage, verified).
-> **Remaining:** additional SVG charts (severity bar), full a11y/contrast pass,
-> PDF/A + metadata, trust footer, and localizing the *scanner-generated* status
-> text + executive summary (data-language, separate from report chrome).
+> **STATUS 3 (commit pending) — P2 essentially complete:** WCAG AA contrast pass
+> (all white-on-colour badges/heatmap moved to −700 shades, computed ≥5.0:1),
+> severity-distribution stacked bar, PDF metadata (Title/Author/Subject/Keywords),
+> **PDF/A-2b** archival variant + **tagged/accessible** PDF (verified: OutputIntent
+> + sRGB ICC + pdfaid part/conformance present in the inflated streams), and trust
+> chrome (per-page "Confidential" marker + closing methodology/disclaimer note).
+> **Only remaining:** localizing the *scanner-generated* status text + executive
+> summary (data-language, produced by the scanner, separate from report chrome).
 
 **Baseline (already shipped in this branch).** Cover + score band + executive
 summary + NIS2 Art.21 matrix + full governance checklist + Art.23 incident
