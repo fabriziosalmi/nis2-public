@@ -736,6 +736,12 @@ _NIS2_LABELS = {
         "st_done": "Done", "st_in_progress": "In progress",
         "st_not_started": "Not started", "st_not_applicable": "N/A",
         "cr1": "Critical", "cr2": "High", "cr3": "Medium", "cr4": "Low", "cr5": "Minimal",
+        "posture": "NIS2 Posture at a Glance",
+        "k_score": "Technical score", "k_gov": "Governance", "k_incidents": "Open incidents",
+        "k_suppliers": "Art. 18 suppliers", "k_continuity": "BCP + DRP coverage",
+        "legend": "Coverage", "leg_ok": "Automated", "leg_partial": "Partial",
+        "leg_manual": "Manual check", "leg_gap": "Gap", "no_hosts": "No hosts responded to the scan.",
+        "confidential": "Confidential — for the recipient organization only",
     },
     "it": {
         "sec_gov": "Checklist di Governance — NIS2 Art. 21",
@@ -754,6 +760,12 @@ _NIS2_LABELS = {
         "st_done": "Completato", "st_in_progress": "In corso",
         "st_not_started": "Non iniziato", "st_not_applicable": "N/A",
         "cr1": "Critico", "cr2": "Alto", "cr3": "Medio", "cr4": "Basso", "cr5": "Minimo",
+        "posture": "Postura NIS2 in sintesi",
+        "k_score": "Punteggio tecnico", "k_gov": "Governance", "k_incidents": "Incidenti aperti",
+        "k_suppliers": "Fornitori Art. 18", "k_continuity": "Copertura BCP + DRP",
+        "legend": "Copertura", "leg_ok": "Automatizzato", "leg_partial": "Parziale",
+        "leg_manual": "Verifica manuale", "leg_gap": "Lacuna", "no_hosts": "Nessun host ha risposto alla scansione.",
+        "confidential": "Riservato — solo per l'organizzazione destinataria",
     },
 }
 
@@ -800,9 +812,9 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
         out += (
             f'<h2>{_h(_nl(locale, "sec_gov"))}</h2>'
             f'<p style="color:#64748b;margin:0 0 8px;font-size:10.5px">{_h(summary)}</p>'
-            f'<table><tr><th>{_h(_nl(locale, "h_item"))}</th><th>{_h(_nl(locale, "h_title"))}</th>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_item"))}</th><th>{_h(_nl(locale, "h_title"))}</th>'
             f'<th>{_h(_nl(locale, "h_priority"))}</th><th>{_h(_nl(locale, "h_ref"))}</th>'
-            f'<th>{_h(_nl(locale, "h_status"))}</th></tr>{rows}</table>'
+            f'<th>{_h(_nl(locale, "h_status"))}</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
     incs = ctx.get("incidents") or []
@@ -819,9 +831,9 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
             )
         out += (
             f'<h2>{_h(_nl(locale, "sec_inc"))}</h2>'
-            f'<table><tr><th>{_h(_nl(locale, "h_incident"))}</th><th>{_h(_nl(locale, "h_type"))}</th>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_incident"))}</th><th>{_h(_nl(locale, "h_type"))}</th>'
             f'<th>{_h(_nl(locale, "h_severity"))}</th><th>{_h(_nl(locale, "h_status"))}</th>'
-            f'<th>{_h(_nl(locale, "h_detected"))}</th><th>{_h(_nl(locale, "h_deadline"))}</th></tr>{rows}</table>'
+            f'<th>{_h(_nl(locale, "h_detected"))}</th><th>{_h(_nl(locale, "h_deadline"))}</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
     vends = ctx.get("vendors") or []
@@ -839,9 +851,9 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
             )
         out += (
             f'<h2>{_h(_nl(locale, "sec_ven"))}</h2>'
-            f'<table><tr><th>{_h(_nl(locale, "h_supplier"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_supplier"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
             f'<th>{_h(_nl(locale, "h_type"))}</th><th>{_h(_nl(locale, "h_access"))}</th>'
-            f'<th>{_h(_nl(locale, "h_score"))}</th></tr>{rows}</table>'
+            f'<th>{_h(_nl(locale, "h_score"))}</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
     procs = ctx.get("bia") or []
@@ -861,12 +873,104 @@ def _nis2_sections_html(ctx: dict | None, locale: str) -> str:
             )
         out += (
             f'<h2>{_h(_nl(locale, "sec_bia"))}</h2>'
-            f'<table><tr><th>{_h(_nl(locale, "h_process"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
+            f'<table><thead><tr><th>{_h(_nl(locale, "h_process"))}</th><th>{_h(_nl(locale, "h_criticality"))}</th>'
             f'<th>{_h(_nl(locale, "h_rto"))}</th><th>{_h(_nl(locale, "h_rpo"))}</th>'
-            f'<th>{_h(_nl(locale, "h_mtpd"))}</th><th>{_h(_nl(locale, "h_continuity"))}</th></tr>{rows}</table>'
+            f'<th>{_h(_nl(locale, "h_mtpd"))}</th><th>{_h(_nl(locale, "h_continuity"))}</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
     return out
+
+
+def _score_color(v: float) -> str:
+    return "#16a34a" if v > 80 else "#ca8a04" if v > 60 else "#dc2626"
+
+
+def _svg_ring(pct: float, color: str, size: int = 92, stroke: int = 11) -> str:
+    """A donut ring as inline SVG (WeasyPrint renders the arc reliably; the
+    centred number is an HTML overlay in `_donut_html`, which is more robust
+    across WeasyPrint's partial SVG-text support)."""
+    import math
+
+    pct = max(0.0, min(100.0, float(pct)))
+    r = 50 - stroke / 2
+    circ = 2 * math.pi * r
+    dash = circ * pct / 100.0
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100">'
+        f'<circle cx="50" cy="50" r="{r:.1f}" fill="none" stroke="#e6ebf2" stroke-width="{stroke}"/>'
+        f'<circle cx="50" cy="50" r="{r:.1f}" fill="none" stroke="{color}" stroke-width="{stroke}" '
+        f'stroke-linecap="round" stroke-dasharray="{dash:.2f} {circ - dash:.2f}" transform="rotate(-90 50 50)"/>'
+        "</svg>"
+    )
+
+
+def _donut_html(pct: float, color: str, num, size: int = 82, numsize: int = 24) -> str:
+    return (
+        f'<div class="donut" style="width:{size}px;height:{size}px;line-height:{size}px">'
+        f"{_svg_ring(pct, color, size)}"
+        f'<div class="donut-num" style="color:{color};font-size:{numsize}px;line-height:{size}px">{_h(num)}</div>'
+        "</div>"
+    )
+
+
+def _gov_score(gov: list) -> tuple[int, int, int]:
+    weights = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1}
+    tot = sum(weights.get(g["priority"], 1) for g in gov)
+    earned = sum(weights.get(g["priority"], 1) for g in gov if g["status"] == "done")
+    score = round(earned / tot * 100) if tot else 0
+    done = sum(1 for g in gov if g["status"] == "done")
+    return done, len(gov), score
+
+
+def _posture_hero(scan, ctx: dict | None, locale: str) -> str:
+    """One-band executive KPI hero — the five NIS2 pillars at a glance. This is
+    the page people screenshot / the closing beat of the demo video."""
+    ctx = ctx or {}
+    gov = ctx.get("governance") or []
+    incs = ctx.get("incidents") or []
+    vends = ctx.get("vendors") or []
+    procs = ctx.get("bia") or []
+
+    score = scan.total_score or 0
+    _, _, gscore = _gov_score(gov)
+    open_inc = sum(1 for i in incs if i.get("status") not in ("closed", "recovered"))
+    art18 = sum(1 for v in vends if v.get("art18"))
+    with_plans = sum(1 for p in procs if p.get("bcp") and p.get("drp"))
+    cont = round(with_plans / len(procs) * 100) if procs else 0
+
+    def tile(viz: str, label: str) -> str:
+        return f'<div class="kpi">{viz}<div class="kpi-label">{_h(label)}</div></div>'
+
+    inc_col = "#dc2626" if open_inc else "#16a34a"
+    tiles = (
+        tile(_donut_html(score, _score_color(score), score, 84, 25), _nl(locale, "k_score"))
+        + tile(_donut_html(gscore, _score_color(gscore), gscore, 84, 25), _nl(locale, "k_gov"))
+        + tile(f'<div class="kpi-num" style="color:{inc_col}">{open_inc}</div>', _nl(locale, "k_incidents"))
+        + tile(f'<div class="kpi-num" style="color:#0284c7">{art18}</div>', _nl(locale, "k_suppliers"))
+        + tile(_donut_html(cont, _score_color(cont), f"{cont}%", 84, 21), _nl(locale, "k_continuity"))
+    )
+    return (
+        f'<div class="hero avoid"><div class="hero-title">{_h(_nl(locale, "posture"))}</div>'
+        f'<div class="kpis">{tiles}</div></div>'
+    )
+
+
+def _matrix_heatmap(cm: dict, locale: str) -> str:
+    """Art. 21(2) a–j coverage as a colour strip + legend, above the detail table."""
+    if not (isinstance(cm, dict) and cm):
+        return ""
+    colors = {"ok": "#16a34a", "partial": "#2563eb", "manual": "#ca8a04", "gap": "#dc2626"}
+    cells = ""
+    for measure in sorted(cm.keys()):
+        val = cm[measure]
+        status = str(val.get("status", "")) if isinstance(val, dict) else str(val)
+        col = colors.get(_matrix_pill(status), "#94a3b8")
+        letter = measure.split("_")[-1]
+        cells += f'<div class="heat-cell" style="background:{col}">{_h(letter)}</div>'
+    legs = ""
+    for cls, key in (("ok", "leg_ok"), ("partial", "leg_partial"), ("manual", "leg_manual"), ("gap", "leg_gap")):
+        legs += f'<span class="leg"><span class="sw" style="background:{colors[cls]}"></span>{_h(_nl(locale, key))}</span>'
+    return f'<div class="heat">{cells}</div><div class="legend">{legs}</div>'
 
 
 def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str | None = None, nis2_ctx: dict | None = None) -> dict:
@@ -907,6 +1011,13 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
             f"<td>{_h(st)}</td>"
             f"<td>{_h(ports)}</td></tr>\n"
         )
+    if not a_rows:
+        # Empty-state row instead of a bare header with no body (which reads
+        # as a broken table in the customer-facing PDF).
+        a_rows = (
+            f'<tr><td colspan="4" style="text-align:center;color:#94a3b8;'
+            f'padding:14px 10px">{_h(_nl(locale, "no_hosts"))}</td></tr>'
+        )
 
     # Executive summary — RENDERED, not escaped. The scanner's SummaryGenerator
     # emits HTML (<div>/<strong>/<a>/<ul>…); html.escape()'ing it here showed the
@@ -945,15 +1056,17 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
             else:
                 status = str(val)
                 desc = ""
+            letter = measure.split("_")[-1]
             name = desc or measure
             cm_rows += (
-                f"<tr><td>{_h(name)}</td>"
+                f'<tr><td><strong>{_h(letter)})</strong>&nbsp; {_h(name)}</td>'
                 f'<td><span class="pill {_matrix_pill(status)}">{_h(status)}</span></td></tr>\n'
             )
         cm_block = (
             f'<h2>{_h(_t(locale, "compliance_matrix"))}</h2>'
-            f'<table class="matrix"><tr><th>{_h(_t(locale, "h_measure"))}</th>'
-            f'<th>{_h(_t(locale, "h_coverage"))}</th></tr>{cm_rows}</table>'
+            f"{_matrix_heatmap(cm, locale)}"
+            f'<table class="matrix"><thead><tr><th>{_h(_t(locale, "h_measure"))}</th>'
+            f'<th>{_h(_t(locale, "h_coverage"))}</th></tr></thead><tbody>{cm_rows}</tbody></table>'
         )
 
     # Optional organisation line on the cover (only when we resolved the name).
@@ -987,13 +1100,28 @@ body{{font-family:'Helvetica Neue',Arial,sans-serif;color:var(--slate);line-heig
 .eyebrow{{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--primary);font-weight:700}}
 h1{{color:var(--ink);font-size:25px;margin:5px 0 9px;font-weight:800;letter-spacing:-.4px}}
 .cover-meta{{font-size:10px;color:var(--muted)}}.cover-meta strong{{color:var(--slate);font-weight:600}}
-h2{{color:var(--ink);font-size:15px;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);font-weight:700}}
-.topgrid{{display:flex;gap:14px;margin:16px 0 4px;align-items:stretch}}
-.score-box{{text-align:center;padding:12px 22px;border:2px solid {sc};border-radius:12px;display:flex;flex-direction:column;justify-content:center;min-width:118px}}
-.score{{font-size:40px;font-weight:800;color:{sc};line-height:1}}.score-label{{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px}}
-.stats{{display:flex;gap:9px;flex:1;flex-wrap:wrap}}
-.stat{{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:9px 6px;flex:1;text-align:center;min-width:70px;display:flex;flex-direction:column;justify-content:center}}
-.stat-value{{font-size:20px;font-weight:700;color:var(--ink)}}.stat-label{{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+h2{{color:var(--ink);font-size:15px;margin:22px 0 9px;padding-bottom:6px;border-bottom:1px solid var(--line);font-weight:700;break-after:avoid}}
+thead{{display:table-header-group}}
+tr,td,th{{break-inside:avoid}}
+.avoid{{break-inside:avoid}}
+.confidential{{margin-top:7px;font-size:8px;letter-spacing:.4px;text-transform:uppercase;color:#94a3b8}}
+.topgrid{{display:flex;gap:16px;margin:16px 0 4px;align-items:center}}
+.score-box{{text-align:center;padding:10px 16px;border:2px solid {sc};border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center}}
+.score-label{{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px}}
+.statgrid{{display:flex;gap:8px;flex:1}}
+.stat{{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:9px 4px;flex:1;text-align:center}}
+.stat-value{{font-size:20px;font-weight:700;color:var(--ink)}}.stat-label{{font-size:7.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+.donut{{position:relative;display:inline-block;text-align:center}}
+.donut-num{{position:absolute;top:0;left:0;right:0;bottom:0;font-weight:800;text-align:center}}
+.hero{{margin:14px 0 6px;padding:14px 16px 16px;background:#f8fafc;border:1px solid var(--line);border-radius:12px}}
+.hero-title{{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--primary);font-weight:700;margin-bottom:10px}}
+.kpis{{display:flex;gap:10px}}
+.kpi{{flex:1;text-align:center}}
+.kpi-num{{font-size:34px;font-weight:800;line-height:84px}}
+.kpi-label{{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}}
+.heat{{margin:4px 0 2px}}
+.heat-cell{{display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:6px;color:#fff;font-weight:700;font-size:12px;margin-right:5px}}
+.legend{{font-size:8.5px;color:var(--muted);margin:2px 0 6px}}.leg{{margin-right:12px}}.sw{{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:middle;margin-right:3px}}
 table{{width:100%;border-collapse:collapse;margin:8px 0}}
 th{{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;text-align:left;border-bottom:2px solid var(--line)}}
 td{{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:10.5px;vertical-align:top}}
@@ -1011,10 +1139,11 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 <div class="eyebrow">NIS2 Compliance Platform</div>
 <h1>{_h(_t(locale, "report_title_h1"))}</h1>
 <div class="cover-meta">{org_line}<strong>{_h(_t(locale, "field_scan"))}:</strong> {_h(scan.name)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_date"))}:</strong> {_h(date_str)} &nbsp;&bull;&nbsp; <strong>{_h(_t(locale, "field_duration"))}:</strong> {scan.duration_seconds or 0}s</div>
+<div class="confidential">{_h(_nl(locale, "confidential"))}</div>
 </div>
 <div class="topgrid">
-<div class="score-box"><div class="score">{score}</div><div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
-<div class="stats">
+<div class="score-box">{_donut_html(score, sc, score, 104, 33)}<div class="score-label">{_h(_t(locale, "score_label"))}</div></div>
+<div class="statgrid">
 <div class="stat"><div class="stat-value">{scan.hosts_scanned or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_scanned"))}</div></div>
 <div class="stat"><div class="stat-value">{scan.hosts_alive or 0}</div><div class="stat-label">{_h(_t(locale, "hosts_active"))}</div></div>
 <div class="stat"><div class="stat-value" style="color:#dc2626">{scan.findings_critical or 0}</div><div class="stat-label">{_h(_t(locale, "critical"))}</div></div>
@@ -1023,13 +1152,14 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:9.5px;color
 <div class="stat"><div class="stat-value" style="color:#2563eb">{scan.findings_low or 0}</div><div class="stat-label">{_h(_t(locale, "low"))}</div></div>
 </div>
 </div>
+{_posture_hero(scan, nis2_ctx, locale)}
 {exec_block}
 {cm_block}
 {_nis2_sections_html(nis2_ctx, locale)}
 <h2>{_h(_t(locale, "findings"))} ({len(findings)})</h2>
-<table><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr>{f_rows}</table>
+<table><thead><tr><th>{_h(_t(locale, "h_severity"))}</th><th>{_h(_t(locale, "h_category"))}</th><th>{_h(_t(locale, "h_finding"))}</th><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_remediation"))}</th></tr></thead><tbody>{f_rows}</tbody></table>
 <h2>{_h(_t(locale, "assets"))} ({len(results)})</h2>
-<table><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr>{a_rows}</table>
+<table><thead><tr><th>{_h(_t(locale, "h_target"))}</th><th>{_h(_t(locale, "h_ip"))}</th><th>{_h(_t(locale, "h_host_state"))}</th><th>{_h(_t(locale, "h_open_ports"))}</th></tr></thead><tbody>{a_rows}</tbody></table>
 </body></html>"""
 
     path = os.path.join(REPORTS_DIR, f"{base}.html")
