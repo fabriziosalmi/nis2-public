@@ -11,6 +11,16 @@
   <img src="docs/public/screenshot.png" alt="NIS2 Platform dashboard with the full NIS2 sidebar — Scans, Findings, Incidents (Art. 23), Compliance, Governance (Art. 21), Suppliers (Art. 18), Business Impact, Reports — plus KPI tiles and severity/score charts" width="900" />
 </p>
 
+<p align="center">
+  ▶️ <b>Watch the 2-min demo:</b>
+  <a href="https://github.com/fabriziosalmi/nis2-public/releases/download/v2.6.0/nis2_demo_it.mp4">🇮🇹 Italiano</a> ·
+  <a href="https://github.com/fabriziosalmi/nis2-public/releases/download/v2.6.0/nis2_demo_en.mp4">🇬🇧 English</a>
+  &nbsp; | &nbsp;
+  📄 <b>Sample NIS2 report (PDF/A):</b>
+  <a href="https://github.com/fabriziosalmi/nis2-public/releases/download/v2.6.0/nis2_demo_report_IT.pdf">🇮🇹 IT</a> ·
+  <a href="https://github.com/fabriziosalmi/nis2-public/releases/download/v2.6.0/nis2_demo_report_EN.pdf">🇬🇧 EN</a>
+</p>
+
 # NIS2 Continuous Posture Management and Remediation Platform
 
 Open-source platform for **NIS2 Directive (EU 2022/2555) continuous posture management**. Governance framework, technical validation engine, remediation playbooks, incident response workflows, and supply chain risk management.
