@@ -102,3 +102,9 @@ WATERMARK.md
 # VitePress build artifacts
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+
+# Demo / working assets (local only — never committed)
+music.mp3
+packages/scanner/reports/
+DRACONIAN-REVIEW-*.md
+WORK-LOG-*.md
