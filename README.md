@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/public/screenshot.png" alt="NIS2 Platform dashboard: total scans, compliance score, findings, monitored assets, and the welcome onboarding panel" width="900" />
+  <img src="docs/public/screenshot.png" alt="NIS2 Platform dashboard with the full NIS2 sidebar — Scans, Findings, Incidents (Art. 23), Compliance, Governance (Art. 21), Suppliers (Art. 18), Business Impact, Reports — plus KPI tiles and severity/score charts" width="900" />
 </p>
 
 # NIS2 Continuous Posture Management and Remediation Platform
@@ -223,7 +223,8 @@ These automated checks verify whether the security measures documented in your g
 | `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
 | `/api/v1/bia` | 5 | Business Impact Analysis |
 | `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT) |
-| `/api/v1/governance` | 4 | 30-item Art. 21 checklist |
+| `/api/v1/incident-monitor` | 2 | Art. 23 deadline monitor — live 24h/72h/1-month countdowns (drives the Incidents page) |
+| `/api/v1/governance` | 8 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
 | `/api/v1/certificates` | 3 | Deep certificate analysis |
 | `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation |
 | `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema) |
@@ -244,7 +245,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 - RBAC: admin, auditor, viewer per organization
 - **Org switcher in the sidebar** — a user with memberships in multiple orgs can move between client tenants without logging out (`POST /api/v1/auth/switch-org` remints the JWT with the new `org_id` claim, the FE clears the TanStack Query cache so no stale data leaks, audit log records the transition)
 - **Self-serve org creation** — the switcher dropdown has a "Create new organization" footer entry that opens a dialog: enter a name, the API derives a unique slug, the user lands as `accepted_at`-stamped admin in the new tenant, and the FE auto-switches into it (`POST /api/v1/organizations`)
-- Executive PDF/CSV reports per client
+- Full **NIS2 dossier** report per client (PDF/HTML) — cover with score donut, "posture at a glance" hero, Art. 21 a–j coverage heatmap, plus governance / incidents / supply-chain / BIA / findings sections. Archival **PDF/A-2b**, tagged/accessible, embedded font, localized in all 5 languages
 - Aggregated compliance dashboard across all organizations
 - Each client's data stays in the same self-hosted instance
 

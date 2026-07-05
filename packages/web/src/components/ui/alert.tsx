@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-only
+// NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 

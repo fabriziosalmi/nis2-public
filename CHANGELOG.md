@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.6.0] - 2026-07-05
+
+The differentiating NIS2 capabilities — previously API-only — now have a full UI, and the exported report became a complete NIS2 dossier (#187).
+
+### ✨ New dashboard pages (the "wedge")
+
+- **Incidents** (`/dashboard/incidents`) — Art. 23 deadline monitor with live **24h / 72h / 1-month countdowns**, backed by a new read API `GET /api/v1/incident-monitor` over the Art. 23 `Incident` model (previously read only by the Celery beat).
+- **Governance** (`/dashboard/governance`) — the 30-item Art. 21 checklist, weighted score, and a **"Sync from scanner findings"** button that runs `POST /governance/sync-risk` (the scanner→compliance bridge) live.
+- **Suppliers** (`/dashboard/vendors`) — Art. 18 supply-chain risk (criticality, data access, security score).
+- **Business Impact** (`/dashboard/bia`) — continuity table (RTO / RPO / MTPD, BCP / DRP).
+- Sidebar navigation + i18n across all 5 locales.
+
+### 📄 Report → full NIS2 dossier
+
+- Governance (Art. 21) / incidents (Art. 23) / supply chain (Art. 18) / BIA sections added — no longer just the scan matrix.
+- Score **donut**, "posture at a glance" **hero band**, Art. 21 a–j coverage **heatmap**, severity distribution bar.
+- Robust pagination (repeating table headers, no split rows / orphans, empty-state), a **premium embedded font** (Lato, SIL OFL), **PDF/A-2b** archival + tagged/accessible PDF, and PDF metadata.
+- **WCAG AA** contrast pass; trust chrome (per-page confidentiality marker + methodology disclaimer). Full **fr/de/es** localization of the new sections.
+
+### 🧰 Misc
+
+- `scripts/seed_demo_narrative.py` — additive, idempotent demo enrichment (governance / incidents / notification channels / vendors / BIA) + an MSSP-operator user across all 10 demo orgs.
+- SPDX / copyright headers completed across the remaining source files.
+
 ## [2.5.17] - 2026-06-27
 
 Report polish and web / developer-experience fixes on top of 2.5.16.

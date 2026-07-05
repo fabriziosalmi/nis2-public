@@ -124,15 +124,19 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | GET | `/api/v1/incidents` | List incidents for the organization | Yes |
 | GET | `/api/v1/incidents/{id}` | Get incident details | Yes |
 | PATCH | `/api/v1/incidents/{id}` | Update incident status or details | Yes |
+| GET | `/api/v1/incident-monitor` | Art. 23 deadline monitor — incidents with live 24h/72h/1-month countdowns (server-computed `seconds_remaining` / `breached`). Drives the Incidents dashboard page | Yes |
+| GET | `/api/v1/incident-monitor/{id}` | Single incident with its computed Art. 23 deadline states | Yes |
 
 ## Governance
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/v1/governance/checklist` | Get the 30-item NIS2 governance checklist with statuses | Yes |
-| PATCH | `/api/v1/governance/checklist/{item_id}` | Update checklist item status | Yes |
-| POST | `/api/v1/governance/seed` | Seed checklist from governance template | Yes |
-| GET | `/api/v1/governance/score` | Get weighted compliance score | Yes |
+| GET | `/api/v1/governance` | Get the 30-item NIS2 Art. 21 checklist with statuses + stats | Yes |
+| PATCH | `/api/v1/governance/{item_id}` | Update a checklist item (status / assignee / evidence) | Yes |
+| POST | `/api/v1/governance/seed` | Seed the checklist from the governance template | Yes |
+| GET | `/api/v1/governance/score` | Weighted compliance score (CRITICAL×3 / HIGH×2 / MEDIUM×1) | Yes |
+| POST | `/api/v1/governance/sync-risk` | The scanner→compliance **bridge**: pulls open findings in as evidence and escalates the affected checklist items | Yes |
+| GET | `/api/v1/governance/risk-summary` | Per-sub-paragraph risk signals derived from open findings | Yes |
 
 ## API Keys
 
