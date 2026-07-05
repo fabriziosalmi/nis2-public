@@ -42,9 +42,18 @@ Run (after seed_demo.py):
     python /app/scripts/seed_demo_narrative.py
 """
 import asyncio
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Demo-data language: default English (SEED_LOCALE=en) for an international
+# audience; SEED_LOCALE=it keeps the Italian strings. `L(en, it)` picks one.
+SEED_LOCALE = os.environ.get("SEED_LOCALE", "en").lower()
+
+
+def L(en, it):
+    return it if SEED_LOCALE == "it" else en
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "api"))
 
@@ -77,7 +86,8 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
             dict(
                 organization_id=org.id,
                 reported_by=user_id,
-                title="Sospetto accesso non autorizzato all'interfaccia SCADA",
+                title=L("Suspected unauthorized access to the SCADA interface",
+                        "Sospetto accesso non autorizzato all'interfaccia SCADA"),
                 incident_type="apt",
                 severity="critical",
                 status="early_warning_sent",
@@ -86,14 +96,19 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
                 early_warning_sent_at=detected + timedelta(hours=20),
                 notification_deadline=detected + timedelta(hours=72),   # ≈ now + 32h
                 final_report_deadline=detected + timedelta(days=30),
-                description=(
+                description=L(
+                    "Anomalous access detected to the SCADA web interface exposed on the "
+                    "internet (scada.gamma-power.example). Pattern consistent with credential "
+                    "enumeration against a Modbus controller. OT segment potentially exposed. "
+                    "Early warning sent to the CSIRT; the detailed 72h notification is being prepared.",
                     "Rilevati accessi anomali all'interfaccia web SCADA esposta "
                     "su internet (scada.gamma-power.example). Pattern compatibile "
                     "con enumerazione credenziali su controller Modbus. Segmento OT "
                     "potenzialmente esposto. Early warning al CSIRT inviato; "
-                    "notifica di dettaglio (72h) in preparazione."
+                    "notifica di dettaglio (72h) in preparazione.",
                 ),
-                affected_systems="SCADA web interface, controller Modbus, DMZ industriale",
+                affected_systems=L("SCADA web interface, Modbus controller, industrial DMZ",
+                                   "SCADA web interface, controller Modbus, DMZ industriale"),
                 affected_asset_ids=asset_ids[:3],
                 impact_category="operational",
                 estimated_impact_level=2,  # severe
@@ -105,11 +120,12 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
                     "domains": ["c2.example"],
                 },
                 timeline_events=[
-                    {"at": (detected).isoformat(), "event": "Anomalia rilevata dal SIEM"},
+                    {"at": (detected).isoformat(), "event": L("Anomaly detected by the SIEM", "Anomalia rilevata dal SIEM")},
                     {"at": (detected + timedelta(hours=20)).isoformat(),
-                     "event": "Early warning inviato al CSIRT (Art. 23, 24h)"},
+                     "event": L("Early warning sent to the CSIRT (Art. 23, 24h)", "Early warning inviato al CSIRT (Art. 23, 24h)")},
                 ],
-                containment_actions="Interfaccia SCADA isolata dalla rete pubblica; regole firewall applicate al segmento OT.",
+                containment_actions=L("SCADA interface isolated from the public network; firewall rules applied to the OT segment.",
+                                      "Interfaccia SCADA isolata dalla rete pubblica; regole firewall applicate al segmento OT."),
                 csirt_taxonomy_code="INTRUSION-ATTEMPT",
             ),
         ]
@@ -119,7 +135,8 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
             dict(
                 organization_id=org.id,
                 reported_by=user_id,
-                title="Tentativo di intrusione sulla telemetria impianti (Telnet)",
+                title=L("Intrusion attempt on plant telemetry (Telnet)",
+                        "Tentativo di intrusione sulla telemetria impianti (Telnet)"),
                 incident_type="other",
                 severity="high",
                 status="detected",
@@ -128,12 +145,16 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
                 early_warning_sent_at=None,
                 notification_deadline=detected + timedelta(hours=72),
                 final_report_deadline=detected + timedelta(days=30),
-                description=(
+                description=L(
+                    "Repeated Telnet logins against the telemetry endpoint (203.0.113.50). "
+                    "Legacy Telnet service still enabled. Impact assessment in progress; "
+                    "early warning not yet sent.",
                     "Login Telnet ripetuti verso l'endpoint di telemetria "
                     "(203.0.113.50). Servizio Telnet legacy ancora attivo. "
-                    "Valutazione impatto in corso; early warning non ancora inviato."
+                    "Valutazione impatto in corso; early warning non ancora inviato.",
                 ),
-                affected_systems="Telemetria impianti, rete SCADA depuratori",
+                affected_systems=L("Plant telemetry, treatment-plant SCADA network",
+                                   "Telemetria impianti, rete SCADA depuratori"),
                 affected_asset_ids=asset_ids[:2],
                 impact_category="operational",
                 estimated_impact_level=3,
@@ -147,7 +168,8 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
             dict(
                 organization_id=org.id,
                 reported_by=user_id,
-                title="Esfiltrazione limitata di dati da form di contatto",
+                title=L("Limited data exfiltration from a contact form",
+                        "Esfiltrazione limitata di dati da form di contatto"),
                 incident_type="data_breach",
                 severity="medium",
                 status="closed",
@@ -158,19 +180,23 @@ def _incidents_for(now, org_slug, org, user_id, asset_ids):
                 notification_sent_at=detected + timedelta(hours=40),
                 final_report_deadline=detected + timedelta(days=30),
                 final_report_sent_at=detected + timedelta(days=18),
-                description=(
+                description=L(
+                    "An injection on a legacy contact form exposed a limited number of "
+                    "email addresses. Vector removed, Art. 23 cycle completed (early warning, "
+                    "72h notification, final report).",
                     "Injection su un form di contatto legacy ha esposto un numero "
                     "limitato di indirizzi email. Vettore rimosso, ciclo Art. 23 "
-                    "completato (early warning, notifica 72h, relazione finale)."
+                    "completato (early warning, notifica 72h, relazione finale).",
                 ),
-                affected_systems="Sito corporate (www.beta-bank.example)",
+                affected_systems=L("Corporate website (www.beta-bank.example)",
+                                   "Sito corporate (www.beta-bank.example)"),
                 impact_category="reputational",
                 estimated_impact_level=4,  # minor
                 users_affected_count=340,
-                containment_actions="Form vulnerabile disabilitato; WAF aggiornato.",
-                eradication_actions="Refactoring del form con validazione server-side.",
-                recovery_actions="Ripristino servizio; notifica agli interessati.",
-                lessons_learned="Introdurre code review di sicurezza sui form pubblici.",
+                containment_actions=L("Vulnerable form disabled; WAF updated.", "Form vulnerabile disabilitato; WAF aggiornato."),
+                eradication_actions=L("Refactored the form with server-side validation.", "Refactoring del form con validazione server-side."),
+                recovery_actions=L("Service restored; data subjects notified.", "Ripristino servizio; notifica agli interessati."),
+                lessons_learned=L("Introduce security code review for public forms.", "Introdurre code review di sicurezza sui form pubblici."),
                 csirt_reference_id="CSIRT-IT-DEMO-0042",
                 csirt_taxonomy_code="INFORMATION-CONTENT-SECURITY",
             ),
@@ -182,7 +208,7 @@ def _vendors_for(now, org):
     return [
         dict(organization_id=org.id, name="Nord ICT Services", vendor_type="ict_service",
              criticality=1, status="active", contact_email="soc@nord-ict.example",
-             services_provided="SOC gestito, monitoraggio 24/7",
+             services_provided=L("Managed SOC, 24/7 monitoring", "SOC gestito, monitoraggio 24/7"),
              data_access_level="high", geographic_location="EU",
              has_security_certification="ISO 27001", security_score=78,
              acn_rilevanza_art18=True,
@@ -196,24 +222,25 @@ def _vendors_for(now, org):
              next_audit_date=now + timedelta(days=210)),
         dict(organization_id=org.id, name="LegacyPatch Srl", vendor_type="ict_service",
              criticality=2, status="review", contact_email="support@legacypatch.example",
-             services_provided="Manutenzione software legacy",
+             services_provided=L("Legacy software maintenance", "Manutenzione software legacy"),
              data_access_level="low", geographic_location="EU",
              has_security_certification=None, security_score=48,
              acn_rilevanza_art18=False,
-             risk_notes="Nessuna certificazione; audit di sicurezza in ritardo.",
+             risk_notes=L("No certification; security audit overdue.", "Nessuna certificazione; audit di sicurezza in ritardo."),
              next_audit_date=now - timedelta(days=30)),
     ]
 
 
 def _bia_for(org, sector):
     return [
-        dict(organization_id=org.id, name=f"Erogazione servizio primario ({sector})",
-             process_owner="Direzione Operations", department="Operations",
+        dict(organization_id=org.id,
+             name=L(f"Primary service delivery ({sector})", f"Erogazione servizio primario ({sector})"),
+             process_owner=L("Operations Directorate", "Direzione Operations"), department="Operations",
              criticality_level=1, rto_hours=4, rpo_hours=1, mtpd_hours=8,
              impact_financial=5, impact_operational=5, impact_reputational=4,
              impact_regulatory=5, impact_safety=4,
              acn_servizio_essenziale=True, has_bcp=True, has_drp=True),
-        dict(organization_id=org.id, name="Fatturazione e incasso clienti",
+        dict(organization_id=org.id, name=L("Customer billing & collection", "Fatturazione e incasso clienti"),
              process_owner="CFO", department="Finance",
              criticality_level=2, rto_hours=24, rpo_hours=8, mtpd_hours=72,
              impact_financial=4, impact_operational=3, impact_reputational=2,
@@ -385,8 +412,8 @@ async def enrich():
           f"(early warning already sent)  ← THE hero countdown")
     print(f"  Eta Water    → 24h early-warning deadline in ~{int(hero_e.total_seconds()//3600)}h "
           f"(not yet sent)")
-    print(f"  Beta Bank    → closed incident (full Art. 23 lifecycle)")
-    print(f"\n  Canale-first login (all 10 clients in the org switcher):")
+    print("  Beta Bank    → closed incident (full Art. 23 lifecycle)")
+    print("\n  Canale-first login (all 10 clients in the org switcher):")
     print(f"    {MSSP_OPERATOR_EMAIL}  /  {demo_password}")
     print("\n  Re-run this script right before filming to refresh the clocks.")
     print("  On camera: open a hero org → click POST /governance/sync-risk")
