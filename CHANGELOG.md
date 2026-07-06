@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.6.1] - 2026-07-06
+
+### 🔧 Dependency maintenance
+
+Routine Dependabot roll-up on top of 2.6.0 — no functional changes. The web
+bumps below were combined into this release (superseding the individual
+Dependabot PRs #117, #122, #123, #124, #125, #126, #127, #128).
+
+**Web (runtime):**
+
+- `react` & `react-dom` 19.2.6 → 19.2.7 (#123, #126)
+- `react-hook-form` 7.76.0 → 7.81.0 (#122)
+- `@tanstack/react-query` 5.100.11 → 5.101.2 (#128)
+- `next-intl` 4.12.0 → 4.13.1 (#127)
+- `date-fns` 4.2.1 → 4.4.0 (#125)
+- `zustand` 5.0.13 → 5.0.14 (#124)
+- `framer-motion` 12.39.0 → 12.40.0 (#112, merged separately)
+
+**Web (dev types):**
+
+- `@types/node` 25.9.0 → 26.1.0 (#117)
+- `@types/react` 19.0.0 → 19.2.17 (#123)
+
+**API / scanner / CI:**
+
+- `python` 3.14.5 → 3.14.6-slim-bookworm (#135)
+- `click` 8.4.0 → 8.4.2 (#185)
+- `playwright` 1.60.0 → 1.61.0 (#186)
+- `actions/setup-python` 5.6.0 → 6.3.0 (#184)
+
 ## [2.6.0] - 2026-07-05
 
 The differentiating NIS2 capabilities — previously API-only — now have a full UI, and the exported report became a complete NIS2 dossier (#187).
