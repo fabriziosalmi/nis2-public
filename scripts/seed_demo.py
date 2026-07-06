@@ -38,14 +38,27 @@ import asyncio
 import hashlib
 import random
 import sys
-import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages" / "api"))
+sys.path.insert(0, str(Path(__file__).parent))  # scripts/ dir for seed_i18n
 
+import os
+import seed_i18n
 from passlib.context import CryptContext
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Demo-data language. Default English (SEED_LOCALE=en) so a fresh `make dev`
+# demo reads in English for an international audience; SEED_LOCALE=it keeps the
+# Italian source verbatim. The seed strings are authored in Italian; `_t()`
+# translates them to English by default via scripts/seed_i18n.py.
+SEED_LOCALE = os.environ.get("SEED_LOCALE", "en").lower()
+
+
+def _t(text):
+    return text if SEED_LOCALE == "it" else seed_i18n.en(text)
 
 # ============================================================
 # 10 fictitious organisations across different NIS2 sectors.
@@ -425,20 +438,26 @@ async def seed():
                     "features": {"dns_checks": True, "web_checks": True, "port_scan": True, "whois_checks": True},
                 },
                 compliance_matrix={
-                    "art21_a": {"status": "Automated" if company["score"] > 70 else "Partially Automated", "description": "Politiche di analisi dei rischi"},
-                    "art21_b": {"status": "Automated" if n_critical == 0 else "Manual Verification Required", "description": "Gestione degli incidenti"},
-                    "art21_c": {"status": "Partially Automated", "description": "Continuita operativa"},
-                    "art21_d": {"status": "Automated" if n_high < 3 else "Manual Verification Required", "description": "Sicurezza della catena di approvvigionamento"},
-                    "art21_e": {"status": "Automated", "description": "Sicurezza delle reti"},
-                    "art21_f": {"status": "Partially Automated", "description": "Gestione delle vulnerabilita"},
-                    "art21_g": {"status": "Automated", "description": "Valutazione della cybersicurezza"},
-                    "art21_h": {"status": "Automated" if company["score"] > 60 else "Manual Verification Required", "description": "Igiene informatica"},
-                    "art21_i": {"status": "Automated" if n_critical == 0 else "Manual Verification Required", "description": "Crittografia"},
-                    "art21_j": {"status": "Manual Verification Required", "description": "Sicurezza risorse umane"},
+                    "art21_a": {"status": "Automated" if company["score"] > 70 else "Partially Automated", "description": _t("Politiche di analisi dei rischi")},
+                    "art21_b": {"status": "Automated" if n_critical == 0 else "Manual Verification Required", "description": _t("Gestione degli incidenti")},
+                    "art21_c": {"status": "Partially Automated", "description": _t("Continuita operativa")},
+                    "art21_d": {"status": "Automated" if n_high < 3 else "Manual Verification Required", "description": _t("Sicurezza della catena di approvvigionamento")},
+                    "art21_e": {"status": "Automated", "description": _t("Sicurezza delle reti")},
+                    "art21_f": {"status": "Partially Automated", "description": _t("Gestione delle vulnerabilita")},
+                    "art21_g": {"status": "Automated", "description": _t("Valutazione della cybersicurezza")},
+                    "art21_h": {"status": "Automated" if company["score"] > 60 else "Manual Verification Required", "description": _t("Igiene informatica")},
+                    "art21_i": {"status": "Automated" if n_critical == 0 else "Manual Verification Required", "description": _t("Crittografia")},
+                    "art21_j": {"status": "Manual Verification Required", "description": _t("Sicurezza risorse umane")},
                 },
-                executive_summary=f"L'audit NIS2 demo di {company['name']} ({company['sector']}) ha rilevato un punteggio simulato di {company['score']}/100. "
+                executive_summary=(
+                    f"The NIS2 demo audit of {company['name']} ({company['sector']}) returned a simulated score of {company['score']}/100. "
+                    + (f"WARNING: {n_critical} critical vulnerabilities would require immediate action. " if n_critical > 0 else "")
+                    + f"{len(company['findings'])} findings were simulated across {len(company['assets'])} analysed assets. All data is fictitious (RFC 2606 / RFC 5737)."
+                ) if SEED_LOCALE != "it" else (
+                    f"L'audit NIS2 demo di {company['name']} ({company['sector']}) ha rilevato un punteggio simulato di {company['score']}/100. "
                     + (f"ATTENZIONE: {n_critical} vulnerabilita critiche richiederebbero intervento immediato. " if n_critical > 0 else "")
-                    + f"Sono stati simulati {len(company['findings'])} findings totali su {len(company['assets'])} asset analizzati. Tutti i dati sono fittizi (RFC 2606 / RFC 5737).",
+                    + f"Sono stati simulati {len(company['findings'])} findings totali su {len(company['assets'])} asset analizzati. Tutti i dati sono fittizi (RFC 2606 / RFC 5737)."
+                ),
                 started_at=scan_date,
                 completed_at=completed_at,
                 duration_seconds=duration,
@@ -461,9 +480,9 @@ async def seed():
                     organization_id=org.id,
                     severity=severity,
                     category=category,
-                    message=message,
+                    message=_t(message),
                     target=target,
-                    remediation=remediation,
+                    remediation=_t(remediation),
                     fingerprint=fingerprint,
                     status=status,
                     # The 10 risk-management measures live at Art. 24(2)
