@@ -358,9 +358,6 @@ def generate_index_page(directory):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIS2 Compliance Reports</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {{
             --primary: #0f172a;
@@ -509,7 +506,7 @@ def generate_index_page(directory):
         }}
 
         .scan-id {{
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: 0.65rem;
             color: var(--text-muted);
             background: #f8fafc;

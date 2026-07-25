@@ -223,7 +223,7 @@ tr:hover {
 }
 
 .reference {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.8rem;
     color: var(--text-muted);
     background: #f1f5f9;
@@ -317,7 +317,7 @@ tr:hover {
 }
 
 .tech-detail {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.8rem;
     color: #475569;
     background: #f8fafc;
