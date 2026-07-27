@@ -17,7 +17,7 @@ dependencies = [
     # scapy removed in v2.4.10 — never imported in the codebase, dragged in
     # GHSA-pq98-w3cw-pgcr (untrusted-pickle session deserialization, no
     # patched release as of 2026-04). Re-add only with a justified use.
-    "prometheus_client>=0.19",
+    "prometheus_client>=0.26.0",
     "python-whois>=0.9",
     "Jinja2>=3.1",
     "watchdog>=4.0",
