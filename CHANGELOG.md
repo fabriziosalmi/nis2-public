@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.6.4] - 2026-08-03
+
+### 🔧 Dependency maintenance
+
+Dependabot roll-up (web + Python), combined into a single lockfile update to
+avoid per-PR rebase churn. No functional changes.
+
+**Web (`packages/web`)** — supersedes #192–#201:
+
+- `@radix-ui/*` — react-popover, react-dialog, react-select, react-dropdown-menu,
+  react-slot, react-tabs, react-tooltip, react-avatar (latest 1.x / 2.x)
+- `framer-motion` → 12.43.0
+- `tailwindcss` → 4.3.3
+
+**Python (`packages/api`, `packages/scanner`):**
+
+- python base image digest bump (#205)
+- `setuptools` requirement → >=83.0.0 (#207)
+- `prometheus-client` → 0.26.0 (#210)
+- `aiohttp` → 3.14.3 (#211)
+
+Handled in separate rounds: the GitHub Actions major bumps (setup-python 7,
+setup-node 7, checkout 7 — #204/#206/#209) and the docs-build security alerts
+(vite / postcss — #213).
+
 ## [2.6.3] - 2026-08-03
 
 ### 🐛 Bug fixes (reported by @oudoken)
