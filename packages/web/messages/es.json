@@ -131,6 +131,7 @@
     "running": "En curso",
     "completed": "Completado",
     "failed": "Fallido",
+    "error": "Error",
     "cancelled": "Cancelado",
     "noScans": "Sin escaneos",
     "noScansYet": "Aún sin escaneos",

@@ -59,6 +59,12 @@ WORKDIR /app/packages/api
 
 EXPOSE 8000
 
+# Defensive against a Windows (CRLF) checkout: strip any carriage returns and
+# ensure the entrypoint stays executable, so the image builds and runs no
+# matter the host's git line-ending config. The .gitattributes at the repo
+# root is the primary fix; this is belt-and-suspenders. See issue #202.
+RUN sed -i 's/\r$//' /app/packages/api/entrypoint.sh && chmod +x /app/packages/api/entrypoint.sh
+
 # P0-01 audit fix: run Alembic migrations before the server starts.
 # The entrypoint falls back gracefully if alembic fails.
 ENTRYPOINT ["/app/packages/api/entrypoint.sh"]

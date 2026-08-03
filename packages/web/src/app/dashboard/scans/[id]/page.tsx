@@ -179,7 +179,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             <Badge variant="outline" className={cn(
               scan.status === "completed" && "border-green-500 text-green-600 bg-green-50",
               scan.status === "running" && "border-blue-500 text-blue-600 animate-pulse",
-              scan.status === "failed" && "border-red-500 text-red-600",
+              (scan.status === "failed" || scan.status === "error") && "border-red-500 text-red-600",
               scan.status === "pending" && "border-yellow-500 text-yellow-600",
             )}>{ts(scan.status as any)}</Badge>
             {scan.status === "completed" && (
@@ -214,7 +214,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
 
-        {scan.status === "failed" && scan.error_message && (
+        {(scan.status === "failed" || scan.status === "error") && scan.error_message && (
           <Alert variant="destructive" className="mt-6 mb-2">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Scan Failed</AlertTitle>

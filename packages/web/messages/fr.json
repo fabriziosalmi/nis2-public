@@ -131,6 +131,7 @@
     "running": "En cours",
     "completed": "Terminée",
     "failed": "Échouée",
+    "error": "Erreur",
     "cancelled": "Annulée",
     "noScans": "Aucune analyse trouvée",
     "noScansYet": "Aucune analyse",
