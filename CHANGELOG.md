@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.6.2] - 2026-07-06
+
+### 🔒 Privacy — maintainer address removed from public surfaces
+
+The maintainer's home/registered address was rendered inline across the README
+legal block, the app footer (5 locales), the docs-site footer, and the
+terms/privacy pages. It is now removed from all of them; the VAT (P.IVA) — a
+public identifier via VIES — is retained.
+
+- **New `docs/legal.md`** — operator identity, VAT, ATECO and the D.Lgs 70/2003
+  e-commerce disclosure on a dedicated, permanently-accessible page (geographic
+  address stated as *available on request / via the public VAT registers*).
+- **README** legal block replaced with a one-line pointer to `docs/legal.md`
+  (the self-hosted data-controller note is kept).
+- **App footer** (`messages/{en,it,de,fr,es}.json`) and **docs footer**
+  (`Home.vue`): street address dropped from the copyright line, VAT kept.
+- **terms.md / privacy.md**: street address removed, VAT kept.
+
 ## [2.6.1] - 2026-07-06
 
 ### 🔧 Dependency maintenance
