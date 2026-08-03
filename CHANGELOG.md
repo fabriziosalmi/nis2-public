@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.6.5] - 2026-08-03
+
+### 🛡️ Security — docs-build dependency CVE fixes
+
+Closes the remaining Dependabot alerts, all in the **root `package-lock.json`**
+(the VitePress documentation build — dev/build-time only, not the app runtime):
+
+- **`vite` 6.4.2 → 6.4.3** — GHSA-fx2h-pf6j-xcff (HIGH), GHSA-v6wh-96g9-6wx3
+  (MEDIUM).
+- **`postcss` → 8.5.25** (override raised to `^8.5.18`) — GHSA-r28c-9q8g-f849
+  (path traversal). Supersedes #213.
+
+`npm audit --audit-level=high` (root) → 0 vulnerabilities.
+
 ## [2.6.4] - 2026-08-03
 
 ### 🔧 Dependency maintenance
