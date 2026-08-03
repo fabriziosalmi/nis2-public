@@ -25,11 +25,12 @@ function StatusBadge({ status }: { status: string }) {
     running: "border-blue-500/30 text-blue-600 dark:text-blue-500 bg-blue-500/10 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.3)]",
     completed: "border-emerald-500/30 text-emerald-600 dark:text-emerald-500 bg-emerald-500/10",
     failed: "border-red-500/30 text-red-600 dark:text-red-500 bg-red-500/10",
+    error: "border-red-500/30 text-red-600 dark:text-red-500 bg-red-500/10",
     cancelled: "border-slate-500/30 text-slate-600 dark:text-slate-400 bg-slate-500/10",
   }
   // Status string from the API matches a translation key; fall back to the
   // raw value if a future status appears that we haven't localised yet.
-  const known = ["pending", "running", "completed", "failed", "cancelled"]
+  const known = ["pending", "running", "completed", "failed", "error", "cancelled"]
   return (
     <Badge variant="outline" className={variants[status] || ""}>
       {known.includes(status) ? t(status as any) : status}

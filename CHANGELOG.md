@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.6.3] - 2026-08-03
+
+### 🐛 Bug fixes (reported by @oudoken)
+
+- **#202 — `make prod` fails: `exec /app/packages/api/entrypoint.sh: no such
+  file or directory`.** Root cause: a Windows checkout (`core.autocrlf=true`)
+  rewrote `entrypoint.sh` to CRLF, so the `#!/bin/sh` shebang became
+  `#!/bin/sh\r` and the container could not exec it (`make dev` worked because
+  it bind-mounts the source). Fix: a new **`.gitattributes`** forcing `LF` on
+  shell scripts (primary), plus a defensive CR-strip + `chmod +x` in the API
+  **Dockerfile** so already-cloned CRLF checkouts still build. Reproduced and
+  verified with a real Docker build (CRLF entrypoint → exact ENOENT → fixed).
+- **#203 — scan detail page crashes with `MISSING_MESSAGE: Could not resolve
+  scans.error`.** The backend legitimately sets a scan to the `error` status
+  when the task queue is unavailable, but that status label was missing from
+  the translations. Added `scans.error` to all 5 locales and taught the status
+  badge (detail + list pages) and the error banner to handle `error` alongside
+  `failed`.
+
 ## [2.6.2] - 2026-07-06
 
 ### 🔒 Privacy — maintainer address removed from public surfaces

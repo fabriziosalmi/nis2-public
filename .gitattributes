@@ -1,0 +1,27 @@
+# Line-ending policy.
+#
+# This project builds and runs inside Linux containers. Shell scripts — above
+# all the API container's entrypoint — MUST keep LF endings. Without this, a
+# Windows checkout with core.autocrlf=true rewrites them to CRLF; the shebang
+# then becomes "#!/bin/sh\r" and the container dies at startup with:
+#
+#   exec /app/packages/api/entrypoint.sh: no such file or directory
+#
+# See https://github.com/fabriziosalmi/nis2-public/issues/202
+*.sh        text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile  text eol=lf
+
+# Let Git normalise text files, but never touch known binaries.
+*           text=auto
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.svg       text
+*.pdf       binary
+*.mp4       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
