@@ -17,8 +17,7 @@
 For the maintainer-operated surfaces:
 
 - **Salmi Fabrizio** (sole proprietor — *libero professionista*)
-- Registered address: Via Sapri 9, 16134 Genova, Italy
-- VAT (P.IVA): IT 03072120995
+- VAT (P.IVA): IT 03072120995 — geographic address available on request and via the public VAT/business registers
 - Email: [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
 
 A formal Data Protection Officer is not designated; the project does not meet any of the trigger conditions in Art. 37(1) GDPR (no large-scale systematic monitoring, no large-scale special-category processing).
@@ -169,6 +168,6 @@ We may update this notice from time to time — material changes are reflected i
 
 For any privacy-related question, request, or complaint about the **public maintainer-operated surfaces** described above:
 
-**Salmi Fabrizio** — Via Sapri 9, 16134 Genova, Italy — [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
+**Salmi Fabrizio** — P.IVA IT 03072120995 — [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
 
 For self-hosted instances, contact whoever runs that instance — not the maintainer of this open-source project.

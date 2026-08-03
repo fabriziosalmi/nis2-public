@@ -822,8 +822,8 @@ const AUDIENCES = [
           </div>
           <div class="mt-12 flex flex-col items-start gap-4 border-t border-slate-200 pt-8 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800">
             <p class="text-xs text-slate-500 dark:text-slate-500">
-              <span v-if="lang === 'en' || lang === 'en-US'">© 2026 Salmi Fabrizio — VAT IT 03072120995 — Via Sapri 9, 16134 Genova · This is not legal advice.</span>
-              <span v-else-if="lang === 'it'">© 2026 Salmi Fabrizio — P.IVA IT 03072120995 — Via Sapri 9, 16134 Genova · Questo non è un parere legale.</span>
+              <span v-if="lang === 'en' || lang === 'en-US'">© 2026 Salmi Fabrizio — VAT IT 03072120995 · This is not legal advice.</span>
+              <span v-else-if="lang === 'it'">© 2026 Salmi Fabrizio — P.IVA IT 03072120995 · Questo non è un parere legale.</span>
             </p>
             <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-500">
               <span class="inline-flex items-center gap-1.5">

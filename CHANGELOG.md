@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.6.2] - 2026-07-06
+
+### 🔒 Privacy — maintainer address removed from public surfaces
+
+The maintainer's home/registered address was rendered inline across the README
+legal block, the app footer (5 locales), the docs-site footer, and the
+terms/privacy pages. It is now removed from all of them; the VAT (P.IVA) — a
+public identifier via VIES — is retained.
+
+- **New `docs/legal.md`** — operator identity, VAT, ATECO and the D.Lgs 70/2003
+  e-commerce disclosure on a dedicated, permanently-accessible page (geographic
+  address stated as *available on request / via the public VAT registers*).
+- **README** legal block replaced with a one-line pointer to `docs/legal.md`
+  (the self-hosted data-controller note is kept).
+- **App footer** (`messages/{en,it,de,fr,es}.json`) and **docs footer**
+  (`Home.vue`): street address dropped from the copyright line, VAT kept.
+- **terms.md / privacy.md**: street address removed, VAT kept.
+
+### 🛡️ Security — dependency CVE fixes
+
+Newly-disclosed HIGH advisories flagged by `trivy fs` / `npm audit` (they turned
+`main` red independently of this change) are resolved here:
+
+- **`next` 16.2.6 → 16.2.12** — fixes CVE-2026-64642 (**authentication bypass**),
+  CVE-2026-64641 (DoS), CVE-2026-64645 / CVE-2026-64649 (SSRF).
+- **`postcss` → 8.5.25** (range `^8.5.18`) — GHSA-r28c-9q8g-f849 (path traversal).
+- **`sharp` → 0.35.3** (new override `^0.35.0`) — GHSA-f88m-g3jw-g9cj (libvips
+  CVE-2026-33327/33328/35590/35591); forced up as a transitive dep of `next`
+  without downgrading `next`.
+
+`npm audit --audit-level=high` → 0 vulnerabilities.
+
 ## [2.6.1] - 2026-07-06
 
 ### 🔧 Dependency maintenance
