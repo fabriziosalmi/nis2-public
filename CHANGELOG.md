@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.6.6] - 2026-08-03
+
+### 👷 CI — GitHub Actions major bumps
+
+Bumped the SHA-pinned CI actions to their v7 majors (supersedes #204/#206/#209).
+Evaluated against the release notes: none of the documented breaking changes
+apply here — runners are `ubuntu-latest` (hosted), there is no
+`pull_request_target`/`workflow_run` trigger, no `packageManager` field, no
+`pip-install` input, and no reliance on `NODE_AUTH_TOKEN`. The only real change
+is the actions now run on Node 24 (fine on hosted runners). Validated green in CI.
+
+- `actions/checkout` → **v7.0.1**
+- `actions/setup-node` → **v7.0.0**
+- `actions/setup-python` → **v7.0.0**
+
 ## [2.6.5] - 2026-08-03
 
 ### 🛡️ Security — docs-build dependency CVE fixes
