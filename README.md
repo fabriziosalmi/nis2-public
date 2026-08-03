@@ -310,15 +310,7 @@ This platform is a tool for governance and discovery, **not legal or compliance 
 
 ## Legal & contact information
 
-In compliance with Art. 7-12 of D.Lgs 70/2003 (Italian e-commerce decree) and the EU e-Commerce Directive 2000/31/EC:
-
-- **Operator:** Salmi Fabrizio (sole proprietor / *libero professionista*)
-- **Registered address:** Via Sapri 9, 16134 Genova, Italy
-- **VAT (P.IVA):** IT 03072120995
-- **ATECO code:** 62.10.00 (Computer programming activities)
-- **Tax regime:** *Regime semplificato*
-- **Contact:** [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
-- **Privacy:** see [docs/privacy.md](docs/privacy.md) for the GDPR Art. 13 information notice covering the public website, the documentation site, and any direct contact via the channels above.
+Operator identity, VAT (P.IVA), ATECO and the D.Lgs 70/2003 e-commerce disclosure are on the dedicated **[legal notice](docs/legal.md)**. Privacy — the GDPR Art. 13 information notice — is in **[docs/privacy.md](docs/privacy.md)**. Contact: [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com).
 
 > **Self-hosted deployments:** when you run this platform on your own infrastructure, **you become the data controller** under Art. 4(7) GDPR for the personal data processed by your instance (registered users, scan results, asset inventory, audit logs). The maintainer is not the data controller for self-hosted instances and provides no `informativa privacy` on your behalf. Adapt [docs/privacy.md](docs/privacy.md) to your deployment, publish it at a stable URL, and notify your users.
 

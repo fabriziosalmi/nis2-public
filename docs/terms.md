@@ -15,7 +15,6 @@
 ## 1. Operator (Art. 7-12 D.Lgs 70/2003)
 
 - **Salmi Fabrizio** (sole proprietor — *libero professionista*)
-- Registered address: Via Sapri 9, 16134 Genova, Italy
 - VAT (P.IVA): IT 03072120995
 - ATECO code: 62.10.00 (Computer programming activities)
 - Tax regime: *Regime semplificato*
@@ -83,4 +82,4 @@ We may update these Terms from time to time. Material changes are reflected in t
 
 ## 11. Contact
 
-**Salmi Fabrizio** — Via Sapri 9, 16134 Genova, Italy — [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
+**Salmi Fabrizio** — P.IVA IT 03072120995 — [fabrizio.salmi@gmail.com](mailto:fabrizio.salmi@gmail.com)
