@@ -61,6 +61,7 @@ const cronPresetKeys = [
 export default function SchedulesPage() {
   const t = useTranslations("schedulesPage")
   const tc = useTranslations("common")
+  const ta = useTranslations("a11y")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
@@ -298,15 +299,15 @@ export default function SchedulesPage() {
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
                         <Button variant="ghost" size="icon" className="h-8 w-8"
-                          onClick={() => triggerNow(s.id)} disabled={triggering === s.id} aria-label="Run schedule now">
+                          onClick={() => triggerNow(s.id)} disabled={triggering === s.id} aria-label={ta("runScheduleNow")}>
                           {triggering === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8"
-                          onClick={() => toggleSchedule(s.id, s.is_active)} aria-label="Pause or resume schedule">
+                          onClick={() => toggleSchedule(s.id, s.is_active)} aria-label={ta("toggleSchedule")}>
                           {s.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 text-green-600" />}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
-                          onClick={() => deleteSchedule(s.id)} aria-label="Delete schedule">
+                          onClick={() => deleteSchedule(s.id)} aria-label={ta("deleteSchedule")}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

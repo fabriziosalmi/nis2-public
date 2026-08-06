@@ -81,8 +81,10 @@ function StatusBadge({ status }: { status: string }) {
 // prefix (✓ / ! / ✗) ensures the rating is recognisable without
 // colour, and the aria-label makes the band name explicit for SR.
 function ScoreDisplay({ score }: { score: number | null | undefined }) {
+  const ta = useTranslations("a11y")
   if (score === null || score === undefined) return <span className="text-muted-foreground">--</span>
   const band = score > 80 ? "good" : score > 60 ? "fair" : "poor"
+  const bandLabel = ta(band === "good" ? "qualityGood" : band === "fair" ? "qualityFair" : "qualityPoor")
   const Icon = band === "good" ? CheckCircle2 : band === "fair" ? AlertTriangle : XCircle
   return (
     <span
@@ -90,7 +92,7 @@ function ScoreDisplay({ score }: { score: number | null | undefined }) {
         "inline-flex items-center gap-1 font-bold",
         band === "good" ? "text-green-600" : band === "fair" ? "text-yellow-600" : "text-red-600"
       )}
-      aria-label={`${score} (${band})`}
+      aria-label={`${score} (${bandLabel})`}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       <span>{score}</span>

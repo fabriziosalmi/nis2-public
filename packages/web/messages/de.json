@@ -64,7 +64,22 @@
     "selectAllRows": "Alle Zeilen auswählen",
     "selectRow": "Zeile auswählen: {label}",
     "expandRow": "Zeilendetails erweitern",
-    "collapseRow": "Zeilendetails reduzieren"
+    "collapseRow": "Zeilendetails reduzieren",
+    "backToScans": "Zurück zu den Scans",
+    "backToSettings": "Zurück zu den Einstellungen",
+    "cancelScan": "Scan abbrechen",
+    "copyKeyToClipboard": "Schlüssel in die Zwischenablage kopieren",
+    "deleteApiKey": "API-Schlüssel löschen",
+    "memberOptions": "Mitgliedsoptionen",
+    "runScheduleNow": "Zeitplan jetzt ausführen",
+    "toggleSchedule": "Zeitplan pausieren oder fortsetzen",
+    "deleteSchedule": "Zeitplan löschen",
+    "copyToClipboard": "In die Zwischenablage kopieren",
+    "openMobileMenu": "Mobiles Menü öffnen",
+    "closeMenu": "Menü schließen",
+    "qualityGood": "gut",
+    "qualityFair": "mittelmäßig",
+    "qualityPoor": "schlecht"
   },
   "dashboard": {
     "title": "Übersicht",
@@ -770,7 +785,10 @@
     "timeoutLabel": "Timeout (Sekunden)",
     "concurrencyLabel": "Parallelität",
     "maxHostsLabel": "Max. Hosts",
-    "startScan": "Scan starten"
+    "startScan": "Scan starten",
+    "assetNamePlaceholder": "z. B. Production API",
+    "assetTypePlaceholder": "Typ auswählen",
+    "assetTargetPlaceholder": "api.example.com"
   },
   "scanDetailsPage": {
     "notFoundTitle": "Scan nicht gefunden",
@@ -802,7 +820,9 @@
     "findingsTitle": "Ergebnisse",
     "findingsDescription": "Während des Scans erkannte Sicherheitsprobleme",
     "noFindings": "Keine Ergebnisse erkannt — hervorragendes Ergebnis!",
-    "findingsPending": "Die Ergebnisse erscheinen, wenn der Scan abgeschlossen ist."
+    "findingsPending": "Die Ergebnisse erscheinen, wenn der Scan abgeschlossen ist.",
+    "scanFailedTitle": "Scan fehlgeschlagen",
+    "cancelScan": "Scan abbrechen"
   },
   "commandPalette": {
     "label": "Befehlspalette",

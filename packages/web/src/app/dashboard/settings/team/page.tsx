@@ -73,6 +73,7 @@ const roleColors: Record<string, string> = {
 export default function TeamPage() {
   const t = useTranslations("teamPage")
   const tc = useTranslations("common")
+  const ta = useTranslations("a11y")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
@@ -191,7 +192,7 @@ export default function TeamPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/settings" aria-label="Back to settings">
+          <Link href="/dashboard/settings" aria-label={ta("backToSettings")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -391,7 +392,7 @@ export default function TeamPage() {
                         {!isSelf && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" aria-label="Member options">
+                              <Button variant="ghost" size="icon" aria-label={ta("memberOptions")}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>

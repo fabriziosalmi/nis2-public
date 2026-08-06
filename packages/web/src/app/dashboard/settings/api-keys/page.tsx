@@ -39,6 +39,7 @@ type CreateKeyForm = z.infer<typeof createKeySchema>
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeysPage")
   const tc = useTranslations("common")
+  const ta = useTranslations("a11y")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   const formatDate = useFormatDate()
@@ -105,7 +106,7 @@ export default function ApiKeysPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/settings" aria-label="Back to settings">
+          <Link href="/dashboard/settings" aria-label={ta("backToSettings")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -137,7 +138,7 @@ export default function ApiKeysPage() {
                   <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
                     <Key className="h-4 w-4 text-muted-foreground shrink-0" />
                     <code className="flex-1 text-sm font-mono break-all">{newKey}</code>
-                    <Button variant="ghost" size="icon" onClick={handleCopy} aria-label="Copy key to clipboard">
+                    <Button variant="ghost" size="icon" onClick={handleCopy} aria-label={ta("copyKeyToClipboard")}>
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
@@ -247,7 +248,7 @@ export default function ApiKeysPage() {
                             </Button>
                           </div>
                         ) : (
-                          <Button variant="ghost" size="icon" onClick={() => setRevokeId(key.id)} aria-label="Delete API key">
+                          <Button variant="ghost" size="icon" onClick={() => setRevokeId(key.id)} aria-label={ta("deleteApiKey")}>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         )

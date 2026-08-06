@@ -68,6 +68,7 @@ type ScanForm = z.infer<typeof scanSchema>
 export default function NewScanPage() {
   const t = useTranslations("scansNewPage")
   const tc = useTranslations("common")
+  const ta = useTranslations("a11y")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   const router = useRouter()
@@ -199,7 +200,7 @@ export default function NewScanPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/scans" aria-label="Back to scans">
+          <Link href="/dashboard/scans" aria-label={ta("backToScans")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -271,14 +272,14 @@ export default function NewScanPage() {
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Name</Label>
-                    <Input placeholder="E.g., Production API" {...registerAsset("name")} />
+                    <Input placeholder={t("assetNamePlaceholder")} {...registerAsset("name")} />
                     {assetErrors.name && <p className="text-xs text-destructive">{assetErrors.name.message as string}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>Type</Label>
                     <UISelect onValueChange={(v) => setAssetValue("type", v)} defaultValue="domain">
                       <UISelectTrigger>
-                        <SelectValue placeholder="Select type" />
+                        <SelectValue placeholder={t("assetTypePlaceholder")} />
                       </UISelectTrigger>
                       <SelectContent>
                         <SelectItem value="domain">Domain</SelectItem>
@@ -289,7 +290,7 @@ export default function NewScanPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Target</Label>
-                    <Input placeholder="api.example.com" {...registerAsset("target")} />
+                    <Input placeholder={t("assetTargetPlaceholder")} {...registerAsset("target")} />
                     {assetErrors.target && <p className="text-xs text-destructive">{assetErrors.target.message as string}</p>}
                   </div>
                 </div>

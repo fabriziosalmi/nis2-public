@@ -64,7 +64,22 @@
     "selectAllRows": "Select all rows",
     "selectRow": "Select row: {label}",
     "expandRow": "Expand row details",
-    "collapseRow": "Collapse row details"
+    "collapseRow": "Collapse row details",
+    "backToScans": "Back to scans",
+    "backToSettings": "Back to settings",
+    "cancelScan": "Cancel scan",
+    "copyKeyToClipboard": "Copy key to clipboard",
+    "deleteApiKey": "Delete API key",
+    "memberOptions": "Member options",
+    "runScheduleNow": "Run schedule now",
+    "toggleSchedule": "Pause or resume schedule",
+    "deleteSchedule": "Delete schedule",
+    "copyToClipboard": "Copy to clipboard",
+    "openMobileMenu": "Open mobile menu",
+    "closeMenu": "Close menu",
+    "qualityGood": "good",
+    "qualityFair": "fair",
+    "qualityPoor": "poor"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -770,7 +785,10 @@
     "timeoutLabel": "Timeout (seconds)",
     "concurrencyLabel": "Concurrency",
     "maxHostsLabel": "Max Hosts",
-    "startScan": "Start Scan"
+    "startScan": "Start Scan",
+    "assetNamePlaceholder": "E.g., Production API",
+    "assetTypePlaceholder": "Select type",
+    "assetTargetPlaceholder": "api.example.com"
   },
   "scanDetailsPage": {
     "notFoundTitle": "Scan not found",
@@ -802,7 +820,9 @@
     "findingsTitle": "Findings",
     "findingsDescription": "Security issues detected during the scan",
     "noFindings": "No findings detected — great result!",
-    "findingsPending": "Findings will appear when the scan completes."
+    "findingsPending": "Findings will appear when the scan completes.",
+    "scanFailedTitle": "Scan failed",
+    "cancelScan": "Cancel scan"
   },
   "commandPalette": {
     "label": "Command palette",

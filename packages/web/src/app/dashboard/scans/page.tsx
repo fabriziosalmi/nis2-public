@@ -42,6 +42,7 @@ export default function ScansPage() {
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page)
   const t = useTranslations("scans")
+  const ta = useTranslations("a11y")
   const formatDate = useFormatDate()
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
@@ -139,7 +140,7 @@ export default function ScansPage() {
                           className={cn("font-bold",
                             scan.total_score > 80 ? "text-green-600" : scan.total_score > 60 ? "text-yellow-600" : "text-red-600"
                           )}
-                          aria-label={`${scan.total_score} (${scan.total_score > 80 ? "good" : scan.total_score > 60 ? "fair" : "poor"})`}
+                          aria-label={`${scan.total_score} (${ta(scan.total_score > 80 ? "qualityGood" : scan.total_score > 60 ? "qualityFair" : "qualityPoor")})`}
                         >{scan.total_score}</span>
                       ) : <span className="text-muted-foreground">--</span>}
                     </TableCell>
@@ -151,7 +152,7 @@ export default function ScansPage() {
                     <TableCell className="text-right">
                       {(scan.status === "running" || scan.status === "pending") && (
                         <Button variant="ghost" size="sm" onClick={(e) => handleCancel(e, scan.id)} disabled={cancelScan.isPending}>
-                          <Ban className="h-4 w-4 text-muted-foreground" aria-label="Cancel Scan" />
+                          <Ban className="h-4 w-4 text-muted-foreground" aria-label={ta("cancelScan")} />
                         </Button>
                       )}
                     </TableCell>

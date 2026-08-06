@@ -64,7 +64,22 @@
     "selectAllRows": "Seleziona tutte le righe",
     "selectRow": "Seleziona riga: {label}",
     "expandRow": "Espandi dettagli riga",
-    "collapseRow": "Riduci dettagli riga"
+    "collapseRow": "Riduci dettagli riga",
+    "backToScans": "Torna alle scansioni",
+    "backToSettings": "Torna alle impostazioni",
+    "cancelScan": "Annulla scansione",
+    "copyKeyToClipboard": "Copia la chiave negli appunti",
+    "deleteApiKey": "Elimina chiave API",
+    "memberOptions": "Opzioni membro",
+    "runScheduleNow": "Esegui la pianificazione ora",
+    "toggleSchedule": "Sospendi o riprendi la pianificazione",
+    "deleteSchedule": "Elimina pianificazione",
+    "copyToClipboard": "Copia negli appunti",
+    "openMobileMenu": "Apri il menu mobile",
+    "closeMenu": "Chiudi il menu",
+    "qualityGood": "buono",
+    "qualityFair": "discreto",
+    "qualityPoor": "scarso"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -770,7 +785,10 @@
     "timeoutLabel": "Timeout (secondi)",
     "concurrencyLabel": "Concorrenza",
     "maxHostsLabel": "Host Massimi",
-    "startScan": "Avvia Scansione"
+    "startScan": "Avvia Scansione",
+    "assetNamePlaceholder": "Es. Production API",
+    "assetTypePlaceholder": "Seleziona tipo",
+    "assetTargetPlaceholder": "api.example.com"
   },
   "scanDetailsPage": {
     "notFoundTitle": "Scansione non trovata",
@@ -802,7 +820,9 @@
     "findingsTitle": "Findings",
     "findingsDescription": "Problemi di sicurezza rilevati durante la scansione",
     "noFindings": "Nessun finding rilevato — ottimo risultato!",
-    "findingsPending": "I findings appariranno al completamento della scansione."
+    "findingsPending": "I findings appariranno al completamento della scansione.",
+    "scanFailedTitle": "Scansione fallita",
+    "cancelScan": "Annulla scansione"
   },
   "commandPalette": {
     "label": "Palette comandi",
