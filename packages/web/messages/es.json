@@ -64,7 +64,22 @@
     "selectAllRows": "Seleccionar todas las filas",
     "selectRow": "Seleccionar fila: {label}",
     "expandRow": "Expandir detalles de la fila",
-    "collapseRow": "Contraer detalles de la fila"
+    "collapseRow": "Contraer detalles de la fila",
+    "backToScans": "Volver a los escaneos",
+    "backToSettings": "Volver a la configuración",
+    "cancelScan": "Cancelar escaneo",
+    "copyKeyToClipboard": "Copiar la clave al portapapeles",
+    "deleteApiKey": "Eliminar clave API",
+    "memberOptions": "Opciones del miembro",
+    "runScheduleNow": "Ejecutar la programación ahora",
+    "toggleSchedule": "Pausar o reanudar la programación",
+    "deleteSchedule": "Eliminar programación",
+    "copyToClipboard": "Copiar al portapapeles",
+    "openMobileMenu": "Abrir el menú móvil",
+    "closeMenu": "Cerrar el menú",
+    "qualityGood": "bueno",
+    "qualityFair": "regular",
+    "qualityPoor": "deficiente"
   },
   "dashboard": {
     "title": "Panel",
@@ -770,7 +785,10 @@
     "timeoutLabel": "Tiempo de espera (segundos)",
     "concurrencyLabel": "Concurrencia",
     "maxHostsLabel": "Hosts Máx.",
-    "startScan": "Iniciar Escaneo"
+    "startScan": "Iniciar Escaneo",
+    "assetNamePlaceholder": "Ej. Production API",
+    "assetTypePlaceholder": "Seleccionar tipo",
+    "assetTargetPlaceholder": "api.example.com"
   },
   "scanDetailsPage": {
     "notFoundTitle": "Escaneo no encontrado",
@@ -802,7 +820,9 @@
     "findingsTitle": "Hallazgos",
     "findingsDescription": "Problemas de seguridad detectados durante el escaneo",
     "noFindings": "Sin hallazgos detectados — ¡excelente resultado!",
-    "findingsPending": "Los hallazgos aparecerán al completarse el escaneo."
+    "findingsPending": "Los hallazgos aparecerán al completarse el escaneo.",
+    "scanFailedTitle": "Escaneo fallido",
+    "cancelScan": "Cancelar escaneo"
   },
   "commandPalette": {
     "label": "Paleta de comandos",

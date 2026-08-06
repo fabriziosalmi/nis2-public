@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.6.7] - 2026-08-07
+
+### 🌍 i18n — zero English leakage in the app UI
+
+Closed the last hardcoded English strings in the dashboard so a non-English
+evaluator (and non-English screen-reader users) never see the UI fall back to
+English. 20 keys added across all 5 locales (en/it/de/fr/es):
+
+- **Visible strings**: the "Scan failed" alert title and the "Cancel scan"
+  button on the scan detail page; the inline asset sub-form placeholders on the
+  new-scan page ("E.g., Production API", "Select type", target example).
+- **Accessibility labels** (previously English-only for all locales): the
+  score-quality screen-reader labels (good/fair/poor) on the dashboard, scans
+  list, scan detail and reports pages; and the icon-button `aria-label`s across
+  the dashboard — back links, cancel scan, copy/delete API key, member options,
+  run/pause/delete schedule, the shared copy-to-clipboard control, and the
+  landing page's mobile-menu open/close.
+
+New keys live in the extended `a11y` namespace plus `scansNewPage` /
+`scanDetailsPage`. No functional changes; `tsc --noEmit` green.
+
 ## [2.6.6] - 2026-08-03
 
 ### 👷 CI — GitHub Actions major bumps

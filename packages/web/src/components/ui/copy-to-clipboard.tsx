@@ -5,6 +5,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Check, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,6 +18,7 @@ interface CopyToClipboardProps {
 
 export function CopyToClipboard({ value, className, iconSize = 14 }: CopyToClipboardProps) {
   const [copied, setCopied] = useState(false)
+  const t = useTranslations("a11y")
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -38,14 +40,14 @@ export function CopyToClipboard({ value, className, iconSize = 14 }: CopyToClipb
       size="icon"
       className={cn("h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity", className)}
       onClick={handleCopy}
-      title="Copy to clipboard"
+      title={t("copyToClipboard")}
     >
       {copied ? (
         <Check className="text-green-500" size={iconSize} />
       ) : (
         <Copy className="text-muted-foreground hover:text-foreground" size={iconSize} />
       )}
-      <span className="sr-only">Copy</span>
+      <span className="sr-only">{t("copyToClipboard")}</span>
     </Button>
   )
 }

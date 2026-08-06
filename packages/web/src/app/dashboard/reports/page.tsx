@@ -60,6 +60,7 @@ export default function ReportsPage() {
   // page / next) — same widget renders on both pages, no need to
   // mint separate keys.
   const ts = useTranslations("scans")
+  const ta = useTranslations("a11y")
   const formatDate = useFormatDate()
   const [page, setPage] = useState(1)
   const { data, isLoading } = useScans(page, "completed")
@@ -199,7 +200,7 @@ export default function ReportsPage() {
                                 : scan.total_score > 60 ? "text-yellow-600"
                                 : "text-red-600",
                             )}
-                            aria-label={`${scan.total_score} (${scan.total_score > 80 ? "good" : scan.total_score > 60 ? "fair" : "poor"})`}
+                            aria-label={`${scan.total_score} (${ta(scan.total_score > 80 ? "qualityGood" : scan.total_score > 60 ? "qualityFair" : "qualityPoor")})`}
                           >
                             {scan.total_score}
                           </span>

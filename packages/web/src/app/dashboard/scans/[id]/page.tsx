@@ -109,6 +109,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
   const t = useTranslations("scanDetailsPage")
   const ts = useTranslations("scans")
   const tf = useTranslations("findings")
+  const ta = useTranslations("a11y")
   const formatDate = useFormatDate()
   const { id } = use(params)
   const { data: scan, isLoading } = useScan(id)
@@ -171,7 +172,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/scans" aria-label="Back to scans"><ArrowLeft className="h-4 w-4" /></Link>
+          <Link href="/dashboard/scans" aria-label={t("backToScans")}><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
@@ -192,7 +193,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             {(scan.status === "running" || scan.status === "pending") && (
               <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelScan.isPending}>
                 {cancelScan.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ban className="mr-2 h-4 w-4" />}
-                {t("cancelScan", { defaultValue: "Cancel Scan" })}
+                {t("cancelScan")}
               </Button>
             )}
           </div>
@@ -207,7 +208,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
           <div className="text-center px-4">
             <div
               className={cn("text-4xl font-bold", score > 80 ? "text-green-600" : score > 60 ? "text-yellow-600" : "text-red-600")}
-              aria-label={`${score} (${score > 80 ? "good" : score > 60 ? "fair" : "poor"})`}
+              aria-label={`${score} (${ta(score > 80 ? "qualityGood" : score > 60 ? "qualityFair" : "qualityPoor")})`}
             >{score}</div>
             <p className="text-xs text-muted-foreground">{t("score")}</p>
           </div>
@@ -217,7 +218,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         {(scan.status === "failed" || scan.status === "error") && scan.error_message && (
           <Alert variant="destructive" className="mt-6 mb-2">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Scan Failed</AlertTitle>
+            <AlertTitle>{t("scanFailedTitle")}</AlertTitle>
             <AlertDescription className="font-mono text-sm mt-1">
               {scan.error_message}
             </AlertDescription>

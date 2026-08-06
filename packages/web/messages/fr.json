@@ -64,7 +64,22 @@
     "selectAllRows": "Sélectionner toutes les lignes",
     "selectRow": "Sélectionner la ligne : {label}",
     "expandRow": "Déplier les détails de la ligne",
-    "collapseRow": "Replier les détails de la ligne"
+    "collapseRow": "Replier les détails de la ligne",
+    "backToScans": "Retour aux analyses",
+    "backToSettings": "Retour aux paramètres",
+    "cancelScan": "Annuler l'analyse",
+    "copyKeyToClipboard": "Copier la clé dans le presse-papiers",
+    "deleteApiKey": "Supprimer la clé API",
+    "memberOptions": "Options du membre",
+    "runScheduleNow": "Exécuter la planification maintenant",
+    "toggleSchedule": "Suspendre ou reprendre la planification",
+    "deleteSchedule": "Supprimer la planification",
+    "copyToClipboard": "Copier dans le presse-papiers",
+    "openMobileMenu": "Ouvrir le menu mobile",
+    "closeMenu": "Fermer le menu",
+    "qualityGood": "bon",
+    "qualityFair": "moyen",
+    "qualityPoor": "faible"
   },
   "dashboard": {
     "title": "Tableau de bord",
@@ -770,7 +785,10 @@
     "timeoutLabel": "Délai d'attente (secondes)",
     "concurrencyLabel": "Concurrence",
     "maxHostsLabel": "Hôtes Max",
-    "startScan": "Démarrer l'analyse"
+    "startScan": "Démarrer l'analyse",
+    "assetNamePlaceholder": "Ex. Production API",
+    "assetTypePlaceholder": "Sélectionner le type",
+    "assetTargetPlaceholder": "api.example.com"
   },
   "scanDetailsPage": {
     "notFoundTitle": "Analyse introuvable",
@@ -802,7 +820,9 @@
     "findingsTitle": "Découvertes",
     "findingsDescription": "Problèmes de sécurité détectés pendant l'analyse",
     "noFindings": "Aucune découverte — excellent résultat !",
-    "findingsPending": "Les découvertes apparaîtront à la fin de l'analyse."
+    "findingsPending": "Les découvertes apparaîtront à la fin de l'analyse.",
+    "scanFailedTitle": "Échec de l'analyse",
+    "cancelScan": "Annuler l'analyse"
   },
   "commandPalette": {
     "label": "Palette de commandes",
