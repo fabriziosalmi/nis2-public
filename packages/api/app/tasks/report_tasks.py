@@ -523,16 +523,14 @@ def _gen_markdown(scan, results, findings, base, locale: str = "en") -> dict:
     lines.append(f"| {_t(locale, 'low')} | {scan.findings_low or 0} |")
     lines.append("")
 
-    if scan.executive_summary:
-        lines.append(f"## {_t(locale, 'executive_summary')}\n")
-        # Blockquote — escape pipes/asterisks/etc inside the body
-        # so a `*emphasis*` from the user doesn't reflow the doc.
-        # executive_summary is HTML; strip tags to readable plain text for the
-        # Markdown report (Markdown viewers don't reliably render embedded HTML,
-        # and escaping it showed the raw tags). The inner text is still _md-escaped.
-        _summary_text = html.unescape(re.sub(r"<[^>]+>", " ", scan.executive_summary))
-        _summary_text = re.sub(r"\s+", " ", _summary_text).strip()
-        lines.append(f"> {_md(_summary_text)}\n")
+    lines.append(f"## {_t(locale, 'executive_summary')}\n")
+    # Reconstructed, fully-localised summary (same source as the PDF/HTML
+    # dossier). Rendered as HTML then flattened to plain text for Markdown
+    # viewers, which don't reliably render embedded HTML. The inner text is
+    # still _md-escaped.
+    _summary_text = html.unescape(re.sub(r"<[^>]+>", " ", _exec_summary_html(scan, locale)))
+    _summary_text = re.sub(r"\s+", " ", _summary_text).strip()
+    lines.append(f"> {_md(_summary_text)}\n")
 
     # Findings table
     lines.append(f"## {_t(locale, 'findings')}\n")
@@ -708,6 +706,77 @@ def _matrix_pill(status: str) -> str:
     if any(k in s for k in ("automated", "verified", "compliant", "pass", "covered")):
         return "ok"
     return "manual"
+
+
+def _matrix_status_label(status: str, locale: str) -> str:
+    """Localise a scanner-emitted coverage status to the report's language.
+
+    The scanner writes English status strings ("Automated", "Partially
+    Automated (Security.txt found)", "Manual Verification Required", ...). We
+    classify them into the same four buckets the heatmap legend uses and reuse
+    the already-localised legend labels (`leg_ok` / `leg_partial` / `leg_manual`
+    / `leg_gap`). This guarantees zero English leakage for ANY status — known or
+    future — and the resulting text pill stays legible in greyscale print
+    (the word carries the meaning, not just the colour).
+    """
+    return _nl(locale, "leg_" + _matrix_pill(status))
+
+
+# Reconstructed executive summary. The scanner emits a rich English HTML blob
+# (`scan.executive_summary`); rather than translate free text, the dossier
+# renders a concise, fully-localised summary built here from structured scan
+# data (score band + severity counts + host coverage). Guarantees zero English
+# leakage in every locale. The raw scanner summary is still available in the
+# JSON export for machine consumers.
+_EXEC_LABELS = {
+    "en": {
+        "band_good": "Good", "band_improve": "Needs improvement", "band_critical": "Critical",
+        "score": "Overall NIS2 posture score: {score}/100 — {band}.",
+        "findings": "{total} finding(s) across {hosts} analysed host(s): {crit} critical, {high} high, {medium} medium, {low} low.",
+        "note": "Automated checks cover the technically observable subset of Art. 21(2); organisational measures require manual verification.",
+    },
+    "it": {
+        "band_good": "Buono", "band_improve": "Da migliorare", "band_critical": "Critico",
+        "score": "Punteggio complessivo di postura NIS2: {score}/100 — {band}.",
+        "findings": "{total} rilievo/i su {hosts} host analizzati: {crit} critici, {high} alti, {medium} medi, {low} bassi.",
+        "note": "I controlli automatici coprono il sottoinsieme tecnicamente osservabile dell'Art. 21(2); le misure organizzative richiedono verifica manuale.",
+    },
+    "fr": {
+        "band_good": "Bon", "band_improve": "À améliorer", "band_critical": "Critique",
+        "score": "Score global de posture NIS2 : {score}/100 — {band}.",
+        "findings": "{total} constatation(s) sur {hosts} hôte(s) analysé(s) : {crit} critiques, {high} élevées, {medium} moyennes, {low} faibles.",
+        "note": "Les contrôles automatisés couvrent le sous-ensemble techniquement observable de l'art. 21(2) ; les mesures organisationnelles nécessitent une vérification manuelle.",
+    },
+    "de": {
+        "band_good": "Gut", "band_improve": "Verbesserungsbedarf", "band_critical": "Kritisch",
+        "score": "NIS2-Gesamtbewertung: {score}/100 — {band}.",
+        "findings": "{total} Feststellung(en) über {hosts} analysierte Host(s): {crit} kritisch, {high} hoch, {medium} mittel, {low} niedrig.",
+        "note": "Automatisierte Prüfungen decken den technisch beobachtbaren Teil von Art. 21(2) ab; organisatorische Maßnahmen erfordern eine manuelle Überprüfung.",
+    },
+    "es": {
+        "band_good": "Bueno", "band_improve": "A mejorar", "band_critical": "Crítico",
+        "score": "Puntuación global de postura NIS2: {score}/100 — {band}.",
+        "findings": "{total} hallazgo(s) en {hosts} host(s) analizados: {crit} críticos, {high} altos, {medium} medios, {low} bajos.",
+        "note": "Las comprobaciones automatizadas cubren el subconjunto técnicamente observable del art. 21(2); las medidas organizativas requieren verificación manual.",
+    },
+}
+
+
+def _exec_summary_html(scan, locale: str) -> str:
+    """Build a concise, fully-localised executive summary from structured data."""
+    L = _EXEC_LABELS[locale if locale in _EXEC_LABELS else "en"]
+    score = int(scan.total_score or 0)
+    band = L["band_critical"] if score < 50 else (L["band_improve"] if score < 80 else L["band_good"])
+    c = scan.findings_critical or 0
+    h = scan.findings_high or 0
+    m = scan.findings_medium or 0
+    lo = scan.findings_low or 0
+    total = c + h + m + lo
+    hosts = scan.hosts_scanned or 0
+    p1 = _h(L["score"].format(score=score, band=band))
+    p2 = _h(L["findings"].format(total=total, hosts=hosts, crit=c, high=h, medium=m, low=lo))
+    p3 = _h(L["note"])
+    return f"<p>{p1}</p><p>{p2}</p><p class=\"muted\">{p3}</p>"
 
 
 # ---------------------------------------------------------------------------
@@ -1184,12 +1253,10 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
     # is its own static structural tags. (Pre-v2.4.19 this was raw AND the data
     # was unescaped — THAT was the XSS; escaping the data at the source closes it,
     # without flattening the formatting.)
-    exec_block = ""
-    if scan.executive_summary:
-        exec_block = (
-            f"<h2>{_h(_t(locale, 'executive_summary'))}</h2>"
-            f'<div class="executive">{_strip_report_emoji(scan.executive_summary)}</div>'
-        )
+    exec_block = (
+        f"<h2>{_h(_t(locale, 'executive_summary'))}</h2>"
+        f'<div class="executive">{_exec_summary_html(scan, locale)}</div>'
+    )
 
     # Compliance matrix — the NIS2 Art. 21(2) measures (a–j) mapped to their
     # coverage status. Turns the report from a findings list into a conformity
@@ -1217,7 +1284,7 @@ def _gen_html(scan, results, findings, base, locale: str = "en", org_name: str |
             name = desc or measure
             cm_rows += (
                 f'<tr><td><strong>{_h(letter)})</strong>&nbsp; {_h(name)}</td>'
-                f'<td><span class="pill {_matrix_pill(status)}">{_h(status)}</span></td></tr>\n'
+                f'<td><span class="pill {_matrix_pill(status)}">{_h(_matrix_status_label(status, locale))}</span></td></tr>\n'
             )
         cm_block = (
             f'<h2>{_h(_t(locale, "compliance_matrix"))}</h2>'
