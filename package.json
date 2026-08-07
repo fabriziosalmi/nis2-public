@@ -1,6 +1,6 @@
 {
   "name": "nis2-public-docs",
-  "version": "2.6.7",
+  "version": "2.6.8",
   "private": true,
   "description": "VitePress documentation build for the NIS2 Continuous Posture Management Platform.",
   "scripts": {

@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.6.8] - 2026-08-07
+
+### 🌍 Report i18n — zero English leakage in the PDF/HTML dossier
+
+The exported NIS2 dossier no longer falls back to the scanner's English content
+under non-English locales — the last "English leak" in the client-facing
+deliverable:
+
+- **Executive summary reconstructed & localized.** Instead of embedding the
+  scanner's English HTML blob, the dossier now renders a concise, fully-localized
+  executive summary — posture score + band, severity breakdown, host coverage,
+  and a methodology note — built from structured scan data, in all 5 locales.
+  Verified end-to-end (en/it/de/fr/es). The raw scanner summary remains in the
+  JSON export for machine consumers.
+- **Compliance-matrix status localized.** The Art. 21(2) coverage status pills
+  ("Automated" / "Partially Automated" / "Manual Verification Required" / gap)
+  now render in the report's language, reusing the heatmap legend labels. Robust
+  for any current or future scanner status (unknown statuses fall back to the
+  localized "manual check" bucket, never English), and greyscale-legible — the
+  word carries the meaning, not just the pill colour.
+- Applied to the HTML/PDF dossier and the Markdown export.
+
+Still a separate follow-up: the Art. 21 measure *names* for live scans (key-format
+normalization), heatmap-cell glyphs, and locale-aware date formatting.
+
 ## [2.6.7] - 2026-08-07
 
 ### 🌍 i18n — zero English leakage in the app UI
