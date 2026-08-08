@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.6.10] - 2026-08-08
+
+### 🛡️ Security — nanoid HIGH CVE
+
+Follow-up to the 2.6.9 web roll-up: a newly-disclosed HIGH advisory surfaced in
+a transitive dependency (flagged by `npm audit` / `trivy fs`).
+
+- **`nanoid` → 3.3.18** via a new `overrides` pin `^3.3.17` — CVE-2026-67213 /
+  GHSA-2v37-7h3g-55p8 (infinite loop in `customAlphabet` when size is 0). nanoid
+  is pulled transitively (postcss / next); the override forces it up without
+  touching the direct dependencies.
+
+`npm audit --audit-level=high` → 0 vulnerabilities.
+
 ## [2.6.9] - 2026-08-08
 
 ### 🔧 Dependency maintenance (web roll-up)
