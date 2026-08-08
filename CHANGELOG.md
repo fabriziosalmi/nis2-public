@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.6.9] - 2026-08-08
+
+### 🔧 Dependency maintenance (web roll-up)
+
+Dependabot roll-up of the 10 open `packages/web` PRs into one lockfile update
+(supersedes #219–#228). No functional changes.
+
+- **`recharts` 2.15 → 3.10.1** (major). Reviewed against the 3.0 migration
+  guide: the dashboard's only chart usage (bar + line via `ResponsiveContainer`,
+  core props only — no `<Customized>`, no internal-state access, no custom
+  tooltip `content`) needs **zero code changes**. `next build` green.
+- `react` & `react-dom` 19.2.7 → 19.2.8
+- `react-hook-form` 7.83 → 7.85, `@hookform/resolvers` → 5.7.1
+- `lucide-react` 1.16 → 1.30, `@radix-ui/react-separator` → 1.1.15,
+  `@radix-ui/react-label` → 2.1.15
+- dev: `@types/react` 19.2.18, `@types/react-dom` 19.2.4,
+  `@tailwindcss/postcss` 4.3.3, `playwright` 1.62.1
+
 ## [2.6.8] - 2026-08-07
 
 ### 🌍 Report i18n — zero English leakage in the PDF/HTML dossier
