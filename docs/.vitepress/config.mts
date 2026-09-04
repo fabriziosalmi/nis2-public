@@ -32,6 +32,9 @@ export default defineConfig({
     title: "NIS2 Platform",
     description: "Open-source GRC platform for NIS2 Directive (EU 2022/2555). Governance framework, technical validation engine, incident response, and supply chain risk management.",
     base: "/nis2-public/",
+    // The hostname carries the base path on purpose: VitePress joins it with each
+    // page's route, so without it every URL in the sitemap would point at a 404.
+    sitemap: { hostname: 'https://fabriziosalmi.github.io/nis2-public/' },
     ignoreDeadLinks: true,
     appearance: 'dark',
     lastUpdated: true,
