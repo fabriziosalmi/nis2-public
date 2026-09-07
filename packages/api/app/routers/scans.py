@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.utils import asset_verification
 from app.dependencies import dual_auth_with_scope, get_current_org, require_role
 from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
@@ -95,6 +96,32 @@ async def create_scan(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid active assets found for the provided IDs",
+        )
+
+    # Refuse to scan a target whose ownership was never established.
+    #
+    # This is the whole point of asset verification: without enforcement here it
+    # is a status field nobody has to satisfy. A scan port-scans the target,
+    # attempts zone transfers against its nameservers and requests /.env and
+    # /.git/HEAD — indistinguishable from reconnaissance in the target's logs,
+    # and at the /16 ceiling roughly 900,000 TCP connections. Doing that to a
+    # third party is the operator's liability, and the platform should not make
+    # it a one-click action.
+    #
+    # `legacy` assets — created before verification existed — are allowed
+    # through, so an upgrade does not silently stop every existing customer's
+    # scans. They are reported as unverified everywhere else.
+    unverified = [a for a in assets if not asset_verification.may_scan(a.verification_status)]
+    if unverified:
+        listed = ", ".join(f"{a.name} ({a.target_value})" for a in unverified[:5])
+        more = f" and {len(unverified) - 5} more" if len(unverified) > 5 else ""
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Ownership is not established for: {listed}{more}. "
+                f"Verify a domain with POST /assets/{{id}}/verification/start, or "
+                f"attest authority over an IP range with POST /assets/{{id}}/attest."
+            ),
         )
 
     # Build config snapshot from assets. We forward the validation-time

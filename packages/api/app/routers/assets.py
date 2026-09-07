@@ -3,7 +3,10 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import csv
 import io
+import logging
 import uuid
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -15,10 +18,12 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.utils import asset_verification as verify
 from app.dependencies import dual_auth_with_scope, get_current_org, require_role
 from app.routers.auth import limiter  # share the single Limiter instance
 from app.models.asset import Asset
@@ -27,6 +32,8 @@ from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetListResponse, AssetResponse, AssetUpdate
 from app.utils.target_validator import TargetValidationError, validate_target_pinned
 from app.middleware.audit import log_action
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -387,3 +394,173 @@ async def import_assets_csv(
     )
 
     return {"created": created, "skipped": skipped, "errors": errors_list}
+
+
+# ---------------------------------------------------------------------------
+# Ownership verification
+# ---------------------------------------------------------------------------
+#
+# Until these existed, any authenticated user could add any domain or a /16 and
+# have the platform port-scan it, attempt zone transfers against its
+# nameservers, and request /.env and /.git/HEAD from it — roughly 900,000 TCP
+# connections per scan at the /16 limit, ten scans a minute. The only control
+# shipped was a disclaimer in localStorage on the public landing page,
+# explicitly suppressed for logged-in users: shown to people who cannot scan,
+# hidden from those who can.
+
+
+class VerificationChallenge(BaseModel):
+    method: str
+    record_name: Optional[str] = None
+    record_value: Optional[str] = None
+    instructions: str
+
+
+class VerificationState(BaseModel):
+    status: str
+    verified_at: Optional[datetime] = None
+    detail: Optional[str] = None
+    observed: Optional[list[str]] = None
+
+
+class AttestationRequest(BaseModel):
+    # Free text, but required and stored: an attestation nobody had to type is
+    # not an attestation. It lands in the audit log with the user's identity.
+    statement: str = Field(..., min_length=10, max_length=1000)
+
+
+@router.post(
+    "/{asset_id}/verification/start",
+    response_model=VerificationChallenge,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def start_verification(
+    asset_id: uuid.UUID,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> VerificationChallenge:
+    """Issue a DNS challenge for a domain asset."""
+    _, membership = current_org
+    asset = await db.get(Asset, asset_id)
+    if not asset or asset.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    if not verify.requires_dns_proof(asset.target_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"A {asset.target_type} target cannot be proven with DNS. "
+                f"Use POST /assets/{{id}}/attest instead."
+            ),
+        )
+
+    # A fresh token per attempt, so a token read from an old support ticket or a
+    # stale record cannot be replayed.
+    asset.verification_token = verify.new_token()
+    await db.flush()
+
+    name, value = verify.challenge_record(asset.target_value, asset.verification_token)
+    return VerificationChallenge(
+        method="dns-txt",
+        record_name=name,
+        record_value=value,
+        instructions=(
+            f"Publish a TXT record at {name} with the value {value}, then call "
+            f"the check endpoint. Only someone who controls the zone can do this, "
+            f"which is the point. The record may be removed once verified."
+        ),
+    )
+
+
+@router.post(
+    "/{asset_id}/verification/check",
+    response_model=VerificationState,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def check_verification(
+    asset_id: uuid.UUID,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> VerificationState:
+    """Resolve the challenge record and record the outcome."""
+    user, membership = current_org
+    asset = await db.get(Asset, asset_id)
+    if not asset or asset.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not asset.verification_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No challenge issued for this asset — call verification/start first.",
+        )
+
+    result = await verify.check_dns_challenge(asset.target_value, asset.verification_token)
+    if result.ok:
+        asset.verification_status = verify.VERIFIED
+        asset.verified_at = datetime.now(timezone.utc)
+        asset.verified_by = user.id
+        await db.flush()
+
+    return VerificationState(
+        status=asset.verification_status,
+        verified_at=asset.verified_at,
+        detail=result.detail,
+        observed=result.observed or None,
+    )
+
+
+@router.post(
+    "/{asset_id}/attest",
+    response_model=VerificationState,
+    dependencies=[Depends(require_role("admin"))],
+)
+async def attest_authority(
+    asset_id: uuid.UUID,
+    payload: AttestationRequest,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> VerificationState:
+    """Record a named assertion of authority over an IP or CIDR target.
+
+    Admin only, and deliberately not available for domains: those have DNS, and
+    an attestation must never be the easy way around evidence that exists.
+
+    This does not verify anything — nothing can, for an address range. RDAP
+    would say who an address is allocated to, not whether this customer is
+    authorised by them. What it does is move the record from "the platform
+    allowed it" to "this person asserted it, on this date, in these words",
+    which is the distinction that matters when someone has to answer for a scan.
+    """
+    user, membership = current_org
+    asset = await db.get(Asset, asset_id)
+    if not asset or asset.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    if verify.requires_dns_proof(asset.target_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A domain can be proven with DNS — use verification/start. "
+                "Attestation exists only for targets that have no such proof."
+            ),
+        )
+
+    asset.verification_status = verify.ATTESTED
+    asset.verified_at = datetime.now(timezone.utc)
+    asset.verified_by = user.id
+    await db.flush()
+
+    # The AuditMiddleware records the request; this makes the words themselves
+    # part of the trail rather than only the fact that a call was made.
+    logger.info(
+        "asset attestation: asset=%s target=%s user=%s org=%s statement=%r",
+        asset.id,
+        asset.target_value,
+        user.id,
+        membership.organization_id,
+        payload.statement,
+    )
+    return VerificationState(
+        status=asset.verification_status,
+        verified_at=asset.verified_at,
+        detail="Authority attested and recorded against your account.",
+    )

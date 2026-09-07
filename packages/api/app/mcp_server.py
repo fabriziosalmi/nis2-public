@@ -27,6 +27,9 @@ from app.dependencies import (
     ROLES_AUDITOR_OR_ADMIN,
     get_current_org,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
 from app.routers.auth import limiter
 from app.models.membership import Membership
 from app.models.user import User
@@ -146,8 +149,62 @@ MCP_TOOLS = [
 ]
 
 
-async def handle_tool_call(name: str, arguments: dict) -> Any:
-    """Execute an MCP tool call and return the result."""
+
+async def _require_owned_target(target: str, *, db: Any, org_id: Any) -> "str | None":
+    """Return an error string when `target` is not a verified asset of `org_id`.
+
+    Returns None when the scan may proceed.
+    """
+    if db is None or org_id is None:
+        # The STDIO entry point has no session. Refusing is the only honest
+        # answer: running the scan would mean scanning an arbitrary host with no
+        # record of who authorised it.
+        return (
+            "scan_target requires an authenticated session so the target can be "
+            "matched against a verified asset. Use the HTTP MCP endpoint."
+        )
+
+    from sqlalchemy import select
+
+    from app.models.asset import Asset
+    from app.utils import asset_verification
+
+    result = await db.execute(
+        select(Asset).where(
+            Asset.organization_id == org_id,
+            Asset.target_value == target,
+            Asset.is_active.is_(True),
+        )
+    )
+    asset = result.scalars().first()
+    if asset is None:
+        return (
+            f"{target!r} is not an asset of this organisation. Add it and verify "
+            f"ownership before scanning; this tool does not accept arbitrary hosts."
+        )
+    if not asset_verification.may_scan(asset.verification_status):
+        return (
+            f"Ownership is not established for {target!r} "
+            f"(status: {asset.verification_status}). Verify the domain or attest "
+            f"authority over the range first."
+        )
+    return None
+
+
+async def handle_tool_call(
+    name: str,
+    arguments: dict,
+    *,
+    db: Any = None,
+    org_id: Any = None,
+) -> Any:
+    """Execute an MCP tool call and return the result.
+
+    `db` and `org_id` are threaded through so the outbound-scan tools can check
+    that the caller's organisation has established authority over the target.
+    They are optional because the STDIO entry point has no request context; that
+    path refuses those tools outright rather than running them unchecked.
+    """
 
     if name == "check_certificate":
         # P0-04 audit fix: validate domain against SSRF blocklist
@@ -201,6 +258,16 @@ async def handle_tool_call(name: str, arguments: dict) -> Any:
                 await validate_domain_pinned(target)
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
+
+        # Ownership. routers/scans.py and the scheduled-scan task both refuse
+        # targets whose ownership was never established; without the same gate
+        # here this tool is the way around them — and it is the most permissive
+        # of the three, because it takes a free-form target rather than an
+        # Asset row. A scan port-scans the host, attempts zone transfers against
+        # its nameservers and requests /.env from it.
+        ownership_error = await _require_owned_target(target, db=db, org_id=org_id)
+        if ownership_error:
+            return {"error": ownership_error}
 
         features = arguments.get(
             "features",
@@ -455,6 +522,7 @@ async def call_tool(
     request: Request,
     payload: dict,
     current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
 ):
     """Execute an MCP tool call via HTTP.
 
@@ -489,7 +557,9 @@ async def call_tool(
         )
 
     try:
-        result = await handle_tool_call(name, arguments)
+        result = await handle_tool_call(
+            name, arguments, db=db, org_id=membership.organization_id
+        )
         return {"result": result}
     except Exception as e:
         # P0-05 audit fix: never leak internal exception text.

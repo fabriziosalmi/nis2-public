@@ -191,6 +191,31 @@ class ApiClient {
     })
   }
 
+  // -------------------------------------------- Asset ownership proof
+  //
+  // Scans are refused for targets whose ownership was never established. The
+  // platform previously had no such check: any authenticated user could add any
+  // domain or a /16 and have it port-scanned.
+  async startAssetVerification(id: string) {
+    return this.request<{ method: string; record_name: string; record_value: string; instructions: string }>(
+      `/api/v1/assets/${id}/verification/start`, { method: 'POST' }
+    )
+  }
+
+  async checkAssetVerification(id: string) {
+    return this.request<{ status: string; detail?: string; observed?: string[] }>(
+      `/api/v1/assets/${id}/verification/check`, { method: 'POST' }
+    )
+  }
+
+  /** IP and CIDR targets only — a domain has DNS proof and must use it. */
+  async attestAssetAuthority(id: string, statement: string) {
+    return this.request<{ status: string; detail?: string }>(
+      `/api/v1/assets/${id}/attest`,
+      { method: 'POST', body: JSON.stringify({ statement }) }
+    )
+  }
+
   // ------------------------------------------------------------- Vendors
   // Art. 18 supply chain. The dashboard rendered the inventory and the scores
   // while offering no way to enter a vendor, so the module read data the

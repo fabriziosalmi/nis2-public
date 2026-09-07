@@ -4,7 +4,8 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Trash2, Loader2, Server, Pencil } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { Plus, Trash2, Loader2, Server, Pencil, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -25,6 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAssets, useCreateAsset, useDeleteAsset, useUpdateAsset } from "@/hooks/use-assets"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { TableSkeleton } from "@/components/ui/skeleton"
+import { VerifyOwnershipDialog } from "@/components/assets/verify-ownership-dialog"
 
 const assetSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -53,6 +55,11 @@ export default function AssetsPage() {
   // target_value are immutable to keep historical scan_results referrable.
   const [editingAsset, setEditingAsset] = useState<any | null>(null)
   const { data, isLoading } = useAssets()
+  // Ownership proof. Assets are unscannable until authority is established;
+  // `legacy` covers rows that predate verification and stays scannable, but is
+  // shown as unproven so it is visible rather than forgotten.
+  const [verifyTarget, setVerifyTarget] = useState<any | null>(null)
+  const queryClient = useQueryClient()
   const createAsset = useCreateAsset()
   const updateAsset = useUpdateAsset()
   const deleteAsset = useDeleteAsset()
@@ -290,6 +297,7 @@ export default function AssetsPage() {
                   <TableHead>{t("type")}</TableHead>
                   <TableHead>{t("target")}</TableHead>
                   <TableHead>{t("tags")}</TableHead>
+                  <TableHead>{t("verification.column")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
@@ -318,6 +326,31 @@ export default function AssetsPage() {
                           <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
                         ))}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const st = asset.verification_status || "unverified"
+                        if (st === "verified" || st === "attested") {
+                          return (
+                            <Badge variant="secondary" className="gap-1">
+                              <ShieldCheck className="h-3 w-3" />
+                              {t(`verification.status_${st}`)}
+                            </Badge>
+                          )
+                        }
+                        const Icon = st === "legacy" ? ShieldQuestion : ShieldAlert
+                        return (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto gap-1 px-2 py-1 text-xs text-amber-700 dark:text-amber-400"
+                            onClick={() => setVerifyTarget(asset)}
+                          >
+                            <Icon className="h-3 w-3" />
+                            {t(`verification.status_${st}`)}
+                          </Button>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Badge variant={asset.is_active ? "secondary" : "outline"}>
@@ -353,6 +386,13 @@ export default function AssetsPage() {
           )}
         </CardContent>
       </Card>
+
+      <VerifyOwnershipDialog
+        asset={verifyTarget}
+        open={!!verifyTarget}
+        onOpenChange={(o) => !o && setVerifyTarget(null)}
+        onVerified={() => queryClient.invalidateQueries({ queryKey: ["assets"] })}
+      />
     </div>
   )
 }

@@ -70,8 +70,17 @@ check "no-context scans=0"            "$(app 'SELECT count(*) FROM scans')"    "
 check "no-context findings=0"         "$(app 'SELECT count(*) FROM findings')" "0"
 check "orgA-context scans"            "$(app "SET app.current_org_id='$ORG_A'; SELECT count(*) FROM scans")"    "$A_SCANS"
 check "orgA-context findings"         "$(app "SET app.current_org_id='$ORG_A'; SELECT count(*) FROM findings")" "$A_FIND"
-check "orgB cannot see A's scans"     "$(app "SET app.current_org_id='$ORG_B'; SELECT count(*) FROM scans")"    "0"
-check "orgB cannot see A's findings"  "$(app "SET app.current_org_id='$ORG_B'; SELECT count(*) FROM findings")" "0"
+# Assert on A's ROWS specifically, not on a total.
+#
+# These read "count(*) FROM scans" in B's context and expected 0, which only
+# holds while B owns nothing. Once B had a scan of its own the check reported a
+# cross-tenant leak that did not exist — and the same arithmetic could hide a
+# real one, if B's own row count happened to match. Scoping the query to A's
+# organisation_id asks the question the check is actually for: can B see A's
+# data? Under RLS a leak returns a row; anything else returns zero regardless of
+# what B owns.
+check "orgB cannot see A's scans"     "$(app "SET app.current_org_id='$ORG_B'; SELECT count(*) FROM scans WHERE organization_id='$ORG_A'")"    "0"
+check "orgB cannot see A's findings"  "$(app "SET app.current_org_id='$ORG_B'; SELECT count(*) FROM findings WHERE organization_id='$ORG_A'")" "0"
 
 echo
 if [ "$fail" = 0 ]; then echo "H5 RLS VALIDATION: ALL CHECKS PASSED ✅"; else echo "H5 RLS VALIDATION: FAILURES ABOVE ❌"; fi

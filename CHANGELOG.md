@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.6.13] - 2026-09-07
+
+### 🛡️ Security — nothing may be scanned without established authority
+
+There was no ownership check anywhere. Any authenticated user could add any
+domain — or a /16, which the validator permits — as an asset and have the
+platform port-scan it, attempt zone transfers against its nameservers, and
+request `/.env` and `/.git/HEAD` from it: roughly 900,000 TCP connections per
+scan at the ceiling, at ten scans a minute. In the target's logs that is
+indistinguishable from reconnaissance, and it made the operator responsible for
+unauthorised scanning of third parties the moment the instance had more than one
+user — which is the deployment this platform is sold for.
+
+The only control that shipped was a legal disclaimer persisted in localStorage
+on the public landing page, explicitly suppressed for authenticated users: shown
+to people who cannot scan, hidden from those who can.
+
+- **Domains: DNS TXT challenge.** Publish `_nis2-challenge.<domain>` with an
+  issued token — the Let's Encrypt DNS-01 mechanism. Only someone controlling
+  the zone can, which makes it evidence rather than an assertion. A dedicated
+  subdomain, so verification never collides with SPF, DMARC or a
+  site-verification record the customer already depends on.
+- **IP and CIDR: recorded attestation.** An address range has no DNS to prove
+  anything with, and RDAP would say who it is allocated to rather than whether
+  this customer is authorised by them. An admin states authority in their own
+  words; the statement is stored against their account and written to the audit
+  log. It verifies nothing — nothing can — but it moves the record from "the
+  platform allowed it" to "this person asserted it, on this date, in these
+  words". Not available for domains: an attestation must never be the easy way
+  around evidence that exists.
+- **Enforced on all three paths that start a scan** — `POST /scans`, the
+  scheduled-scan task (unattended and on a cron, the worst shape for an
+  unauthorised scan), and the MCP `scan_target` tool, which additionally now
+  requires the target to match an asset of the caller's organisation instead of
+  accepting a free-form host. A gate on one of three is not a gate.
+- Assets predating verification are marked `legacy` and keep working — an
+  upgrade that silently stopped every existing customer's scans would be its own
+  defect — while displaying as *not verified* so they stay visible.
+- Full UI on the assets page: an ownership column, the DNS challenge with the
+  record to publish, and the attestation form.
+
+### 🐛 Fixed
+
+- `scripts/h5_validate.sh` asserted that organisation B could see **zero** scans,
+  which only holds while B owns none. Once B had a scan of its own the check
+  reported a cross-tenant leak that did not exist — and the same arithmetic
+  could have hidden a real one. It now asserts that B cannot see **A's rows**
+  specifically, which is the question the check is for.
+
 ## [2.6.12] - 2026-09-07
 
 Scanner correctness, and the CI job that would have caught most of the last two

@@ -241,6 +241,18 @@ async def ensure_schema() -> None:
             ("users", "totp_recovery_codes", "VARCHAR(1024)"),
             ("users", "invite_token_hash", "VARCHAR(128)"),
             ("users", "invite_token_expires_at", "TIMESTAMP WITH TIME ZONE"),
+            # Asset ownership verification (migration 008). Listed here too
+            # because this bootstrap is the path a bare `docker compose up`
+            # takes; without it a dev volume created before 008 500s on every
+            # asset query.
+            # NOTE the default: `legacy`, not `unverified`. Rows predating
+            # verification are grandfathered — an upgrade that silently stopped
+            # every existing customer's scans would be its own defect — while
+            # staying visibly distinct from a target actually proven.
+            ("assets", "verification_status", "VARCHAR(16) NOT NULL DEFAULT 'legacy'"),
+            ("assets", "verification_token", "VARCHAR(64)"),
+            ("assets", "verified_at", "TIMESTAMP WITH TIME ZONE"),
+            ("assets", "verified_by", "UUID"),
         ]
         # v2.4.14: PasswordResetToken is a brand-new table; create_all above
         # already provisions it, no ALTER needed. Listed here for the

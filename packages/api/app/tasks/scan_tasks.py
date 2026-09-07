@@ -165,6 +165,7 @@ def run_scheduled_scan_task(self, schedule_id: str, org_id: str | None = None):
 async def _run_scheduled_scan(schedule_id: str, org_id: str | None = None):
     from app.models.scan_schedule import ScanSchedule
     from app.models.asset import Asset
+    from app.utils import asset_verification
     from app.models.scan import Scan
 
     async with async_session_factory() as db:
@@ -198,6 +199,22 @@ async def _run_scheduled_scan(schedule_id: str, org_id: str | None = None):
                 )
             )
             for asset in assets_result.scalars().all():
+                # Same ownership gate as the manual path in routers/scans.py.
+                # Enforcing it there alone would have left this one open: a
+                # schedule created before verification, or pointing at an asset
+                # whose proof was later revoked, would keep scanning a target
+                # nobody established authority over — unattended, on a cron,
+                # which is the worst shape for it. Skipped rather than fatal so
+                # one unverified asset does not silently cancel a schedule's
+                # other targets.
+                if not asset_verification.may_scan(asset.verification_status):
+                    logger.warning(
+                        "scheduled scan: skipping unverified asset %s (%s) on schedule %s",
+                        asset.id,
+                        asset.target_value,
+                        schedule.id,
+                    )
+                    continue
                 if asset.target_type == "domain":
                     domains.append(asset.target_value)
                     # P2-05 audit fix: forward the validation-time

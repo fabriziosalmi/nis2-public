@@ -32,6 +32,11 @@ class AssetResponse(BaseModel):
     pinned_ip: Optional[str] = None
     tags: Optional[list[str]] = None
     is_active: bool
+    # Ownership proof. Exposed because the dashboard has to show which assets
+    # can actually be scanned, and because an operator reviewing an inventory
+    # needs to see which targets were merely asserted rather than proven.
+    verification_status: str = "unverified"
+    verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

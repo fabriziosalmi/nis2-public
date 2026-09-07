@@ -252,6 +252,39 @@ Finding text is interpolated into the prompt, and that text derives from content
 
 ---
 
+## Scanning only what you may scan
+
+Before a target can be scanned, the organisation has to establish authority over
+it. There is no way to add an arbitrary host and press scan.
+
+| Target | Proof | How |
+|---|---|---|
+| Domain | **DNS TXT challenge** | Publish `_nis2-challenge.<domain>` with the issued token. Only someone controlling the zone can, which is what makes it evidence — the mechanism certificate authorities use for DNS-01 |
+| IP address, CIDR | **Recorded attestation** | An address range has no DNS to prove anything with. An **admin** states authority in their own words; the statement is stored against their account and written to the audit log |
+
+All three paths that can start a scan enforce this — the manual `POST /scans`,
+the scheduled-scan task, and the MCP `scan_target` tool, which additionally
+requires the target to match an asset of the caller's organisation rather than
+accepting a free-form host.
+
+An attestation is not available for domains: they have DNS proof, and a
+signature must never be the easy way around evidence that exists.
+
+> **Assets created before this existed** are marked `legacy` and keep working —
+> an upgrade that silently stopped every existing scan would be its own defect.
+> They display as *not verified*, so they are visible rather than forgotten.
+
+> **What this is and is not.** DNS verification is proof. An attestation is not:
+> nothing can verify authority over an address range from the outside, and RDAP
+> would only say who it is allocated to, not whether you are authorised by them.
+> What the attestation does is move the record from "the platform allowed it" to
+> "this person asserted it, on this date, in these words". Scanning a third
+> party without authorisation carries civil and in places criminal exposure in
+> the EU, and an AXFR attempt plus a request for `/.env` is indistinguishable
+> from reconnaissance in the target's logs.
+
+---
+
 ## Technical validation engine (30+ checks)
 
 These automated checks verify whether the security measures documented in your governance framework are actually implemented on the network:
