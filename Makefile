@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 
-.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed db-provision-app-role test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
+.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed db-provision-app-role version version-check version-check-release version-set test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
 
 # ─── Cross-platform Python detection ─────────────────────────────────
 # v2.4.28: pre-2.4.28 the Makefile invoked `python` literally, which on
@@ -163,6 +163,47 @@ db-provision-app-role:
 	@echo "  superuser in MIGRATION_DATABASE_URL, then restart the API."
 	@echo ""
 
+# ─── Versioning ──────────────────────────────────────────────────────
+# `VERSION` at the repo root is the single source of truth. Four manifests and
+# SECURITY.md's supported-versions table are derived from it by `version-set`,
+# and `version-check` fails the build when any of them drifts.
+#
+# Everything this guards had already gone wrong: the manifests said 2.6.10 while
+# the newest tag was v2.6.8 (so the README's release badge, which reads GitHub
+# releases, showed a version two behind), CHANGELOG.md was missing entries for
+# eight tagged releases, and SECURITY.md named 2.5.x as current for the whole
+# 2.6 series while telling operators on 2.4.x they were still supported.
+
+version:
+ifeq ($(strip $(PYTHON)),)
+	$(error $(PYTHON_NOT_FOUND_MSG))
+endif
+	@$(PYTHON) scripts/version.py current
+
+version-check:
+ifeq ($(strip $(PYTHON)),)
+	$(error $(PYTHON_NOT_FOUND_MSG))
+endif
+	@$(PYTHON) scripts/version.py check
+
+# Adds the git-tag requirement. Run before cutting a release, not on every commit:
+# between releases the tree is legitimately ahead of the newest tag.
+version-check-release:
+ifeq ($(strip $(PYTHON)),)
+	$(error $(PYTHON_NOT_FOUND_MSG))
+endif
+	@$(PYTHON) scripts/version.py check --release
+
+# make version-set VERSION=2.7.0
+version-set:
+ifeq ($(strip $(PYTHON)),)
+	$(error $(PYTHON_NOT_FOUND_MSG))
+endif
+	@test -n "$(VERSION)" || ( \
+	  echo "ERROR -- pass the new version, e.g.  make version-set VERSION=2.7.0"; \
+	  exit 1 )
+	@$(PYTHON) scripts/version.py set $(VERSION)
+
 # Testing
 test: test-scanner test-api
 
@@ -193,6 +234,8 @@ check: lint
 	@! grep -rn "^[[:space:]]*except:$$" --include="*.py" packages/ || (echo "  FAIL" && exit 1)
 	@echo "== policy: no CORS wildcard =="
 	@! grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py || (echo "  FAIL" && exit 1)
+	@echo "== version consistency =="
+	@$(PYTHON) scripts/version.py check
 	@echo "== policy: .env not tracked =="
 	@! git ls-files --error-unmatch .env 2>/dev/null || (echo "  FAIL: .env is tracked" && exit 1)
 	@echo "== npm audit (web, prod deps, high) =="

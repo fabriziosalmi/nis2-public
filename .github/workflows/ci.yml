@@ -306,6 +306,32 @@ jobs:
           echo "OK: CORS properly restricted"
 
   # -----------------------------------------------------------------------
+  # Version consistency
+  #
+  # `VERSION` at the repo root is the single source of truth; the four manifests
+  # and SECURITY.md's supported-versions table are derived from it. Everything
+  # this guards had already drifted: manifests at 2.6.10 against a newest tag of
+  # v2.6.8, CHANGELOG.md missing entries for eight tagged releases, and
+  # SECURITY.md naming 2.5.x as current for the whole 2.6 series while telling
+  # operators on 2.4.x they were still receiving patches.
+  #
+  # The git-tag requirement is NOT checked here: between releases the tree is
+  # legitimately ahead of the newest tag, and failing every commit for that would
+  # train people to ignore the gate. `make version-check-release` adds it at
+  # release time.
+  # -----------------------------------------------------------------------
+  version-consistency:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check VERSION against every derived file
+        run: python scripts/version.py check
+
+  # -----------------------------------------------------------------------
   # Python dependency vulnerability scan
   # -----------------------------------------------------------------------
   pip-audit:

@@ -18,7 +18,7 @@ We support the **current minor** and the **previous minor** with security patche
 | Version | Status | Security patches |
 |---------|--------|------------------|
 | 2.6.x   | Current | Yes |
-| 2.5.x   | Previous | Yes (until 2026-12-31) |
+| 2.5.x   | Previous | Yes |
 | ≤ 2.4   | End-of-life | No — please upgrade |
 
 <!--
