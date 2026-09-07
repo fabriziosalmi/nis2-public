@@ -20,8 +20,13 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 COMPOSE_FILE="${COMPOSE_FILE:-infra/docker/docker-compose.dev.yml}"
-APP_PW="${NIS2_APP_PASSWORD:-h5validate}"
-DC=(docker compose -f "$COMPOSE_FILE")
+# Prefer .env so we match the role the postgres initdb wrapper provisioned.
+APP_PW="${NIS2_APP_PASSWORD:-$(grep -E '^NIS2_APP_PASSWORD=' .env 2>/dev/null | cut -d= -f2- || true)}"
+APP_PW="${APP_PW:-h5validate}"
+# --env-file: compose resolves ${VAR} interpolation from the .env in the project
+# directory (infra/docker/, which has none), not from the repo root. Without it
+# every ${VAR:-default} in the compose file beats the operator's real config.
+DC=(docker compose --env-file .env -f "$COMPOSE_FILE")
 
 su()  { "${DC[@]}" exec -T postgres psql -U nis2 -d nis2 -tAX -c "$1" | tail -1; }
 # app() may run "SET ...; SELECT ..." in one session (the GUC must persist across
@@ -37,7 +42,7 @@ check() { # label  actual  expected
 
 echo "== 1. Provision nis2_app (init-SQL, idempotent) =="
 if "${DC[@]}" exec -T postgres psql -U nis2 -d nis2 -v app_pw="$APP_PW" \
-      < infra/docker/initdb/01-create-app-role.sql >/tmp/h5_provision.log 2>&1; then
+      < infra/docker/initdb/sql/01-create-app-role.sql >/tmp/h5_provision.log 2>&1; then
   echo "  provisioned"
 else
   echo "  provision returned non-zero — last lines:"; tail -3 /tmp/h5_provision.log | sed 's/^/    /'

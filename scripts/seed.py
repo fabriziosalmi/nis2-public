@@ -16,7 +16,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 async def seed():
-    from app.database import Base, async_session_factory, engine
+    from app.database import Base, async_session_factory, engine, set_rls_org_context
     from app.models import (
         Asset,
         Finding,
@@ -64,6 +64,26 @@ async def seed():
         )
         db.add(org)
         await db.flush()
+
+        # Establish the RLS tenant context before writing any tenant-scoped row.
+        #
+        # Every table carrying organization_id has a FORCE ROW LEVEL SECURITY
+        # policy whose WITH CHECK clause compares the row's organization_id to
+        # `app.current_org_id`. With no context set, current_setting() returns
+        # NULL, the predicate never matches, and every INSERT is rejected with
+        # "new row violates row-level security policy".
+        #
+        # This script has always written without setting it. The failure only
+        # surfaced once the API stopped running as the bootstrap superuser,
+        # because Postgres bypasses RLS for superusers and the policies were
+        # decorative. That is precisely the class of bug RLS exists to catch:
+        # code writing tenant data without declaring which tenant.
+        #
+        # The `memberships` policy also accepts a user_id match, so both ids go
+        # in. Session-scoped (is_local=false) because the seed spans several
+        # flushes and commits; safe here because this is a short-lived one-shot
+        # process, not a pooled request handler.
+        await set_rls_org_context(db, org.id, user.id)
 
         # Membership
         membership = Membership(

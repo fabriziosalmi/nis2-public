@@ -46,6 +46,30 @@ endif
 # specific target's prerequisites.
 PYTHON_NOT_FOUND_MSG := Python 3.10+ not found.\n  Install from https://www.python.org/ (Linux/macOS may use the system package manager).\n  On Windows: the Microsoft Store stub at %LOCALAPPDATA%\\Microsoft\\WindowsApps\\python.exe is NOT a real Python — open Settings > Apps > Apps & Features > App execution aliases and disable 'python.exe' / 'python3.exe', then install Python from python.org.
 
+# ─── Why every compose call carries --env-file .env ──────────────────
+# Docker Compose resolves ${VAR} INTERPOLATION from the .env in the PROJECT
+# DIRECTORY, which defaults to the directory holding the compose file --
+# infra/docker/ here, where no .env exists. `env_file:` on a service is a
+# different mechanism with an explicit relative path (../../.env) and does find
+# the repo-root file.
+#
+# So the stack silently ran on two different credential sources: services with
+# `env_file:` (api, workers) got the real .env values, while every ${VAR:-default}
+# in the compose files -- POSTGRES_USER/PASSWORD/DB, REDIS_PASSWORD,
+# NEXT_PUBLIC_API_URL -- fell back to its literal default. The two halves agree
+# only for as long as .env still contains the defaults; set a real
+# POSTGRES_PASSWORD and postgres keeps `nis2secret` while the API connects with
+# the new one. Observed: the whole dev stack up, postgres "healthy", and every
+# request failing with `password authentication failed`.
+#
+# Worse in prod, where the guards are `${POSTGRES_PASSWORD:?...}` rather than
+# `:-default`: with no interpolation source the guard fires and compose refuses
+# the file outright, so `make prod` could not start the stack at all. Nothing
+# caught it because no CI job builds or boots the images.
+#
+# --env-file .env points interpolation at the repo-root file, making the two
+# mechanisms agree. Verified by test_compose_env_wiring.py.
+
 # Development
 dev: dev-up
 	@echo ""
@@ -63,7 +87,7 @@ dev: dev-up
 # trust on what is actually a startup race. `--wait-timeout 90` caps
 # that wait at 90s so a genuinely stuck service still surfaces.
 dev-up:
-	docker compose -f infra/docker/docker-compose.dev.yml up -d --build --wait --wait-timeout 90
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml up -d --build --wait --wait-timeout 90
 
 # `--renew-anon-volumes` is necessary whenever a node dependency was
 # added or removed in packages/web. Docker compose preserves anonymous
@@ -72,38 +96,38 @@ dev-up:
 # new package shows up as `Module not found` even after `--build`. This
 # target is the right thing to run after editing package.json.
 dev-up-fresh:
-	docker compose -f infra/docker/docker-compose.dev.yml up -d --build --force-recreate --renew-anon-volumes --wait --wait-timeout 120
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml up -d --build --force-recreate --renew-anon-volumes --wait --wait-timeout 120
 
 dev-down:
-	docker compose -f infra/docker/docker-compose.dev.yml down
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml down
 
 dev-logs:
-	docker compose -f infra/docker/docker-compose.dev.yml logs -f
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml logs -f
 
 api-logs:
-	docker compose -f infra/docker/docker-compose.dev.yml logs -f api
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml logs -f api
 
 web-logs:
-	docker compose -f infra/docker/docker-compose.dev.yml logs -f web
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml logs -f web
 
 # Database
 db-migrate:
-	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic revision --autogenerate -m "$(msg)"
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic revision --autogenerate -m "$(msg)"
 
 db-upgrade:
-	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic upgrade head
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic upgrade head
 
 # P0-01: mark an EXISTING database as up-to-date with the current
 # Alembic head. Run this ONCE when adopting Alembic on a database
 # that was previously managed by ensure_schema().
 db-stamp:
-	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic stamp head
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic stamp head
 
 db-history:
-	docker compose -f infra/docker/docker-compose.dev.yml exec api alembic history --verbose
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic history --verbose
 
 db-seed:
-	docker compose -f infra/docker/docker-compose.dev.yml exec api python -m scripts.seed
+	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api python -m scripts.seed
 
 # Provision the nis2_app least-privilege runtime role on an EXISTING database.
 #
@@ -127,7 +151,7 @@ db-provision-app-role:
 	  exit 1 )
 	@echo "== provisioning nis2_app on the running postgres service =="
 	@set -a; . ./.env; set +a; \
-	  docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+	  docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T postgres \
 	    psql -v ON_ERROR_STOP=1 \
 	         --username "$${POSTGRES_USER:-nis2}" \
 	         --dbname "$${POSTGRES_DB:-nis2}" \
@@ -445,10 +469,10 @@ prod-preflight:
 	@echo ""
 
 prod-up: prod-preflight
-	docker compose -f infra/docker/docker-compose.prod.yml up -d --build --wait --wait-timeout 120
+	docker compose --env-file .env -f infra/docker/docker-compose.prod.yml up -d --build --wait --wait-timeout 120
 
 prod-down:
-	docker compose -f infra/docker/docker-compose.prod.yml down
+	docker compose --env-file .env -f infra/docker/docker-compose.prod.yml down
 
 # ─── Cleanup ─────────────────────────────────────────────────────────
 # Drops dev volumes (postgres data, etc.) and Python/Next caches.

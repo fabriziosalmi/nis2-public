@@ -40,7 +40,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       # Provisions the nis2_app NOSUPERUSER NOBYPASSRLS runtime role. This
       # mount is what the whole RLS security model depends on, and it did not
-      # exist: initdb/01-create-app-role.sql was written, documented and
+      # exist: initdb/sql/01-create-app-role.sql was written, documented and
       # referenced by the README as the tenant-isolation mechanism, while being
       # mounted by no compose file and executed on no deployment. Every install
       # therefore ran the API as the bootstrap superuser, for which Postgres
@@ -137,9 +137,31 @@ services:
     # healthcheck Caddy can race the API and serve 502s during the
     # 5–30s startup window (RLS bootstrap + schema sync).
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2).status==200 else 1)"]
+      # /health/ready, NOT /health.
+      #
+      # By design (see app/routers/health.py) /health is a LIVENESS probe that
+      # "never returns a non-200" — it reports the Python process is routing and
+      # checks nothing else. Both compose files pointed the container healthcheck
+      # at it, so `--wait` and Caddy's `depends_on: service_healthy` gated on a
+      # signal that cannot fail. Observed directly: with the database
+      # unreachable, `docker compose up --wait` returned success, every service
+      # showed `healthy`, and every API request 500'd. /health/ready reported
+      # {"status":"degraded","checks":{"database":"error",...}} the whole time.
+      #
+      # Readiness is the correct semantics for gating dependents: do not route
+      # traffic to an API that cannot reach its database. Docker does not restart
+      # containers on `unhealthy`, so this cannot cause a restart loop — it only
+      # holds back whatever depends on the service.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=8).status==200 else 1)"]
       interval: 10s
-      timeout: 3s
+      # 10s, not 3s. /health/ready pings the Celery workers via the broker and
+      # `control.ping` always waits its full _CELERY_PING_TIMEOUT (3s) — it
+      # cannot know whether another worker is about to reply. Measured: the
+      # endpoint answers 200 in a steady 3.15s. With `timeout: 3s` Docker killed
+      # every probe (health log: exit=-1, i.e. timed out, never a real failure),
+      # so the api container sat permanently `unhealthy` while answering
+      # correctly on every manual request.
+      timeout: 10s
       retries: 12
       start_period: 30s
 

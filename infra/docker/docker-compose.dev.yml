@@ -8,13 +8,25 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nis2}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nis2secret}
       POSTGRES_DB: ${POSTGRES_DB:-nis2}
+      # Read by initdb/01-create-app-role.sh on first volume init. Dev needs the
+      # role for the same reason prod does: .env.example points DATABASE_URL at
+      # nis2_app, so without this mount `make dev` comes up with an API that
+      # cannot authenticate to its own database.
+      NIS2_APP_PASSWORD: ${NIS2_APP_PASSWORD:-devapppw}
     # Security: bind to loopback only. `make dev` on an untrusted LAN must not
     # expose Postgres (default creds) to the network — and Docker's iptables
     # rules bypass a host firewall, so the explicit 127.0.0.1 is the guard.
     ports: ["127.0.0.1:5433:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Kept symmetric with prod so the two stacks cannot drift on the security
+      # model. Dev exercising the same least-privilege role as prod is also the
+      # only way the RLS policies get tested by everyday work.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nis2"]
+      # Parameterised, like prod: the literal `-U nis2` left the healthcheck
+      # failing forever on any deployment that customised POSTGRES_USER.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       retries: 5
 
@@ -77,14 +89,33 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
-      # /api/v1/health does not require auth (deliberately) and returns
-      # 200 once lifespan setup (RLS, schema bootstrap) has completed —
-      # the right gate for any downstream waiting on `service_healthy`.
-      # Using python instead of wget/curl because the slim API image
-      # ships neither but always has python; no extra layer needed.
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2).status==200 else 1)"]
+      # Using python instead of wget/curl because the slim API image ships
+      # neither but always has python; no extra layer needed.
+      # /health/ready, NOT /health.
+      #
+      # By design (see app/routers/health.py) /health is a LIVENESS probe that
+      # "never returns a non-200" — it reports the Python process is routing and
+      # checks nothing else. Both compose files pointed the container healthcheck
+      # at it, so `--wait` and Caddy's `depends_on: service_healthy` gated on a
+      # signal that cannot fail. Observed directly: with the database
+      # unreachable, `docker compose up --wait` returned success, every service
+      # showed `healthy`, and every API request 500'd. /health/ready reported
+      # {"status":"degraded","checks":{"database":"error",...}} the whole time.
+      #
+      # Readiness is the correct semantics for gating dependents: do not route
+      # traffic to an API that cannot reach its database. Docker does not restart
+      # containers on `unhealthy`, so this cannot cause a restart loop — it only
+      # holds back whatever depends on the service.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=8).status==200 else 1)"]
       interval: 5s
-      timeout: 3s
+      # 10s, not 3s. /health/ready pings the Celery workers via the broker and
+      # `control.ping` always waits its full _CELERY_PING_TIMEOUT (3s) — it
+      # cannot know whether another worker is about to reply. Measured: the
+      # endpoint answers 200 in a steady 3.15s. With `timeout: 3s` Docker killed
+      # every probe (health log: exit=-1, i.e. timed out, never a real failure),
+      # so the api container sat permanently `unhealthy` while answering
+      # correctly on every manual request.
+      timeout: 10s
       retries: 20
       start_period: 30s
 

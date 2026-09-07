@@ -16,7 +16,9 @@ superuser (`nis2`) the policies are decorative — isolation rests on the app-la
 
 ## 1. Provision the role
 
-Fresh deploy: drop [`infra/docker/initdb/01-create-app-role.sql`](../infra/docker/initdb/01-create-app-role.sql)
+Fresh deploy: automatic — `docker-compose.{dev,prod}.yml` mount `infra/docker/initdb`
+into the postgres container and the `01-create-app-role.sh` wrapper runs
+[`infra/docker/initdb/sql/01-create-app-role.sql`](../infra/docker/initdb/sql/01-create-app-role.sql)
 into the postgres container's `/docker-entrypoint-initdb.d/` (runs once on first
 volume init).
 
@@ -24,7 +26,7 @@ Existing deploy (volume already initialised): run it once as the superuser —
 
 ```bash
 psql "$SUPERUSER_DATABASE_URL" -v app_pw="$NIS2_APP_PASSWORD" \
-     -f infra/docker/initdb/01-create-app-role.sql
+     -f infra/docker/initdb/sql/01-create-app-role.sql
 ```
 
 Confirm the role is least-privilege:
