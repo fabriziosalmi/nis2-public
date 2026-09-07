@@ -216,17 +216,32 @@ prod-preflight:
 	  echo "      POSTGRES_PASSWORD=$$(openssl rand -base64 24)"; \
 	  echo ""; \
 	  exit 1 )
-	@if grep -qE '^JWT_SECRET=GENERATE_ME' .env; then \
+	@if grep -iqE '^(POSTGRES_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env; then \
 	  echo ""; \
 	  echo "==================================================================="; \
-	  echo "  ERROR -- JWT_SECRET is still the placeholder GENERATE_ME..."; \
+	  echo "  ERROR -- one or more secrets in .env are still placeholders"; \
 	  echo "==================================================================="; \
 	  echo ""; \
-	  echo "  Step 1) Generate a real secret:"; \
+	  echo "  Offending lines (value redacted):"; \
+	  echo ""; \
+	  grep -inE '^(POSTGRES_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env \
+	    | sed -E 's/=.*/=<PLACEHOLDER>/' | sed 's/^/      /'; \
+	  echo ""; \
+	  echo "  These are the literal values published in .env.example. A"; \
+	  echo "  deployment that keeps them is running on credentials that"; \
+	  echo "  anyone can read in the public repository -- for JWT_SECRET"; \
+	  echo "  that means anyone can mint a valid token for any user in any"; \
+	  echo "  organisation."; \
+	  echo ""; \
+	  echo "  This check used to look for the literal 'GENERATE_ME' only."; \
+	  echo "  v2.5.5 renamed the placeholders to 'CHANGE_ME_*' and the check"; \
+	  echo "  silently stopped matching anything. It is now marker-based, and"; \
+	  echo "  packages/api/tests/test_env_example_placeholders.py asserts that"; \
+	  echo "  every value shipped in .env.example is still caught."; \
+	  echo ""; \
+	  echo "  Generate a real secret per line:"; \
 	  echo ""; \
 	  echo "      openssl rand -base64 32"; \
-	  echo ""; \
-	  echo "  Step 2) Replace the JWT_SECRET= line in .env with the output."; \
 	  echo ""; \
 	  exit 1; fi
 	@grep -qE '^JWT_SECRET=.{32,}' .env || ( \
@@ -281,6 +296,78 @@ prod-preflight:
 	  echo "  Multiple domains: comma-separated, NO wildcards."; \
 	  echo ""; \
 	  exit 1 )
+	@if grep -qE '^ENVIRONMENT=development' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- ENVIRONMENT=development in a production .env"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  docker-compose.prod.yml now pins ENVIRONMENT=production per"; \
+	  echo "  service, so THIS STACK is safe regardless. But the line is still"; \
+	  echo "  wrong, and anything that reads .env directly -- systemd, k8s,"; \
+	  echo "  bare uvicorn, alembic, a host-side pytest run -- will pick up"; \
+	  echo "  development mode, which:"; \
+	  echo ""; \
+	  echo "    * drops the Secure flag from the session cookies;"; \
+	  echo "    * mounts the UNAUTHENTICATED /api/v1/auth/debug/last-email"; \
+	  echo "      endpoint, which returns the last password-reset link and"; \
+	  echo "      is enough on its own for account takeover;"; \
+	  echo "    * skips the JWT_SECRET / CORS_ORIGINS boot validation;"; \
+	  echo "    * skips the SUPERUSER/BYPASSRLS refusal, making RLS decorative;"; \
+	  echo "    * swallows every outbound email into an in-memory outbox."; \
+	  echo ""; \
+	  echo "  Fix:"; \
+	  echo ""; \
+	  echo "      ENVIRONMENT=production"; \
+	  echo ""; \
+	  exit 1; fi
+	@if grep -qE '^DOMAIN=nis2\.yourdomain\.com' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- DOMAIN is still the placeholder nis2.yourdomain.com"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Caddy would request a public certificate for a domain you do"; \
+	  echo "  not control: the ACME challenge fails and repeated attempts"; \
+	  echo "  burn the Let's Encrypt failure rate limit for your IP."; \
+	  echo ""; \
+	  echo "  Set your real public host:"; \
+	  echo ""; \
+	  echo "      DOMAIN=nis2.example.com"; \
+	  echo ""; \
+	  echo "  Or, for a local production smoke test, use:"; \
+	  echo ""; \
+	  echo "      DOMAIN=localhost"; \
+	  echo ""; \
+	  exit 1; fi
+	@grep -qE '^SMTP_HOST=.+' .env || ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  WARNING -- SMTP_HOST is empty"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  In production the in-memory dev outbox is OFF, so nothing will"; \
+	  echo "  send mail. Two flows go silent:"; \
+	  echo ""; \
+	  echo "    * password reset -- users never receive the link;"; \
+	  echo "    * Art. 23 incident-deadline alerts -- the 24h/72h/1-month"; \
+	  echo "      fallback channel is 'email the org admins'."; \
+	  echo ""; \
+	  echo "  The API stays up and still returns 204; the failure appears"; \
+	  echo "  only in the logs. Configure SMTP_* in .env, or accept that"; \
+	  echo "  both flows are inert on this deployment."; \
+	  echo "" )
+	@grep -qE '^PUBLIC_URL=https?://localhost' .env && ( \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  WARNING -- PUBLIC_URL still points at localhost"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  Password-reset emails embed this origin. Recipients would get a"; \
+	  echo "  link they cannot open. Set it to your public origin, e.g."; \
+	  echo ""; \
+	  echo "      PUBLIC_URL=https://nis2.example.com"; \
+	  echo "" ) || true
 	@if grep -qE '^RLS_SUPERUSER_OK=1' .env; then \
 	  echo ""; \
 	  echo "==================================================================="; \

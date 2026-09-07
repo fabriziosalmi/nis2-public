@@ -18,6 +18,60 @@ _INSECURE_JWT_DEFAULTS = {
     "changeme",
 }
 
+# Exact-match on a literal is the wrong shape for this check, and it failed
+# exactly the way that shape always fails. v2.5.5 renamed the .env.example
+# placeholders from `GENERATE_ME_openssl_rand_base64_32` to
+# `CHANGE_ME_RUN_openssl_rand_base64_32`; the set above kept the OLD string, so
+# from that release on, the shipped placeholder was:
+#   - not in _INSECURE_JWT_DEFAULTS  (renamed, exact match missed it),
+#   - 36 characters long             (so the >= 32 length floor passed it),
+#   - not matched by the Makefile's `^JWT_SECRET=GENERATE_ME` grep either.
+# Net effect: `cp .env.example .env && make prod` booted production signing
+# every JWT with a key published in this repository. Anyone could mint a token
+# for any user in any organisation.
+#
+# Substring markers instead of literals: every realistic unedited template value
+# contains at least one, while a real secret does not. Renaming a placeholder can
+# no longer silently disarm the check — which is the property the exact-match set
+# never had.
+#
+# Marker selection is deliberately conservative, because a detector that rejects
+# a VALID secret is worse than one that misses an exotic template: it teaches the
+# operator to work around the check. Every marker below is either
+#   (a) long enough that a chance collision is not credible ("placeholder"), or
+#   (b) anchored on "_" or "-", neither of which appears in base64 output
+#       ([A-Za-z0-9+/=]), so it cannot collide with `openssl rand -base64 32`.
+# Short all-alphanumeric markers were tried and removed: "xxxx" rejected the
+# legitimate 40-char secret in tests/test_data_encryption_key.py, and "todo"
+# carries a ~1-in-25k false-positive rate against random base64 for negligible
+# benefit. test_real_generated_secrets_are_not_flagged guards this boundary.
+_PLACEHOLDER_MARKERS = (
+    "change_me",
+    "change-me",
+    "changeme",
+    "generate_me",
+    "generate-me",
+    "generateme",
+    "placeholder",
+    "yourdomain",
+    "your_",
+    "insert_",
+    "replace_",
+)
+
+
+def looks_like_placeholder(value: str) -> bool:
+    """True when `value` is recognisably an unedited template value.
+
+    Used for every secret the platform refuses to boot on. Deliberately
+    marker-based rather than an allow/deny list of literals — see the comment
+    on _PLACEHOLDER_MARKERS for why the literal version failed.
+    """
+    if value in _INSECURE_JWT_DEFAULTS:
+        return True
+    low = value.lower()
+    return any(marker in low for marker in _PLACEHOLDER_MARKERS)
+
 
 class Settings(BaseSettings):
     environment: str = "production"
@@ -115,7 +169,7 @@ class Settings(BaseSettings):
             # Dev convenience: generate an ephemeral secret so `make dev` boots
             # cleanly. Tokens won't survive a restart — that's intentional, so
             # local sessions don't leak into production by accident.
-            if self.jwt_secret in _INSECURE_JWT_DEFAULTS or len(self.jwt_secret) < 32:
+            if looks_like_placeholder(self.jwt_secret) or len(self.jwt_secret) < 32:
                 self.jwt_secret = secrets.token_urlsafe(32)
                 logger.warning(
                     "[dev] JWT_SECRET missing or weak; using an ephemeral random "
@@ -131,7 +185,7 @@ class Settings(BaseSettings):
             )
 
         problems: list[str] = []
-        if self.jwt_algorithm != "RS256" and self.jwt_secret in _INSECURE_JWT_DEFAULTS:
+        if self.jwt_algorithm != "RS256" and looks_like_placeholder(self.jwt_secret):
             problems.append(
                 "JWT_SECRET is unset or uses an insecure placeholder. "
                 "Generate one with `openssl rand -base64 32`."
@@ -146,7 +200,7 @@ class Settings(BaseSettings):
         # key off a hardcoded literal — defeating MFA for anyone with a DB dump.
         # Require strong material either way; fail closed.
         totp_key_material = self.data_encryption_key or self.jwt_secret
-        if totp_key_material in _INSECURE_JWT_DEFAULTS or len(totp_key_material) < 32:
+        if looks_like_placeholder(totp_key_material) or len(totp_key_material) < 32:
             problems.append(
                 "DATA_ENCRYPTION_KEY must be a strong secret of at least 32 "
                 "characters — it keys field-level MFA/TOTP encryption. In RS256 "

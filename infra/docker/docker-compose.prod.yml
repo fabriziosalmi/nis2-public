@@ -83,6 +83,34 @@ services:
     volumes:
       - reports-data:/tmp/nis2-reports
     env_file: ../../.env
+    environment:
+      # ENVIRONMENT is a property of WHICH COMPOSE FILE YOU RAN, not of a
+      # hand-edited .env line. Compose gives `environment:` precedence over
+      # `env_file:`, so this cannot be downgraded by a stale or copied .env.
+      #
+      # Why this is here: `.env.example` used to ship ENVIRONMENT=development
+      # and `make prod`'s preflight never checked it. Following the README
+      # verbatim therefore produced a PRODUCTION deployment running in DEV
+      # mode, which silently disabled FIVE separate controls at once:
+      #   1. Settings._validate_runtime_config returns early -> no JWT_SECRET
+      #      strength check, no CORS allow-list check, no DATA_ENCRYPTION_KEY
+      #      requirement (app/config.py).
+      #   2. _cookie_secure() returns False -> access/refresh/csrf cookies are
+      #      issued WITHOUT the Secure flag behind Caddy's HTTPS
+      #      (app/routers/auth.py).
+      #   3. The unauthenticated GET /api/v1/auth/debug/last-email helper is
+      #      mounted (app/routers/auth.py).
+      #   4. The in-memory dev outbox swallows every outbound email instead of
+      #      dialling the MTA (app/utils/email.py) — so password resets and
+      #      Art. 23 deadline alerts went to a log line.
+      #   5. assert_db_role_rls_safe() skips the SUPERUSER/BYPASSRLS refusal
+      #      (app/database.py), leaving RLS decorative.
+      # (3) + (4) chained into unauthenticated account takeover:
+      # forgot-password -> read the reset link from the debug endpoint ->
+      # reset-password. The dev compose already pins ENVIRONMENT per service;
+      # prod now matches so the two files are symmetric and neither depends on
+      # operator diligence.
+      ENVIRONMENT: production
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -121,6 +149,11 @@ services:
       # stop after the first task. See the _CELERY_WORKER_MODE comment
       # block in packages/api/app/database.py.
       CELERY_WORKER: "1"
+      # Pinned for the same reason as the api service above — see the long
+      # note there. The worker specifically needs it for the RLS boot guard
+      # in app/tasks/celery_app.py (_enforce_rls_role), which is gated on
+      # production and would otherwise never fire.
+      ENVIRONMENT: production
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -158,6 +191,8 @@ services:
       # Same NullPool fix as celery-worker above; the dev compose sets
       # CELERY_WORKER on both services, so prod matches to avoid drift.
       CELERY_WORKER: "1"
+      # Pinned for the same reason as the api service above.
+      ENVIRONMENT: production
     depends_on:
       redis: { condition: service_healthy }
     restart: unless-stopped
