@@ -49,7 +49,6 @@ import {
   Bell,
   ScrollText,
   CalendarClock,
-  GitCompareArrows,
   type LucideIcon,
 } from "lucide-react"
 import { useTranslations } from "next-intl"

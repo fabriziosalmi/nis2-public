@@ -4,7 +4,7 @@
 "use client"
 
 import Link from "next/link"
-import { Plus, Loader2, CalendarClock, Radar, Ban } from "lucide-react"
+import { Plus, CalendarClock, Radar, Ban } from "lucide-react"
 import { useFormatDate } from "@/lib/dates"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"

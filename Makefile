@@ -238,6 +238,8 @@ check: lint
 	@$(PYTHON) scripts/version.py check
 	@echo "== policy: .env not tracked =="
 	@! git ls-files --error-unmatch .env 2>/dev/null || (echo "  FAIL: .env is tracked" && exit 1)
+	@echo "== web lint + typecheck =="
+	cd packages/web && npm run lint && npm run typecheck
 	@echo "== npm audit (web, prod deps, high) =="
 	cd packages/web && npm audit --omit=dev --audit-level=high
 	@command -v pip-audit >/dev/null 2>&1 && pip-audit --skip-editable || echo "  (pip-audit not installed — skipped)"

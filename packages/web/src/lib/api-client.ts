@@ -14,7 +14,9 @@
 
 const API_BASE = ''
 
-interface FetchOptions extends RequestInit {}
+// An alias, not an empty interface: `interface X extends Y {}` is exactly Y,
+// and the extra name only obscures that.
+type FetchOptions = RequestInit
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 

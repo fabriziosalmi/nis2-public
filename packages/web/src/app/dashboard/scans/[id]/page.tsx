@@ -49,7 +49,7 @@ function ComplianceMatrixList({ matrix }: { matrix: Record<string, any> }) {
   return (
     <div className="grid gap-3">
       {Object.entries(matrix).map(([key, item]: [string, any]) => {
-        let rawLetter = key.replace("art21_", "")
+        const rawLetter = key.replace("art21_", "")
         let letter = rawLetter
         
         // Handle cases where the backend sends "b) Incident Handling" instead of "art21_b"

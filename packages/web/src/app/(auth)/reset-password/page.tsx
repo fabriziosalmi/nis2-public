@@ -100,8 +100,10 @@ function ResetPasswordInner() {
       // Brief pause so the user sees the success state before we
       // bounce them to /login.
       setTimeout(() => router.push("/login"), 1500)
-    } catch (err: any) {
-      // Single error bucket — see comment at top.
+    } catch (_err) {
+      // Single error bucket — see comment at top. The cause is deliberately
+      // discarded: distinguishing "unknown token" from "expired" would turn the
+      // reset endpoint into an oracle.
       setSubmitError(t("resetPasswordPage.invalidOrExpired"))
     } finally {
       setLoading(false)

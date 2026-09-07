@@ -20,6 +20,7 @@ import dns.exception
 # Phase 5 modules
 from .legal import LegalChecker
 from .resilience import ResilienceChecker
+from .headers import evaluate_headers, parse_set_cookie
 from .secrets import SecretsDetector, WHOISMonitor
 
 # Setup basic logging
@@ -41,6 +42,36 @@ class ScanResult:
     secrets_found: List[Dict[str, Any]] = field(default_factory=list)
     whois_info: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
+
+
+def should_run_legal_checks(host_header: str) -> bool:
+    """Is this host the public face of a business, for the Italian legal checks?
+
+    The P.IVA / privacy-notice / cookie-banner checks apply to a commercial
+    website, not to `mail.` or `api.` subdomains or bare IPs — running Playwright
+    against every host would be slow and would report a missing privacy policy on
+    an SMTP endpoint.
+
+    Extracted from inside check_http because the only test covering it
+    RE-IMPLEMENTED it in the test file rather than importing it, so it exercised
+    nothing that shipped. That copy had already drifted from the original.
+    """
+    try:
+        ipaddress.ip_address(host_header)
+        return False  # a bare IP is not a commercial website
+    except ValueError:
+        pass
+
+    if host_header.startswith('www.'):
+        return True
+    parts = host_header.split('.')
+    if len(parts) == 2:
+        return True  # example.com
+    # Two-level public suffixes: example.co.uk, example.com.it
+    if len(parts) == 3 and len(parts[-1]) == 2 and len(parts[-2]) <= 3:
+        return True
+    return False
+
 
 class Scanner:
     def __init__(self, config):
@@ -161,11 +192,23 @@ class Scanner:
                     result['redirects'] = []
                     if 'Location' in resp.headers:
                         result['redirect_location'] = resp.headers.get('Location')
-                    # Check security headers
+                    # Security headers, EVALUATED. The previous version only
+                    # recorded which of three names were absent, so
+                    # `default-src *; script-src 'unsafe-inline'` and
+                    # `max-age=1` both counted as satisfied controls.
                     result['missing_headers'] = []
                     for h in ['Strict-Transport-Security', 'Content-Security-Policy', 'X-Frame-Options']:
                         if h not in resp.headers:
                             result['missing_headers'].append(h)
+                    result['header_issues'] = [
+                        {
+                            'header': i.header,
+                            'severity': i.severity,
+                            'summary': i.summary,
+                            'detail': i.detail,
+                        }
+                        for i in evaluate_headers(dict(resp.headers))
+                    ]
 
                     # Phase 5: Enhanced checks
                     # Prevent OOM / memory exhaustion by capping the body read to 1MB.
@@ -182,18 +225,21 @@ class Scanner:
                         dict(resp.headers), cookies_str
                     )
 
-                    # Cookie Security (Raw Header Analysis)
+                    # Cookie flags, parsed as ATTRIBUTES. Substring matching on
+                    # the raw line counted `secure_session=1` as Secure and made
+                    # `SameSite=None` — weaker than omitting the attribute —
+                    # indistinguishable from `SameSite=Strict`.
                     result['cookies_analysis'] = []
-                    # aiohttp headers is a multidict, use getall for multiple Set-Cookie headers
                     raw_cookies = resp.headers.getall('Set-Cookie', [])
                     for rc in raw_cookies:
-                        c_info = {
-                            'raw': rc,
-                            'secure': 'secure' in rc.lower(),
-                            'httponly': 'httponly' in rc.lower(),
-                            'samesite': 'samesite' in rc.lower()
-                        }
-                        result['cookies_analysis'].append(c_info)
+                        flags = parse_set_cookie(rc)
+                        result['cookies_analysis'].append({
+                            'name': flags.name,
+                            'secure': flags.secure,
+                            'httponly': flags.httponly,
+                            'samesite': flags.samesite,
+                            'issues': flags.issues,
+                        })
 
                     # Subresource Integrity (SRI) Check
                     result['sri_missing'] = []
@@ -215,23 +261,7 @@ class Scanner:
 
                     # Legal compliance (Italian requirements, cookie banner)
                     # User Requirement: Check P.IVA only on www and root domains, not IPs or service subdomains.
-                    should_check_legal = False
-                    try:
-                        # Check if IP
-                        ipaddress.ip_address(host_header)
-                    except ValueError:
-                        # Not an IP, assume domain
-                        parts = host_header.split('.')
-                        if host_header.startswith('www.'):
-                            should_check_legal = True
-                        elif len(parts) == 2:
-                            # e.g. example.com
-                            should_check_legal = True
-                        elif len(parts) == 3 and len(parts[-1]) == 2 and len(parts[-2]) <= 3:
-                            # Heuristic for co.uk, com.it, etc.
-                            should_check_legal = True
-
-                    if should_check_legal:
+                    if should_run_legal_checks(host_header):
                         # Use FQDN for legal checks so Playwright visits the real domain, not the IP
                         legal_url = f"{schema}://{host_header}"
                         if port not in [80, 443]:
@@ -292,83 +322,184 @@ class Scanner:
 
         return result
 
-    async def check_tls(self, ip: str, port: int, hostname: str = None) -> Dict[str, Any]:
-        if port not in [443, 8443]:
-            return {}
+    # A probe that cannot fail is worse than no probe: it reports "clean".
+    #
+    # Debian bookworm — the base image this ships on — sets OpenSSL's default
+    # security level to 2, which refuses TLS 1.0/1.1 CLIENT-side regardless of
+    # `minimum_version`. Verified inside the running container: the handshake
+    # dies with NO_CIPHERS_AVAILABLE before a single byte reaches the target, the
+    # `except` below swallowed it, and `weak_versions` came back empty for every
+    # host on earth — including ones genuinely serving TLS 1.0.
+    #
+    # `@SECLEVEL=0` on the probe context only. It is scoped to these throwaway
+    # contexts and never touches the connection used to read the certificate.
+    _WEAK_PROBE_CIPHERS = "ALL:@SECLEVEL=0"
 
-        result = {'valid': False, 'version': 'unknown', 'expired': False, 'expiry_date': None}
+    # Ports probed for TLS. A named constant rather than a literal inside
+    # check_tls: as an inline list the limitation was invisible, and TLS served
+    # on any other port — 9443, 8080 with implicit TLS, a management interface —
+    # was skipped with no trace in the report.
+    TLS_PORTS = (443, 8443)
+
+    async def _probe_protocol(self, ip: str, port: int, hostname: str,
+                              version: "ssl.TLSVersion") -> bool:
+        """True when the server completes a handshake at exactly `version`."""
         try:
-            # We connect nicely to get the cert
-            context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_OPTIONAL # Allow getting cert even if not verified?
-
-            # Note: asyncio doesn't expose getpeercert() easily without verify.
-            # We will use a synchronous wrap for the certificate part solely because of stdlib limitations in async ssl
-            # or just accept basic info for now.
-            # Let's stick to version for this iteration to avoid blocking loop.
-
-            conn = asyncio.open_connection(ip, port, ssl=context)
-            reader, writer = await asyncio.wait_for(conn, timeout=5.0)
-
-            ssl_obj = writer.get_extra_info('ssl_object')
-            ssl_obj.getpeercert()
-
-            result['version'] = ssl_obj.version()
-            cipher_info = ssl_obj.cipher()
-            result['cipher'] = cipher_info[0] if cipher_info else 'unknown'
-
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            ctx.minimum_version = version
+            ctx.maximum_version = version
+            try:
+                ctx.set_ciphers(self._WEAK_PROBE_CIPHERS)
+            except ssl.SSLError:
+                # An OpenSSL build that refuses SECLEVEL=0 cannot probe these
+                # protocols at all. Report "not detected" rather than "absent".
+                return False
+            conn = asyncio.open_connection(
+                ip, port, ssl=ctx, server_hostname=hostname or None
+            )
+            _, writer = await asyncio.wait_for(conn, timeout=5.0)
             writer.close()
             await writer.wait_closed()
-            result['valid'] = True
-
-        except Exception as e:
-            result['error'] = str(e)
-            return result
-
-        # 2. Check for Weak Versions (TLS 1.0, 1.1)
-        # We attempt to connect forcing older protocols.
-        result['weak_versions'] = []
-
-        # Check TLS 1.0
-        try:
-            ctx_v1 = ssl.create_default_context()
-            ctx_v1.check_hostname = False
-            ctx_v1.verify_mode = ssl.CERT_NONE
-            ctx_v1.minimum_version = ssl.TLSVersion.TLSv1
-            ctx_v1.maximum_version = ssl.TLSVersion.TLSv1
-
-            conn_v1 = asyncio.open_connection(ip, port, ssl=ctx_v1)
-            r, w = await asyncio.wait_for(conn_v1, timeout=3.0)
-            result['weak_versions'].append('TLSv1.0')
-            w.close()
-            await w.wait_closed()
+            return True
         except Exception:
-            pass
+            return False
 
-        # Check TLS 1.1
+    async def check_tls(self, ip: str, port: int, hostname: str = None) -> Dict[str, Any]:
+        if port not in self.TLS_PORTS:
+            return {}
+
+        result: Dict[str, Any] = {
+            'handshake_ok': False,
+            'version': 'unknown',
+            'chain_valid': None,
+            'chain_error': None,
+            'hostname_match': None,
+            'sni_sent': bool(hostname),
+            'weak_versions': [],
+            'weak_probe_supported': True,
+        }
+
+        # SNI. The previous version called open_connection() with no
+        # server_hostname and check_hostname=False, so no SNI was sent at all:
+        # against any shared IP, CDN or load balancer the server answered with
+        # its DEFAULT certificate and every conclusion drawn was about somebody
+        # else's site. The scan pins the resolved IP (DNS-rebinding defence), so
+        # the hostname has to travel in the handshake or it travels nowhere.
+        server_hostname = hostname or None
+
+        # Two connections on purpose. The first VALIDATES — full chain and
+        # hostname verification, which is the only way `chain_valid` can mean
+        # anything. The old code set verify_mode=CERT_OPTIONAL with
+        # check_hostname=False and then reported the result as `valid`, so
+        # "valid" meant "a handshake completed", which is not a security
+        # property.
         try:
-            ctx_v1_1 = ssl.create_default_context()
-            ctx_v1_1.check_hostname = False
-            ctx_v1_1.verify_mode = ssl.CERT_NONE
-            ctx_v1_1.minimum_version = ssl.TLSVersion.TLSv1_1
-            ctx_v1_1.maximum_version = ssl.TLSVersion.TLSv1_1
+            strict = ssl.create_default_context()
+            conn = asyncio.open_connection(
+                ip, port, ssl=strict, server_hostname=server_hostname
+            )
+            _, writer = await asyncio.wait_for(conn, timeout=5.0)
+            result['chain_valid'] = True
+            result['hostname_match'] = True
+            writer.close()
+            await writer.wait_closed()
+        except ssl.SSLCertVerificationError as exc:
+            result['chain_valid'] = False
+            result['chain_error'] = exc.verify_message or str(exc)
+            mismatch = self._classify_verification_failure(
+                getattr(exc, 'verify_code', None)
+            )
+            # False only when the hostname is demonstrably the cause; None when
+            # an earlier fault stopped verification before the name was checked.
+            result['hostname_match'] = False if mismatch else None
+        except Exception as exc:
+            result['chain_error'] = str(exc)
 
-            conn_v1_1 = asyncio.open_connection(ip, port, ssl=ctx_v1_1)
-            r, w = await asyncio.wait_for(conn_v1_1, timeout=3.0)
-            result['weak_versions'].append('TLSv1.1')
-            w.close()
-            await w.wait_closed()
-        except Exception:
-            pass
+        # The second connection READS the negotiated parameters, and must not
+        # abort on an untrusted chain — a self-signed certificate is a finding to
+        # report, not a reason to return nothing about the host.
+        try:
+            lax = ssl.create_default_context()
+            lax.check_hostname = False
+            lax.verify_mode = ssl.CERT_NONE
+            conn = asyncio.open_connection(
+                ip, port, ssl=lax, server_hostname=server_hostname
+            )
+            _, writer = await asyncio.wait_for(conn, timeout=5.0)
+            ssl_obj = writer.get_extra_info('ssl_object')
+            if ssl_obj is not None:
+                result['version'] = ssl_obj.version()
+                cipher_info = ssl_obj.cipher()
+                if cipher_info:
+                    result['cipher'] = cipher_info[0]
+                    result['cipher_bits'] = cipher_info[2]
+            result['handshake_ok'] = True
+            writer.close()
+            await writer.wait_closed()
+        except Exception as exc:
+            # Do NOT return here. A server that speaks only TLS 1.0 refuses this
+            # modern context, and that is precisely the host whose obsolete
+            # protocols most need reporting — bailing out would have made the
+            # worst case the one the scanner stays silent about.
+            result['error'] = str(exc)
 
+        # Active downgrade probe, one connection per obsolete protocol.
+        for label, version in (
+            ('TLSv1.0', ssl.TLSVersion.TLSv1),
+            ('TLSv1.1', ssl.TLSVersion.TLSv1_1),
+        ):
+            if await self._probe_protocol(ip, port, server_hostname, version):
+                result['weak_versions'].append(label)
+
+        # Whether this build could have detected them at all. Without it a
+        # missing finding is indistinguishable from a clean server, which is the
+        # exact ambiguity that hid the bookworm defect.
+        result['weak_probe_supported'] = self._weak_probe_available()
         return result
+
+    # OpenSSL verify code for "hostname mismatch". Everything else that reaches
+    # SSLCertVerificationError is a chain fault.
+    _VERIFY_HOSTNAME_MISMATCH = 62
+
+    @classmethod
+    def _classify_verification_failure(cls, verify_code) -> "bool | None":
+        """Was the hostname the reason verification failed?
+
+        Returns True for a hostname mismatch, None when it could not be
+        determined. `None` is the important case and the previous code got it
+        wrong: OpenSSL stops at the first fault, so a self-signed certificate
+        fails as self-signed and the hostname is never examined. Inferring
+        "hostname is fine" from "the error was not 62" reported a check that
+        never ran as passed — the shape of false assurance this scanner is being
+        cleaned of.
+        """
+        if verify_code is None:
+            return None
+        return True if verify_code == cls._VERIFY_HOSTNAME_MISMATCH else None
+
+    @staticmethod
+    def _weak_probe_available() -> bool:
+        """Can this OpenSSL build negotiate TLS 1.0 as a client at all?"""
+        try:
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            ctx.minimum_version = ssl.TLSVersion.TLSv1
+            ctx.maximum_version = ssl.TLSVersion.TLSv1
+            ctx.set_ciphers(Scanner._WEAK_PROBE_CIPHERS)
+            return len(ctx.get_ciphers()) > 0
+        except Exception:
+            return False
 
     def check_dns_security_sync(self, domain: str) -> Dict[str, Any]:
         """Check for DNSSEC, Zone Transfer, Email Security (SPF/DMARC), and Redundancy (MX)."""
         # This is the synchronous implementation to be run in a thread
         result = {
             'dnssec_enabled': False,
+            'dnssec_dnskey': False,
+            'dnssec_ds': False,
             'zone_transfer_exposed': False,
             'nameservers': [],
             'spf': {'present': False, 'record': None},
@@ -376,17 +507,34 @@ class Scanner:
             'mx': []
         }
 
-        # 1. Check DNSSEC (DNSKEY presence)
+        # 1. DNSSEC. A DNSKEY in the zone is NOT DNSSEC: without a DS record in
+        #    the parent zone there is no chain of trust, resolvers ignore the
+        #    signatures entirely, and the zone is unprotected. Signed-but-
+        #    undelegated is the most common DNSSEC misconfiguration there is, and
+        #    inferring "enabled" from a DNSKEY reported exactly that case as
+        #    compliant — under Art. 21(2)(h), on a control an auditor may check.
+        result['dnssec_dnskey'] = False
+        result['dnssec_ds'] = False
         try:
-            # We assume if DNSKEY exists, it's at least configured.
-            # Full validation is complex, but this is a good first order check.
-            answers = dns.resolver.resolve(domain, 'DNSKEY')
-            if answers:
-                result['dnssec_enabled'] = True
+            if dns.resolver.resolve(domain, 'DNSKEY'):
+                result['dnssec_dnskey'] = True
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
-             result['dnssec_enabled'] = False
+            pass
         except Exception as e:
-             logger.debug(f"DNSSEC check failed for {domain}: {e}")
+            logger.debug(f"DNSKEY lookup failed for {domain}: {e}")
+
+        try:
+            # The DS lives in the PARENT zone, which is why it is the delegation
+            # signal: only the parent can publish it.
+            if dns.resolver.resolve(domain, 'DS'):
+                result['dnssec_ds'] = True
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
+            pass
+        except Exception as e:
+            logger.debug(f"DS lookup failed for {domain}: {e}")
+
+        # Both halves, or the chain does not reach this zone.
+        result['dnssec_enabled'] = result['dnssec_dnskey'] and result['dnssec_ds']
 
         # 2. Check Zone Transfer (AXFR)
         try:

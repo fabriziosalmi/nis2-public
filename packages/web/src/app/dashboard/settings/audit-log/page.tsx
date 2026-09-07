@@ -27,7 +27,6 @@ const actionColors: Record<string, string> = {
 
 export default function AuditLogPage() {
   const t = useTranslations("auditLogPage")
-  const tc = useTranslations("common")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
   // Pagination strings (previous / next / page) live in the `scans`

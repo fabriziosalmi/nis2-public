@@ -256,19 +256,30 @@ Finding text is interpolated into the prompt, and that text derives from content
 
 These automated checks verify whether the security measures documented in your governance framework are actually implemented on the network:
 
-These checks run as part of a scan unless the table says otherwise. Read the right-hand column before quoting any of this to an auditor: several checks verify that a control is *present*, not that it is *correct*, and one whole category is not part of a scan at all.
+These checks run as part of a scan. The right-hand column says what each one
+establishes, because several of them used to verify that a control was *present*
+rather than *correct* — and a compliance report that records a permissive header
+as a satisfied measure is worse than one that omits it.
 
-| Category | Checks | What the check actually establishes |
-|----------|--------|-------------------------------------|
-| **TLS/SSL** | Negotiated protocol version and cipher; attempts TLS 1.0 / 1.1 handshakes; HSTS header present | The connection is made **without SNI** and with `check_hostname=False` / `CERT_OPTIONAL`, so against any shared IP, CDN or load balancer the server answers with its *default* certificate and the chain is not validated. Only the **negotiated** cipher is recorded — there is no cipher-suite enumeration. HSTS is checked for presence only, not `max-age` / `includeSubDomains`. On the shipped Debian bookworm image, OpenSSL's system-wide `SECLEVEL=2` refuses TLS < 1.2 client-side, so the weak-protocol probe cannot report a positive |
-| **DNS security** | DNSSEC, SPF, DMARC, zone transfer (AXFR), MX redundancy | DNSSEC is inferred from the **presence of a DNSKEY record**; the parent DS record is not checked, so a signed-but-undelegated zone — the most common DNSSEC misconfiguration — reads as enabled |
-| **HTTP headers** | CSP, HSTS, X-Frame-Options, cookie flags, SRI, security.txt | **Presence only.** `Content-Security-Policy: default-src *; script-src 'unsafe-inline'` passes. Cookie flags are matched as substrings of the raw `Set-Cookie`, so `SameSite=None` is indistinguishable from `SameSite=Strict`. SRI covers `<script src>` on external origins, not stylesheets |
+| Category | Checks | What the check establishes |
+|----------|--------|----------------------------|
+| **TLS/SSL** | Chain and hostname verification, negotiated protocol and cipher, active TLS 1.0 / 1.1 downgrade probe, HSTS | SNI is sent, so the certificate read is this host's and not the default one a shared IP or CDN answers with. The chain is verified for real; an untrusted or mismatched certificate is reported, and the two are distinguished because they have different fixes. When verification stops at an earlier fault the hostname is reported as *undetermined* rather than passing. The downgrade probe lowers the security level for the probe alone, and the report states whether the probe was available at all |
+| **DNS security** | DNSSEC (DNSKEY **and** parent DS), SPF, DMARC, zone transfer (AXFR), MX redundancy | DNSSEC requires both halves: a signed zone with no DS record in the parent has no chain of trust and resolvers ignore the signatures — the most common DNSSEC misconfiguration, and one that a DNSKEY-only check reported as enabled |
+| **HTTP headers** | CSP, HSTS, X-Frame-Options, X-Content-Type-Options, cookie flags, SRI, security.txt | Judged on content. `default-src *`, `'unsafe-inline'`, `'unsafe-eval'`, `max-age=1` and `max-age=0` (which *disables* HSTS) are all reported. Cookie flags are parsed as attributes, so a cookie merely *named* `secure_session` does not count as Secure, and `SameSite=None` is distinguished from `SameSite=Strict` |
 | **Port exposure** | 14 critical ports (SSH, RDP, SMB, MySQL, PostgreSQL, Redis, MongoDB) | TCP reachability from the scanner's vantage point |
 | **Resilience** | WAF/CDN detection, version disclosure | Header and cookie fingerprinting |
 | **Secrets** | AWS keys, GitHub tokens, private keys, JWT in responses | Pattern matching over the first 1 MB of the response body |
-| **Certificates** — chain validation, CT logs (crt.sh), OCSP, key strength, SAN coverage, expiry prediction, 0-100 health score | **not part of a scan** | This is the one genuinely deep analyser in the codebase, and `scanner.py` never calls it. It is reachable only through `POST /api/v1/certificates/check` and the MCP `check_certificate` tool — neither of which has a dashboard screen. Scans, reports and the compliance score do not include it |
+| **Certificates** — chain validation, CT logs (crt.sh), OCSP, key strength, SAN coverage, expiry prediction, 0-100 health score | **not part of a scan** | The deep analyser is reachable only through `POST /api/v1/certificates/check` and the MCP `check_certificate` tool, neither of which has a dashboard screen. Scans, reports and the compliance score do not include it |
 
 > **CVSS scores in findings are fixed per check type**, not computed from the target's context, exposure or compensating controls. Treat them as severity labels, not as CVSS assessments.
+
+> **On the Art. 21 matrix in the report.** Every value names the evidence behind
+> it or says the control is out of scope for an external scan. Supply-chain
+> security (d) and cyber hygiene & training (g) are marked *not assessed*: an SRI
+> check on `<script>` tags is not a partial automation of supplier assessment,
+> and training leaves no trace in an HTTP response. A matrix that claims more
+> than it can evidence is the one thing in this platform most likely to fail in
+> front of an auditor.
 
 ### EU Privacy / GDPR Posture (separate from NIS2)
 

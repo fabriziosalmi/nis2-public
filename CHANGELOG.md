@@ -1,5 +1,92 @@
 # Changelog
 
+## [2.6.12] - 2026-09-07
+
+Scanner correctness, and the CI job that would have caught most of the last two
+releases' defects on its own.
+
+### 🐛 Fixed — the scanner reported things it could not establish
+
+- **The obsolete-protocol probe could never fire.** Verified with a real
+  handshake inside the shipped `python:3.14-slim-bookworm` image: OpenSSL's
+  default security level is 2, which refuses TLS 1.0/1.1 **client-side**
+  regardless of `minimum_version`. The handshake died with
+  `NO_CIPHERS_AVAILABLE` before a byte reached the target, a bare `except`
+  swallowed it, and `weak_versions` came back empty for every host ever
+  scanned — including ones genuinely serving TLS 1.0. The probe now lowers the
+  security level for itself alone, and the report states whether the probe was
+  available at all, so a missing finding is no longer indistinguishable from a
+  clean server.
+- **No SNI was sent.** `check_tls` connected with no `server_hostname` and
+  `check_hostname=False`, so against any shared IP, CDN or load balancer the
+  server answered with its *default* certificate and every TLS conclusion was
+  about a different site. Scans pin the resolved IP as a DNS-rebinding defence,
+  so the hostname has to travel in the handshake or it travels nowhere.
+- **`valid` meant "a handshake completed".** With `CERT_OPTIONAL` and hostname
+  checking off, a self-signed certificate and a properly chained one were
+  indistinguishable — and the field was consumed as a security property. The
+  chain is now verified for real, untrusted and mismatched certificates are
+  reported separately because they have different fixes, and when verification
+  stops at an earlier fault the hostname is reported as *undetermined* rather
+  than as passing.
+- **DNSSEC was inferred from a DNSKEY alone.** Without a DS record in the parent
+  zone there is no chain of trust and resolvers ignore the signatures. Signed-
+  but-undelegated is the most common DNSSEC misconfiguration, and it was being
+  reported as enabled. Both halves are now required.
+- **Security headers were checked for presence.** `default-src *`,
+  `'unsafe-inline'`, `'unsafe-eval'`, `max-age=1` and `max-age=0` — which
+  *disables* HSTS — all passed as satisfied controls. They are now evaluated.
+- **Cookie flags were substring matches** on the raw `Set-Cookie` line, so a
+  cookie named `secure_session` counted as Secure and `SameSite=None` was
+  indistinguishable from `SameSite=Strict`. Parsed as attributes now.
+- **`secret_patterns.yaml` was never packaged.** `pyproject.toml` declared the
+  packages but not the package data, so every containerised deployment ran
+  secret detection on a reduced hardcoded fallback instead of the 29-pattern
+  file. Found by running the scanner inside the built image and reading the
+  warning it emitted — the only one of this platform's silent degradations that
+  said anything, and it went unnoticed anyway.
+
+### 📝 Changed — the Art. 21 matrix now says what it can evidence
+
+The matrix that lands in the PDF claimed "d) Supply Chain Security: Partially
+Automated" on the strength of checking the `integrity` attribute of external
+`<script>` tags, and "g) Cyber Hygiene & Training: Partially Automated" on
+response headers. Art. 21(2)(d) concerns supplier assessment, contracts and
+monitoring; training is people and has no HTTP surface. Both now read *not
+assessed by scan*, every remaining partial claim names its evidence, and bare
+"Automated" is gone — a scan sees the public surface and every genuine
+automation here is partial. The README's disclaimer does not travel with the
+report, so the table has to answer "on what evidence?" by itself.
+
+### ✨ Added — CI that exercises the things that kept breaking
+
+- **`docker-stack` job**: builds the images, synthesises a `.env` the way the
+  README tells an operator to, runs the preflight, boots the stack with
+  `--wait`, asserts the API is *ready* rather than merely alive, checks the
+  runtime Postgres role is not a superuser, seeds and proves cross-tenant
+  isolation, registers a real user, and resolves the production compose file.
+  Nothing had ever built these images; every infrastructure defect in this
+  repository was found by a human hitting it.
+- **ESLint**, which the web package never had: `next lint` was removed in
+  Next.js 16, so `npm run lint` errored and CI never ran it. 12,500 lines were
+  checked only by `tsc`. Zero errors after removing 15 pieces of genuine dead
+  code; the React Compiler-era rules are warnings with a written reason rather
+  than a blanket disable.
+- **`typecheck` as its own CI step**, so a type error and a build error are
+  distinguishable.
+
+### 🧪 Tests
+
+`test_scanner_logic.py` was a tautology: it defined its own copies of the
+heuristics inside the test file and asserted against those, importing nothing
+that shipped — and the copies had already diverged from the code. Replaced by
+tests that import the real function, which is now extracted rather than inlined.
+New suites cover TLS against actual servers (a mock would have reproduced the
+old wrongness happily), header and cookie evaluation, DNSSEC delegation, the
+matrix claims, and the packaging of runtime data files.
+
+125 scanner tests, up from 57.
+
 ## [2.6.11] - 2026-09-07
 
 Security hardening of the deployment defaults, plus the missing write paths that

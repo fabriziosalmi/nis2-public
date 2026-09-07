@@ -254,6 +254,16 @@ jobs:
           cache-dependency-path: packages/web/package-lock.json
       - name: Install dependencies
         run: npm ci
+      # `next lint` was removed in Next.js 16 and there was no ESLint config, so
+      # `npm run lint` errored and CI never ran it. 12,500 lines of TypeScript
+      # were checked only by tsc, which says nothing about unused state, missing
+      # hook dependencies, or an <a> where a <Link> belongs.
+      - name: Lint
+        run: npm run lint
+      # `next build` type-checks as a side effect, but a dedicated step fails
+      # faster and says plainly which of the two broke.
+      - name: Typecheck
+        run: npm run typecheck
       - name: Build
         run: npm run build
 
@@ -304,6 +314,98 @@ jobs:
             exit 1
           fi
           echo "OK: CORS properly restricted"
+
+  # -----------------------------------------------------------------------
+  # Docker stack — builds the images and BOOTS them
+  #
+  # No CI job had ever built these images or started this stack, and it showed.
+  # Found by hand, all of it invisible to the existing suites:
+  #
+  #   * `make prod` could not start at all — compose resolves ${VAR}
+  #     interpolation from the project directory's .env (infra/docker/, which has
+  #     none), so the `:?` guards rejected the file outright;
+  #   * the container healthcheck pointed at /health, a liveness probe documented
+  #     as never returning non-200, so `--wait` reported success while the API
+  #     could not reach its database;
+  #   * the postgres initdb script that provisions the least-privilege role was
+  #     mounted by no compose file and could not have run as written;
+  #   * `make db-seed` wrote tenant rows with no RLS context.
+  #
+  # The comments in docker-compose.prod.yml still credit a human ("reported by
+  # Davide", "restart-looped forever") for finding earlier ones. That is the gap
+  # this job closes.
+  # -----------------------------------------------------------------------
+  docker-stack:
+    name: Docker Build & Boot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Synthesise a .env the way an operator would
+        # Mirrors the README: copy the template, fill the secrets. If
+        # .env.example drifts into a shape that cannot produce a working
+        # deployment, this step is where it surfaces.
+        run: |
+          cp .env.example .env
+          APP_PW=$(openssl rand -hex 16)
+          DB_PW=$(openssl rand -hex 16)
+          RD_PW=$(openssl rand -hex 16)
+          sed -i "s|CHANGE_ME_APP_ROLE_PASSWORD|${APP_PW}|g" .env
+          sed -i "s|CHANGE_ME_DB_PASSWORD|${DB_PW}|g" .env
+          sed -i "s|CHANGE_ME_REDIS_PASSWORD|${RD_PW}|g" .env
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 32)|" .env
+          sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=http://localhost:8077|" .env
+          sed -i "s|^DOMAIN=.*|DOMAIN=localhost|" .env
+
+      - name: Preflight must accept it
+        run: make prod-preflight
+
+      - name: Build and boot the dev stack
+        # --wait fails the job if any service does not reach `healthy`. That is
+        # the point: it was passing on a stack whose every request 500'd, because
+        # the healthcheck could not fail.
+        run: |
+          docker compose --env-file .env -f infra/docker/docker-compose.dev.yml \
+            up -d --build --wait --wait-timeout 300
+
+      - name: The API must be READY, not merely alive
+        run: |
+          curl -sf http://localhost:8000/api/v1/health/ready | tee /dev/stderr | grep -q '"status":"ok"'
+
+      - name: The runtime role must be the least-privilege one
+        # Postgres bypasses RLS for superusers, so this is what decides whether
+        # tenant isolation is enforced or decorative.
+        run: |
+          docker compose --env-file .env -f infra/docker/docker-compose.dev.yml \
+            exec -T postgres psql -U nis2 -d nis2 -tAc \
+            "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='nis2_app'" | grep -qx f
+
+      - name: Seed, then prove cross-tenant isolation
+        run: |
+          docker compose --env-file .env -f infra/docker/docker-compose.dev.yml \
+            exec -T api python -m scripts.seed
+          bash scripts/h5_validate.sh
+
+      - name: A real request must work end to end
+        run: |
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:8000/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","password":"C!password99","full_name":"CI","org_name":"CI Org"}')
+          test "$CODE" = 201 || { echo "register returned $CODE"; exit 1; }
+
+      - name: The production compose file must at least resolve
+        # Not booted here (it wants port 80/443 and a real domain), but a
+        # `config` that fails is exactly how `make prod` was broken.
+        run: docker compose --env-file .env -f infra/docker/docker-compose.prod.yml config -q
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --env-file .env -f infra/docker/docker-compose.dev.yml logs --tail 120
+
+      - name: Tear down
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/docker-compose.dev.yml down -v
 
   # -----------------------------------------------------------------------
   # Version consistency

@@ -90,16 +90,32 @@ class ComplianceEngine:
         # Canonical NIS2 Art. 21(2) letters (a–j). Pre-fix, f–i were shifted by
         # one (cryptography tagged g instead of h, cyber hygiene f instead of g,
         # etc.) — both here and in the per-finding references below.
+        # What the scanner can EVIDENCE, not what its checks are named after.
+        #
+        # The previous values were a marketing claim rendered as an audit
+        # artefact. "d) Supply Chain Security: Partially Automated" rested on
+        # checking the `integrity` attribute of external <script> tags — Art.
+        # 21(2)(d) is about supplier assessment, contracts and monitoring, and an
+        # SRI check is not a partial automation of that, it is a different
+        # subject. "g) Cyber Hygiene & Training: Partially Automated" rested on
+        # response headers; training has no observable HTTP surface at all.
+        # "Automated", unqualified, claimed completeness for (e) and (h) that a
+        # public-surface probe cannot have.
+        #
+        # The disclaimer in the README does not travel with the PDF. What lands
+        # on an auditor's desk is this table, so it has to be able to answer
+        # "on what evidence?" by itself. Every value below names its evidence or
+        # says the control is out of scope for an external scan.
         nis2_matrix = {
             "a) Risk Analysis per Information Security": "Manual Verification Required",
             "b) Incident Handling": "Manual Verification Required",
             "c) Business Continuity & Crisis Mgmt": "Manual Verification Required",
-            "d) Supply Chain Security": "Partially Automated",  # SRI / external scripts
-            "e) Security in Network & Information Systems": "Automated",  # Vuln/exposure scan, DNS
+            "d) Supply Chain Security": "Not Assessed by Scan (supplier controls are organisational)",
+            "e) Security in Network & Information Systems": "Partially Automated (public exposure surface only)",
             "f) Effectiveness Assessment of Risk Measures": "Manual Verification Required",
-            "g) Cyber Hygiene & Training": "Partially Automated",  # Security headers, cookies
-            "h) Cryptography & Encryption": "Automated",  # HTTPS/TLS/cert checks
-            "i) HR Security, Access Control & Asset Management": "Partially Automated",  # Port exposure
+            "g) Cyber Hygiene & Training": "Not Assessed by Scan (training has no external surface)",
+            "h) Cryptography & Encryption": "Partially Automated (public TLS endpoints only)",
+            "i) HR Security, Access Control & Asset Management": "Partially Automated (port exposure only)",
             "j) MFA & Communications": "Manual Verification Required"
         }
 
@@ -223,6 +239,38 @@ class ComplianceEngine:
                          )
                          host_findings.append(f)
 
+                # Header QUALITY, from nis2scan.headers. The presence check below
+                # stays for the missing-HSTS case, but these carry the findings a
+                # presence check structurally cannot raise: a CSP that allows
+                # 'unsafe-inline', a wildcard script source, max-age=1, or
+                # max-age=0 (which instructs browsers to forget the policy) all
+                # used to count as satisfied controls.
+                _SEVERITY_CVSS = {"HIGH": 6.5, "MEDIUM": 4.3, "LOW": 3.1}
+                for issue in info.get('header_issues', []):
+                    # The plain "header absent" cases are already covered by the
+                    # dedicated findings below and in the missing-headers list;
+                    # emitting both would double-count them in the score.
+                    if "not set" in issue['summary'] or "No Content-Security-Policy" in issue['summary']:
+                        continue
+                    f = ComplianceFinding(
+                        severity=issue['severity'],
+                        category="CYBER HYGIENE",
+                        message=f"{issue['summary']} on port {port}",
+                        rationale=(
+                            "A security header that is present but permissive is not a "
+                            "control; it reads as one in an audit."
+                        ),
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                        cvss_base_score=_SEVERITY_CVSS.get(issue['severity'], 3.1),
+                        technical_detail=issue['detail'],
+                        remediation="Tighten the header — see the technical detail.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                    )
+                    host_findings.append(f)
+
                 missing = info.get('missing_headers', [])
                 if 'Strict-Transport-Security' in missing and port in [443, 8443]:
                      f = ComplianceFinding(
@@ -255,8 +303,32 @@ class ComplianceEngine:
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
                             cvss_base_score=3.0,
-                            technical_detail=f"Cookie: {c.get('raw', '')}",
+                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
                             remediation="Set the 'Secure' flag for all sensitive cookies.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                        )
+                        host_findings.append(f)
+
+                    # SameSite=None is sent on cross-site requests — weaker than
+                    # omitting the attribute in browsers that default to Lax.
+                    # Substring matching could not tell it from SameSite=Strict.
+                    if c.get('samesite') == 'None':
+                        f = ComplianceFinding(
+                            severity="LOW",
+                            category="CYBER HYGIENE",
+                            message="Cookie sets SameSite=None",
+                            rationale=(
+                                "The cookie is attached to cross-site requests, which is "
+                                "weaker than omitting the attribute in browsers defaulting "
+                                "to Lax."
+                            ),
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                            cvss_base_score=3.1,
+                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
+                            remediation="Use SameSite=Lax or Strict unless the cookie is genuinely needed cross-site.",
                             remediation_cost="Low",
                             remediation_effort="Low",
                             compliance_article="Art. 21.2.g (Cyber Hygiene)"
@@ -273,7 +345,7 @@ class ComplianceEngine:
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
                             cvss_base_score=3.0,
-                            technical_detail=f"Cookie: {c.get('raw', '')}",
+                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
                             remediation="Set the 'HttpOnly' flag for session cookies.",
                             remediation_cost="Low",
                             remediation_effort="Low",
@@ -382,6 +454,87 @@ class ComplianceEngine:
                     )
                     host_findings.append(f)
 
+                # Chain / hostname verification. The scanner previously connected
+                # with CERT_OPTIONAL and check_hostname=False and reported the
+                # outcome as `valid`, so "valid" meant "a handshake completed" —
+                # it could not tell a trusted certificate from a self-signed one,
+                # and with no SNI it was frequently reading a different site's
+                # certificate altogether. Now the probe validates for real, so
+                # these are the first TLS trust findings the scanner can support.
+                if info.get('chain_valid') is False:
+                    detail = info.get('chain_error') or 'chain verification failed'
+                    if info.get('hostname_match') is False:
+                        f = ComplianceFinding(
+                            severity="HIGH",
+                            category="ENCRYPTION",
+                            message=f"TLS certificate does not match the hostname on port {port}",
+                            rationale=(
+                                "A certificate issued for a different name gives clients no "
+                                "assurance they are talking to this service."
+                            ),
+                            target=host.ip,
+                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                            cvss_base_score=5.9,
+                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                            technical_detail=f"Verification (with SNI): {detail}",
+                            remediation="Install a certificate whose SAN list covers this hostname.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.h (Cryptography)"
+                        )
+                    else:
+                        f = ComplianceFinding(
+                            severity="HIGH",
+                            category="ENCRYPTION",
+                            message=f"TLS certificate chain does not validate on port {port}",
+                            rationale=(
+                                "Clients cannot establish trust: the certificate is expired, "
+                                "self-signed, or missing an intermediate."
+                            ),
+                            target=host.ip,
+                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                            cvss_base_score=7.4,
+                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                            technical_detail=f"Verification (with SNI): {detail}",
+                            remediation=(
+                                "Renew or replace the certificate and serve the full "
+                                "intermediate chain."
+                            ),
+                            remediation_cost="Medium",
+                            remediation_effort="Low",
+                            compliance_article="Art. 21.2.h (Cryptography)"
+                        )
+                    host_findings.append(f)
+
+                # Say so when the check could not run, instead of leaving a
+                # missing finding to be read as a clean result. On the shipped
+                # bookworm image this probe was silently inert for every scan
+                # ever run: OpenSSL's default security level refused TLS 1.0/1.1
+                # client-side, the handshake died before reaching the target, and
+                # `weak_versions` came back empty for every host.
+                if info.get('weak_probe_supported') is False:
+                    f = ComplianceFinding(
+                        severity="INFO",
+                        category="ENCRYPTION",
+                        message=f"Obsolete-protocol probe unavailable on port {port}",
+                        rationale=(
+                            "This scanner's OpenSSL build refuses to negotiate TLS 1.0/1.1, "
+                            "so their absence from this report is not evidence of absence."
+                        ),
+                        target=host.ip,
+                        reference="Scanner limitation",
+                        technical_detail=(
+                            "TLS 1.0/1.1 client contexts could not be created even at "
+                            "SECLEVEL=0. Verify with an external tool before relying on "
+                            "this result."
+                        ),
+                        remediation="Run the scanner on an image whose OpenSSL permits the probe.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.h (Cryptography)"
+                    )
+                    host_findings.append(f)
+
                 if info.get('expired'):
                     f = ComplianceFinding(
                         severity="HIGH",
@@ -430,7 +583,13 @@ class ComplianceEngine:
                         reference="NIS2 Directive Art. 21.2.e (Network Security)",
                         cvss_base_score=4.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail="DNSKEY record not found or valid chain not established.",
+                        technical_detail=(
+                            "Zone is signed (DNSKEY present) but the parent publishes no DS "
+                            "record, so resolvers ignore the signatures and the zone is "
+                            "unprotected — the most common DNSSEC misconfiguration."
+                            if host.dns_info.get('dnssec_dnskey')
+                            else "No DNSKEY record: the zone is not signed."
+                        ),
                         remediation="Enable and configure DNSSEC at your registrar and DNS provider.",
                         remediation_cost="Low",
                         remediation_effort="Medium",
@@ -782,18 +941,36 @@ class ComplianceEngine:
 
         # Update NIS2 Matrix based on collected indicators
         if has_security_txt:
-            nis2_matrix["b) Incident Handling"] = "Partially Automated (Security.txt found)"
+            nis2_matrix["b) Incident Handling"] = (
+                "Partially Automated (security.txt published — a disclosure contact, "
+                "not an incident-handling process)"
+            )
 
         if has_spf_dmarc:
-            nis2_matrix["j) MFA & Communications"] = "Partially Automated (Email Security Verified)"
+            nis2_matrix["j) MFA & Communications"] = (
+                "Partially Automated (SPF/DMARC present — email authenticity only; "
+                "MFA is not externally observable)"
+            )
 
         # I3: an MX-record count is NOT evidence of business continuity / backup
         # / DR / crisis management, so Art. 21.2.c stays "Manual Verification
         # Required" rather than being inferred from DNS redundancy.
 
-        # Enhanced Automation Status
-        nis2_matrix["g) Cyber Hygiene & Training"] = "Partially Automated (Info Leakage & Header Checks)"
-        nis2_matrix["d) Supply Chain Security"] = "Partially Automated (Secrets & Env File Checks)"
+        # I5: neither of these upgrades survives the question "on what evidence?".
+        #
+        # Header and info-leakage checks were promoting (g) Cyber Hygiene &
+        # TRAINING to partially automated. Training is people; it leaves no trace
+        # in an HTTP response, and the scanner cannot speak to it at all.
+        #
+        # Secrets and exposed .env files were promoting (d) Supply Chain
+        # Security. Finding a leaked credential on a host says nothing about how
+        # that organisation assesses, contracts with or monitors its suppliers,
+        # which is what Art. 21(2)(d) requires. Those findings are reported on
+        # their own merits under (e) and (i); inflating an unrelated
+        # sub-paragraph is how a compliance report stops being evidence.
+        #
+        # Both therefore stay as declared above. Do not re-add these lines
+        # without evidence that actually bears on the sub-paragraph.
 
         # Generate Executive Summary using Modular Generator
         summary_gen = SummaryGenerator()

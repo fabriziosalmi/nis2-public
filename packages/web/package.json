@@ -1,12 +1,13 @@
 {
   "name": "@nis2/web",
-  "version": "2.6.11",
+  "version": "2.6.12",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
@@ -41,10 +42,13 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
     "playwright": "^1.62.1",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.3.3",

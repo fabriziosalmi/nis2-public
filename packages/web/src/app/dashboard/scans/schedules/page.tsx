@@ -9,8 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import {
-  Clock, Plus, Trash2, Play, Pause, Loader2, CalendarClock, AlertCircle,
-} from "lucide-react"
+  Clock, Plus, Trash2, Play, Pause, Loader2, CalendarClock, } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"

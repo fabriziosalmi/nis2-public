@@ -5,7 +5,7 @@
 
 import { useEffect, useState, Fragment } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { Loader2, Filter, ChevronDown, ChevronRight, AlertTriangle, Download, ShieldAlert, X } from "lucide-react"
+import { Loader2, Filter, ChevronDown, ChevronRight, Download, ShieldAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

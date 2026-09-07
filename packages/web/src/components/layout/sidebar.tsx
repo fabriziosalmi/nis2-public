@@ -18,7 +18,6 @@ import {
   Network,
   Activity,
   FileText,
-  Settings,
   Users,
   Key,
   Bell,
