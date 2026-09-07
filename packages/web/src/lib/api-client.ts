@@ -468,6 +468,60 @@ class ApiClient {
     return this.request<any>(`/api/v1/incident-monitor/${id}`)
   }
 
+  /** Record that an Art. 23 obligation was submitted to CSIRT Italia.
+   *
+   *  Submission happens on csirt.gov.it — there is no API to submit to — so the
+   *  platform cannot observe it. Until this existed, the three `*_sent_at`
+   *  columns were read by the deadline task, by the API and by the countdown
+   *  below, and written by nothing: an operator who filed the Early Warning on
+   *  time kept receiving breach alerts for it, daily, with no way to say it was
+   *  done short of closing or deleting the incident. */
+  async recordIncidentSubmission(
+    id: string,
+    obligation: 'early_warning' | 'notification' | 'final_report',
+    csirtReferenceId?: string,
+  ) {
+    return this.request<any>(`/api/v1/incident-monitor/${id}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify({ obligation, csirt_reference_id: csirtReferenceId || null }),
+    })
+  }
+
+  // ------------------------------------------------------- ACN (Italy) / CSIRT
+
+  /** The regulatory countdown: D.Lgs 138/2024 and the ACN determine, with days
+   *  remaining and an urgency band per item. */
+  async getComplianceDeadlines() {
+    return this.request<any>('/api/v1/deadlines')
+  }
+
+  /** The "Red Button". Declares the incident — starting the Art. 23 clocks the
+   *  monitor watches — and returns the Early Warning payload for manual
+   *  submission to csirt.gov.it. It used to return the payload and persist
+   *  nothing, so the operator held a document and no clock was running. */
+  async csirtEmergency(data: {
+    what_happened: string
+    affected_services: string
+    is_ongoing: boolean
+    estimated_users_affected?: number | null
+    detected_at?: string | null
+  }) {
+    return this.request<any>('/api/v1/csirt/emergency', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  /** Vendor inventory in the ACN Determina 127437 (Art. 18) shape. */
+  async exportAcnArt18() {
+    return this.request<any>('/api/v1/acn-export/art18')
+  }
+
+  /** BIA export in the ACN shape. */
+  async exportAcnBia() {
+    return this.request<any>('/api/v1/acn-export/bia')
+  }
+
   // -------------------------------------------------------------- Governance
   async listGovernance(params: Record<string, string> = {}) {
     const qs = new URLSearchParams(params).toString()

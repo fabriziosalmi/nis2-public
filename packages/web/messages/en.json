@@ -519,7 +519,33 @@
     "impact_integrity": "Integrity",
     "impact_authenticity": "Authenticity",
     "impactLevel": "Impact level (1-5)",
-    "supplyChain": "Supply-chain impact (Art. 18)"
+    "supplyChain": "Supply-chain impact (Art. 18)",
+    "markSubmitted": "Mark as submitted",
+    "csirtReferencePrompt": "CSIRT reference (optional) — the identifier the portal returned. Leave empty to record the submission without one.",
+    "submissionRecorded": "Submission recorded. The deadline monitor will stop alerting on this obligation.",
+    "submissionFailed": "Could not record the submission",
+    "redButton": {
+      "open": "Red Button",
+      "title": "CSIRT emergency — Art. 23 Early Warning",
+      "subtitle": "Three questions. Everything else is taken from your organisation record and current asset inventory.",
+      "whatHappened": "What happened?",
+      "whatHappenedPlaceholder": "Ransomware encrypted the production file servers",
+      "affectedServices": "Which services are affected?",
+      "affectedServicesPlaceholder": "Customer portal, internal email",
+      "usersAffected": "Estimated users affected (optional)",
+      "usersAffectedPlaceholder": "e.g. 4500",
+      "consequence": "Pressing this declares the incident: the 24-hour, 72-hour and one-month Art. 23 clocks start now and the record is auditable.",
+      "declareAction": "Declare and generate",
+      "declared": "Incident declared — the Art. 23 clock is running",
+      "failed": "Could not declare the incident",
+      "clockStarted": "The incident is recorded and its deadlines are being monitored.",
+      "earlyWarningDeadline": "Early Warning due by",
+      "downloadPayload": "Download payload",
+      "copyPayload": "Copy payload",
+      "copyFailed": "Could not copy to clipboard",
+      "openCsirt": "Open csirt.gov.it",
+      "manualSubmission": "Submission is manual: CSIRT Italia offers no API. Once you have filed it, record the submission on the incident so the deadline alerts stop."
+    }
   },
   "governance": {
     "title": "Governance",
@@ -782,7 +808,19 @@
     "infoTitle": "About this matrix",
     "infoBody": "This matrix maps Art. 21(2) requirements of the NIS2 Directive (EU 2022/2555), transposed into Italian law as D.Lgs 138/2024 (Art. 24, comma 2). Automated checks verify TLS, DNS, HTTP security headers, encryption, and incident handling. \"Manual Review\" entries require attestation from the compliance team.",
     "disclaimerTitle": "Educational heuristic, not the ACN framework",
-    "disclaimerBody": "The 30-item governance checklist and this 10-row matrix are a community-curated educational heuristic mapped to the ten Art. 21(2) sub-paragraphs at a high level. They are not a verbatim reproduction of the official ACN framework (NIST-derived, detailed across Determinazioni 127434/2026 and follow-ups). For any production compliance posture, refer directly to ACN guidance and engage a qualified advisor."
+    "disclaimerBody": "The 30-item governance checklist and this 10-row matrix are a community-curated educational heuristic mapped to the ten Art. 21(2) sub-paragraphs at a high level. They are not a verbatim reproduction of the official ACN framework (NIST-derived, detailed across Determinazioni 127434/2026 and follow-ups). For any production compliance posture, refer directly to ACN guidance and engage a qualified advisor.",
+    "deadlines": {
+      "title": "Regulatory deadlines",
+      "subtitle": "Statutory dates from D.Lgs 138/2024 and the ACN determine.",
+      "overdueCount": "{count} overdue",
+      "daysRemaining": "{count} days left",
+      "daysOverdue": "{count} days overdue",
+      "urgency_overdue": "Overdue",
+      "urgency_critical": "Critical",
+      "urgency_urgent": "Urgent",
+      "urgency_warning": "Upcoming",
+      "urgency_on_track": "On track"
+    }
   },
   "auditLogPage": {
     "title": "Audit Log",
@@ -1261,5 +1299,12 @@
     "processCreateFailed": "Could not add the process",
     "processUpdateFailed": "Could not update the process",
     "processDeleteFailed": "Could not remove the process"
+  },
+  "acnExport": {
+    "art18": "ACN Art. 18 export",
+    "bia": "ACN BIA export",
+    "done": "Export downloaded",
+    "failed": "Export failed",
+    "preliminaryNotice": "Preliminary schema — to be re-validated against the official ACN modello di categorizzazione once published."
   }
 }

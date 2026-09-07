@@ -56,3 +56,41 @@ export function useDeleteIncident() {
     onSuccess: invalidate,
   })
 }
+
+/** Record that an Art. 23 obligation was filed with CSIRT Italia.
+ *
+ *  Submission happens on csirt.gov.it and the platform cannot observe it, so
+ *  the operator records it. Until this existed the three `*_sent_at` columns
+ *  were read by the deadline task, by the API and by the countdown, and written
+ *  by nothing: filing the Early Warning on time did not stop the breach alerts
+ *  for it. */
+export function useRecordSubmission() {
+  const invalidate = useInvalidateIncident()
+  return useMutation({
+    mutationFn: ({
+      id,
+      obligation,
+      csirtReferenceId,
+    }: {
+      id: string
+      obligation: 'early_warning' | 'notification' | 'final_report'
+      csirtReferenceId?: string
+    }) => api.recordIncidentSubmission(id, obligation, csirtReferenceId),
+    onSuccess: invalidate,
+  })
+}
+
+/** The CSIRT "Red Button". Declares the incident — starting the clocks the
+ *  monitor watches — and returns the Early Warning payload. */
+export function useCsirtEmergency() {
+  const invalidate = useInvalidateIncident()
+  return useMutation({
+    mutationFn: (data: {
+      what_happened: string
+      affected_services: string
+      is_ongoing: boolean
+      estimated_users_affected?: number | null
+    }) => api.csirtEmergency(data),
+    onSuccess: invalidate,
+  })
+}

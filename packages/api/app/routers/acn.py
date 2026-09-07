@@ -10,11 +10,11 @@ Endpoints:
   to be published by the Tavolo NIS in May/June 2026; this schema will be
   re-validated and may change once the official template is released.
 - /deadlines: Compliance timeline with real NIS2 D.Lgs 138/2024 deadlines.
-- /csirt/emergency: "Red Button" - instant CSIRT Early Warning payload
-  generator. Produces an artefact ready for manual submission to csirt.gov.it.
+- /csirt/emergency: "Red Button" — declares the incident and returns the Art. 23
+  Early Warning payload, ready for manual submission to csirt.gov.it.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -23,7 +23,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user_org
+from app.dependencies import get_current_user_org, require_role
+from app.models.incident import Incident
+from app.routers.incident_monitor import (
+    _EARLY_WARNING_WINDOW,
+    _NOTIFICATION_WINDOW,
+    final_report_deadline_for,
+)
 
 router = APIRouter(tags=["acn"])
 
@@ -145,22 +151,37 @@ class EmergencyIncidentRequest(BaseModel):
     detected_at: Optional[datetime] = None
 
 
-@router.post("/csirt/emergency")
+@router.post(
+    "/csirt/emergency", dependencies=[Depends(require_role("admin", "auditor"))]
+)
 async def csirt_emergency_payload(
     data: EmergencyIncidentRequest,
     db: AsyncSession = Depends(get_db),
     auth: tuple = Depends(get_current_user_org),
 ):
-    """
-    CSIRT "Red Button" — Generate Art. 23 Early Warning payload.
+    """CSIRT "Red Button" — declare the incident and generate its Early Warning.
 
-    Under stress (ransomware at 3 AM), the operator fills 3 fields.
-    The system generates the complete Early Warning payload using
-    the latest asset data from the database. Guarantees the 24h SLA.
+    Under stress at 3 AM the operator fills three fields; the payload is built
+    from the current asset inventory and the Art. 23 clocks start.
+
+    They did not, before. This endpoint composed a JSON document and returned
+    it, persisting nothing — no `incidents` row, so no countdown, no 24-hour
+    alert, nothing for the dossier and nothing for an auditor. The operator who
+    pressed the emergency button in the worst hour of their year received a
+    file and the impression that the process had started, and the deadline
+    monitor never knew the incident existed. A control that produces confidence
+    without producing the obligation it represents is worse than no control.
+
+    Declaring is now part of pressing it, so the row the monitor watches exists
+    before the payload is returned. Submission to CSIRT Italia stays a manual
+    step — there is no API to submit to — and is recorded through
+    `POST /incident-monitor/{id}/submissions`.
     """
     user, org_id = auth
     now = datetime.now(timezone.utc)
     detected = data.detected_at or now
+    if detected.tzinfo is None:
+        detected = detected.replace(tzinfo=timezone.utc)
 
     # Fetch org name
     from app.models.organization import Organization
@@ -181,6 +202,33 @@ async def csirt_emergency_payload(
         for a in assets
     ]
 
+    # Declare the incident BEFORE building the payload. If this fails the
+    # operator gets an error rather than a document that looks like a filing;
+    # the failure mode to avoid is a payload in hand and no clock running.
+    incident = Incident(
+        organization_id=org_id,
+        reported_by=user.id,
+        title=(data.what_happened or "Emergency incident").strip()[:500],
+        incident_type="unknown",
+        severity="high",
+        status="detected",
+        detected_at=detected,
+        early_warning_deadline=detected + _EARLY_WARNING_WINDOW,
+        notification_deadline=detected + _NOTIFICATION_WINDOW,
+        final_report_deadline=final_report_deadline_for(detected),
+        description=data.what_happened,
+        affected_systems=data.affected_services,
+        impact_category="availability",
+        # The panic form asks three questions; it cannot ask for a severity
+        # assessment. 3 is the mid point, and the classification block below
+        # says "to_be_determined" rather than pretending otherwise.
+        estimated_impact_level=3,
+        users_affected_count=data.estimated_users_affected,
+    )
+    db.add(incident)
+    await db.flush()
+    await db.refresh(incident)
+
     # Generate Early Warning payload (ACN CSIRT format)
     early_warning = {
         "schema_version": "1.0",
@@ -193,26 +241,28 @@ async def csirt_emergency_payload(
             "contact_email": user.email if hasattr(user, "email") else None,
         },
         "incident": {
+            # The declared incident this payload belongs to. Without it the
+            # document could not be traced back to the record the deadline
+            # monitor watches.
+            "incident_id": str(incident.id),
             "detection_timestamp": detected.isoformat(),
-            "early_warning_deadline": (detected + timedelta(hours=24)).isoformat(),
-            "notification_deadline": (detected + timedelta(hours=72)).isoformat(),
+            "early_warning_deadline": incident.early_warning_deadline.isoformat(),
+            "notification_deadline": incident.notification_deadline.isoformat(),
             # NIS2 Art. 23(4)(d): the final report is due 1 month from the
             # *notification* (the 72h report), NOT from detection. Was
             # `detected + 30d`, which told operators it was due ~a month early.
-            "final_report_deadline": (
-                detected + timedelta(hours=72) + timedelta(days=30)
-            ).isoformat(),
+            "final_report_deadline": incident.final_report_deadline.isoformat(),
             "description": data.what_happened,
             "affected_services": data.affected_services,
             "is_ongoing": data.is_ongoing,
             "estimated_users_affected": data.estimated_users_affected,
             "hours_remaining_early_warning": max(
                 0,
-                round((detected + timedelta(hours=24) - now).total_seconds() / 3600, 1),
+                round((incident.early_warning_deadline - now).total_seconds() / 3600, 1),
             ),
             "hours_remaining_notification": max(
                 0,
-                round((detected + timedelta(hours=72) - now).total_seconds() / 3600, 1),
+                round((incident.notification_deadline - now).total_seconds() / 3600, 1),
             ),
         },
         "asset_inventory_snapshot": asset_inventory,
@@ -225,6 +275,11 @@ async def csirt_emergency_payload(
         "instructions": {
             "next_step": "Submit this payload to CSIRT Italia within the early_warning_deadline.",
             "notification_portal": "https://www.csirt.gov.it/",
+            "after_submitting": (
+                "Record the submission via POST /api/v1/incident-monitor/"
+                f"{incident.id}/submissions so the deadline monitor stops "
+                "alerting on an obligation you have already discharged."
+            ),
             "note": "This is an auto-generated Early Warning. Complete incident details in the full notification within 72 hours.",
         },
     }

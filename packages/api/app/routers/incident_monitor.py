@@ -208,12 +208,34 @@ async def get_incident_monitor(
 # Write path
 # ---------------------------------------------------------------------------
 
-# Art. 23 windows, measured from detection. These are stored on the row rather
-# than derived on read so that a later correction to `detected_at` cannot
-# silently move a deadline an operator has already acted on.
+# Art. 23 windows. Stored on the row rather than derived on read so that a later
+# correction to `detected_at` cannot silently move a deadline an operator has
+# already acted on.
+#
+# The first two run from detection. The third does NOT, and getting that wrong
+# is not a rounding error: Art. 23(4)(d) requires the final report "not later
+# than one month after the submission of the incident notification referred to
+# in point (b)" — the 72-hour notification, not the detection. This code
+# computed `detected_at + 30 days` and the alert text said "1 month from
+# detection", so every incident was reported as due three days early and the
+# breach alert fired while the operator was still inside the legal window.
+# `app/routers/acn.py` had already been corrected; the path that actually
+# writes the row had not, which is the one the monitor, the dossier and the
+# dashboard countdown all read.
 _EARLY_WARNING_WINDOW = timedelta(hours=24)
 _NOTIFICATION_WINDOW = timedelta(hours=72)
 _FINAL_REPORT_WINDOW = timedelta(days=30)
+
+
+def final_report_deadline_for(detected_at: datetime, notification_sent_at: Optional[datetime] = None) -> datetime:
+    """When the Art. 23(4)(d) final report is due.
+
+    Anchored on the actual submission of the 72-hour notification once that is
+    recorded, and on the notification deadline until then — which is the latest
+    the anchor can legally be, so the answer is never optimistic.
+    """
+    anchor = notification_sent_at or (detected_at + _NOTIFICATION_WINDOW)
+    return anchor + _FINAL_REPORT_WINDOW
 
 
 class IncidentCreateRequest(BaseModel):
@@ -280,7 +302,7 @@ async def declare_incident(
         detected_at=detected_at,
         early_warning_deadline=detected_at + _EARLY_WARNING_WINDOW,
         notification_deadline=detected_at + _NOTIFICATION_WINDOW,
-        final_report_deadline=detected_at + _FINAL_REPORT_WINDOW,
+        final_report_deadline=final_report_deadline_for(detected_at),
         description=payload.description,
         impact_category=payload.impact_category,
         estimated_impact_level=payload.estimated_impact_level,
@@ -342,3 +364,98 @@ async def delete_incident(
     if not incident or incident.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Incident not found")
     await db.delete(incident)
+
+
+# ---------------------------------------------------------------------------
+# Recording that an obligation was discharged
+# ---------------------------------------------------------------------------
+
+# `early_warning_sent_at`, `notification_sent_at` and `final_report_sent_at`
+# were read everywhere and written nowhere. The Celery task reads them to decide
+# whether an obligation is still outstanding, `_to_response` reads them, and the
+# dashboard renders a "submitted" state from them — but no code path in the
+# application ever set one. So the alerting could not be switched off by doing
+# the thing it was alerting about: an operator who submitted the Early Warning
+# to CSIRT Italia on time kept receiving breach alerts for it, daily, forever,
+# and the only escape was closing the incident or deleting the row.
+#
+# Submission to CSIRT Italia is a manual step outside this platform — there is
+# no API to submit to — so the platform cannot observe it happening. What it
+# can do is let the operator record it, attributed and audited, which is also
+# the artefact an auditor asks for: who declared the obligation discharged, and
+# when.
+
+_OBLIGATIONS = {
+    "early_warning": ("early_warning_sent_at", "early_warning_deadline"),
+    "notification": ("notification_sent_at", "notification_deadline"),
+    "final_report": ("final_report_sent_at", "final_report_deadline"),
+}
+
+
+class RecordSubmissionRequest(BaseModel):
+    obligation: str = Field(..., description="early_warning | notification | final_report")
+    # Defaults to now, but the submission usually happened before someone got
+    # round to recording it, and the recorded time is what an auditor reads.
+    submitted_at: Optional[datetime] = None
+    # CSIRT Italia returns a reference on submission; it is the only evidence
+    # tying this row to the actual filing.
+    csirt_reference_id: Optional[str] = Field(None, max_length=255)
+
+
+@router.post(
+    "/{incident_id}/submissions",
+    response_model=IncidentMonitorResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def record_submission(
+    incident_id: uuid.UUID,
+    payload: RecordSubmissionRequest,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentMonitorResponse:
+    """Record that an Art. 23 obligation was submitted to the CSIRT."""
+    user, membership = current_org
+    now = datetime.now(timezone.utc)
+
+    incident = await db.get(Incident, incident_id)
+    if not incident or incident.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    if payload.obligation not in _OBLIGATIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown obligation. Expected one of: {', '.join(_OBLIGATIONS)}",
+        )
+
+    sent_field, _ = _OBLIGATIONS[payload.obligation]
+    submitted_at = payload.submitted_at or now
+    if submitted_at.tzinfo is None:
+        submitted_at = submitted_at.replace(tzinfo=timezone.utc)
+    # A submission recorded in the future is a typo, and it would silently
+    # suppress the alerting until that date arrives.
+    if submitted_at > now:
+        raise HTTPException(
+            status_code=422, detail="submitted_at cannot be in the future"
+        )
+    if submitted_at < incident.detected_at:
+        raise HTTPException(
+            status_code=422,
+            detail="submitted_at cannot precede the recorded detection time",
+        )
+
+    setattr(incident, sent_field, submitted_at)
+    if payload.csirt_reference_id:
+        incident.csirt_reference_id = payload.csirt_reference_id
+
+    # Art. 23(4)(d) anchors the final report on the actual submission of the
+    # notification, so recording that submission fixes the anchor. Only while
+    # the final report is itself still outstanding: moving a deadline that has
+    # already been discharged would rewrite history.
+    if payload.obligation == "notification" and incident.final_report_sent_at is None:
+        incident.final_report_deadline = final_report_deadline_for(
+            incident.detected_at, submitted_at
+        )
+
+    await db.flush()
+    await db.refresh(incident)
+    return _to_response(incident, now)

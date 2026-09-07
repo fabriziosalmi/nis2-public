@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button"
 import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
 import { useVendors, useVendorStats, useCreateVendor, useUpdateVendor, useDeleteVendor } from "@/hooks/use-vendors"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { AcnExportButton } from "@/components/export/acn-export-button"
+import { api } from "@/lib/api-client"
 
 const critVariant: Record<number, "critical" | "high" | "medium" | "low"> = {
   1: "critical", 2: "high", 3: "medium", 4: "low",
@@ -126,7 +128,8 @@ export default function VendorsPage() {
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <AcnExportButton kind="art18" fetcher={() => api.exportAcnArt18()} />
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
           {t("addVendor")}

@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
-import { useIncidentMonitor, useCreateIncident, useUpdateIncident, useDeleteIncident } from "@/hooks/use-incidents"
+import { useIncidentMonitor, useCreateIncident, useUpdateIncident, useDeleteIncident, useRecordSubmission } from "@/hooks/use-incidents"
+import { RedButtonDialog } from "@/components/incidents/red-button-dialog"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
@@ -45,11 +46,15 @@ function DeadlineChip({
   deadline,
   isOpen,
   nowMs,
+  onRecordSent,
+  recording,
 }: {
   title: string
   deadline: Deadline
   isOpen: boolean
   nowMs: number
+  onRecordSent: () => void
+  recording: boolean
 }) {
   const t = useTranslations("incidents")
   if (!deadline.deadline) return null
@@ -89,8 +94,22 @@ function DeadlineChip({
         )}
       </div>
       <span className="text-[10px] opacity-70">
-        {sent ? "" : overdue ? t("deadlinePassed") : t("remaining")}
+        {sent ? new Date(deadline.sent_at!).toLocaleDateString() : overdue ? t("deadlinePassed") : t("remaining")}
       </span>
+      {/* Without this the alerting could not be switched off by doing the thing
+          it was alerting about: the `*_sent_at` columns were read in three
+          places and written in none, so an operator who filed the Early Warning
+          on time kept receiving breach alerts for it, daily. */}
+      {isOpen && !sent && (
+        <button
+          type="button"
+          onClick={onRecordSent}
+          disabled={recording}
+          className="mt-0.5 text-left text-[10px] font-medium underline underline-offset-2 opacity-80 hover:opacity-100 disabled:opacity-50"
+        >
+          {t("markSubmitted")}
+        </button>
+      )}
     </div>
   )
 }
@@ -118,6 +137,30 @@ export default function IncidentsPage() {
   const deleteIncident = useDeleteIncident()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
+  const [redButtonOpen, setRedButtonOpen] = useState(false)
+  const recordSubmission = useRecordSubmission()
+
+  // Recording is a claim about a filing that happened outside the platform —
+  // CSIRT Italia has no API to submit to — so it asks for the reference the
+  // portal returns. That reference is the only thing tying this row to the
+  // actual submission, and it is what an auditor asks for.
+  const markSubmitted = async (
+    inc: any,
+    obligation: "early_warning" | "notification" | "final_report",
+  ) => {
+    const reference = window.prompt(t("csirtReferencePrompt")) ?? undefined
+    if (reference === undefined) return
+    try {
+      await recordSubmission.mutateAsync({
+        id: inc.id,
+        obligation,
+        csirtReferenceId: reference.trim() || undefined,
+      })
+      toast.success(t("submissionRecorded"))
+    } catch (err: any) {
+      toast.error(t("submissionFailed"), { description: err.message })
+    }
+  }
 
   // Mirrors IncidentCreate in app/routers/incidents.py. The Art. 23 clocks run
   // from `detected_at`, so it is offered explicitly rather than defaulted to
@@ -203,7 +246,13 @@ export default function IncidentsPage() {
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        {/* Deliberately the loudest control on the page. It is used during a
+            live incident by someone who should not have to look for it. */}
+        <Button variant="destructive" onClick={() => setRedButtonOpen(true)}>
+          <Siren className="mr-2 h-4 w-4" />
+          {t("redButton.open")}
+        </Button>
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
           {t("declareIncident")}
@@ -288,9 +337,11 @@ export default function IncidentsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-3">
-                    <DeadlineChip title={`${t("earlyWarning")} · 24h`} deadline={dl.early_warning} isOpen={inc.is_open} nowMs={nowMs} />
-                    <DeadlineChip title={`${t("notification")} · 72h`} deadline={dl.notification} isOpen={inc.is_open} nowMs={nowMs} />
-                    <DeadlineChip title={`${t("finalReport")} · 1M`} deadline={dl.final_report} isOpen={inc.is_open} nowMs={nowMs} />
+                    <DeadlineChip title={`${t("earlyWarning")} · 24h`} deadline={dl.early_warning} isOpen={inc.is_open} nowMs={nowMs} recording={recordSubmission.isPending} onRecordSent={() => markSubmitted(inc, "early_warning")} />
+                    <DeadlineChip title={`${t("notification")} · 72h`} deadline={dl.notification} isOpen={inc.is_open} nowMs={nowMs} recording={recordSubmission.isPending} onRecordSent={() => markSubmitted(inc, "notification")} />
+                    {/* Art. 23(4)(d): one month from the submission of the 72-hour
+                        notification, not from detection. */}
+                    <DeadlineChip title={`${t("finalReport")} · 1M`} deadline={dl.final_report} isOpen={inc.is_open} nowMs={nowMs} recording={recordSubmission.isPending} onRecordSent={() => markSubmitted(inc, "final_report")} />
                   </div>
                 </CardContent>
               </Card>
@@ -309,6 +360,8 @@ export default function IncidentsPage() {
         submitting={createIncident.isPending || updateIncident.isPending}
         onSubmit={submit}
       />
+
+      <RedButtonDialog open={redButtonOpen} onOpenChange={setRedButtonOpen} />
     </div>
   )
 }

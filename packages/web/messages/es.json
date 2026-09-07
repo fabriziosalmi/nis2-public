@@ -519,7 +519,33 @@
     "impact_integrity": "Integridad",
     "impact_authenticity": "Autenticidad",
     "impactLevel": "Nivel de impacto (1-5)",
-    "supplyChain": "Impacto en la cadena de suministro (art. 18)"
+    "supplyChain": "Impacto en la cadena de suministro (art. 18)",
+    "markSubmitted": "Marcar como enviado",
+    "csirtReferencePrompt": "Referencia CSIRT (opcional) — el identificador devuelto por el portal. Déjalo vacío para registrar el envío sin referencia.",
+    "submissionRecorded": "Envío registrado. El monitor dejará de alertar sobre esta obligación.",
+    "submissionFailed": "No se pudo registrar el envío",
+    "redButton": {
+      "open": "Botón rojo",
+      "title": "Emergencia CSIRT — alerta temprana Art. 23",
+      "subtitle": "Tres preguntas. Todo lo demás se toma de los datos de la organización y del inventario de activos actual.",
+      "whatHappened": "¿Qué ha ocurrido?",
+      "whatHappenedPlaceholder": "Un ransomware ha cifrado los servidores de archivos de producción",
+      "affectedServices": "¿Qué servicios están afectados?",
+      "affectedServicesPlaceholder": "Portal de clientes, correo interno",
+      "usersAffected": "Usuarios afectados, estimación (opcional)",
+      "usersAffectedPlaceholder": "p. ej. 4500",
+      "consequence": "Pulsar declara el incidente: los plazos del Art. 23 de 24 horas, 72 horas y un mes empiezan ahora, y el registro es auditable.",
+      "declareAction": "Declarar y generar",
+      "declared": "Incidente declarado — el plazo del Art. 23 está corriendo",
+      "failed": "No se pudo declarar el incidente",
+      "clockStarted": "El incidente está registrado y sus plazos están monitorizados.",
+      "earlyWarningDeadline": "Alerta temprana antes del",
+      "downloadPayload": "Descargar payload",
+      "copyPayload": "Copiar payload",
+      "copyFailed": "No se pudo copiar al portapapeles",
+      "openCsirt": "Abrir csirt.gov.it",
+      "manualSubmission": "El envío es manual: CSIRT Italia no ofrece API. Una vez enviado, registra el envío en el incidente para detener las alertas de plazo."
+    }
   },
   "governance": {
     "title": "Gobernanza",
@@ -782,7 +808,19 @@
     "infoTitle": "Acerca de esta matriz",
     "infoBody": "Esta matriz mapea los requisitos del Art. 21(2) de la Directiva NIS2 (EU 2022/2555), transpuesta al derecho italiano como D.Lgs 138/2024 (Art. 24, apartado 2). Las comprobaciones automatizadas verifican TLS, DNS, cabeceras HTTP, cifrado y gestión de incidentes. Las entradas \"Verificación Manual\" requieren la atestación del equipo de cumplimiento.",
     "disclaimerTitle": "Heurística didáctica, no el marco ACN",
-    "disclaimerBody": "La checklist de 30 elementos y esta matriz de 10 filas son una heurística didáctica mantenida por la comunidad, mapeada a alto nivel sobre los diez sub-apartados del Art. 21(2). No son una reproducción literal del marco oficial de la ACN italiana (derivado de NIST, detallado en las Determinazioni 127434/2026 y siguientes). Para cualquier postura de cumplimiento en producción, refiérase directamente a las directrices ACN y contrate a un asesor cualificado."
+    "disclaimerBody": "La checklist de 30 elementos y esta matriz de 10 filas son una heurística didáctica mantenida por la comunidad, mapeada a alto nivel sobre los diez sub-apartados del Art. 21(2). No son una reproducción literal del marco oficial de la ACN italiana (derivado de NIST, detallado en las Determinazioni 127434/2026 y siguientes). Para cualquier postura de cumplimiento en producción, refiérase directamente a las directrices ACN y contrate a un asesor cualificado.",
+    "deadlines": {
+      "title": "Plazos normativos",
+      "subtitle": "Fechas legales del D.Lgs 138/2024 y de las determinaciones de la ACN.",
+      "overdueCount": "{count} vencidos",
+      "daysRemaining": "{count} días restantes",
+      "daysOverdue": "{count} días de retraso",
+      "urgency_overdue": "Vencido",
+      "urgency_critical": "Crítico",
+      "urgency_urgent": "Urgente",
+      "urgency_warning": "Próximo",
+      "urgency_on_track": "En plazo"
+    }
   },
   "auditLogPage": {
     "title": "Registro de Auditoría",
@@ -1261,5 +1299,12 @@
     "processCreateFailed": "No se pudo añadir el proceso",
     "processUpdateFailed": "No se pudo actualizar el proceso",
     "processDeleteFailed": "No se pudo eliminar el proceso"
+  },
+  "acnExport": {
+    "art18": "Exportación ACN Art. 18",
+    "bia": "Exportación ACN BIA",
+    "done": "Exportación descargada",
+    "failed": "La exportación ha fallado",
+    "preliminaryNotice": "Esquema preliminar — pendiente de revalidación con el modelo de categorización oficial de la ACN cuando se publique."
   }
 }

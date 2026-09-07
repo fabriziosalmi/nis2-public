@@ -76,7 +76,11 @@ _DEADLINES = [
         "final_report_deadline",
         "final_report_sent_at",
         "Final Report",
-        "Art. 23.1 — 1 month from detection",
+        # Art. 23(4)(d) anchors this on the submission of the 72-hour
+        # notification, not on detection. The text said "from detection" and
+        # the deadline was computed to match, so the alert fired three days
+        # before the obligation was actually due.
+        "Art. 23(4)(d) — 1 month from the incident notification",
     ),
 ]
 

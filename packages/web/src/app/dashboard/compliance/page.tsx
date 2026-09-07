@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useScans } from "@/hooks/use-scans"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { RegulatoryDeadlines } from "@/components/compliance/regulatory-deadlines"
 
 // NIS2 Art. 21(2) sub-paragraphs (a)–(j) — both the title and the
 // description for each are now resolved via i18n at render time
@@ -116,6 +117,11 @@ export default function CompliancePage() {
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
+
+      {/* The statutory dates. These do not depend on having run a scan, so they
+          render above the empty state rather than behind it — an organisation
+          with no scans yet is precisely the one that needs to see them. */}
+      <RegulatoryDeadlines />
 
       {!hasData && (
         <div className="flex flex-col items-center justify-center py-24 text-center px-4 relative overflow-hidden rounded-xl border bg-card/30">

@@ -519,7 +519,33 @@
     "impact_integrity": "Intégrité",
     "impact_authenticity": "Authenticité",
     "impactLevel": "Niveau d'impact (1-5)",
-    "supplyChain": "Impact sur la chaîne d'approvisionnement (art. 18)"
+    "supplyChain": "Impact sur la chaîne d'approvisionnement (art. 18)",
+    "markSubmitted": "Marquer comme transmis",
+    "csirtReferencePrompt": "Référence CSIRT (facultatif) — l'identifiant renvoyé par le portail. Laisser vide pour enregistrer la transmission sans référence.",
+    "submissionRecorded": "Transmission enregistrée. Le moniteur cessera d'alerter sur cette obligation.",
+    "submissionFailed": "Impossible d'enregistrer la transmission",
+    "redButton": {
+      "open": "Bouton rouge",
+      "title": "Urgence CSIRT — alerte précoce Art. 23",
+      "subtitle": "Trois questions. Le reste provient des données de l'organisation et de l'inventaire d'actifs actuel.",
+      "whatHappened": "Que s'est-il passé ?",
+      "whatHappenedPlaceholder": "Un rançongiciel a chiffré les serveurs de fichiers de production",
+      "affectedServices": "Quels services sont touchés ?",
+      "affectedServicesPlaceholder": "Portail client, messagerie interne",
+      "usersAffected": "Utilisateurs touchés, estimation (facultatif)",
+      "usersAffectedPlaceholder": "p. ex. 4500",
+      "consequence": "Appuyer déclare l'incident : les délais Art. 23 de 24 heures, 72 heures et un mois démarrent maintenant, et l'enregistrement est auditable.",
+      "declareAction": "Déclarer et générer",
+      "declared": "Incident déclaré — le délai Art. 23 court",
+      "failed": "Impossible de déclarer l'incident",
+      "clockStarted": "L'incident est enregistré et ses échéances sont surveillées.",
+      "earlyWarningDeadline": "Alerte précoce à transmettre avant le",
+      "downloadPayload": "Télécharger le payload",
+      "copyPayload": "Copier le payload",
+      "copyFailed": "Copie dans le presse-papiers impossible",
+      "openCsirt": "Ouvrir csirt.gov.it",
+      "manualSubmission": "La transmission est manuelle : CSIRT Italia n'expose pas d'API. Une fois transmise, enregistrez-la sur l'incident pour arrêter les alertes d'échéance."
+    }
   },
   "governance": {
     "title": "Gouvernance",
@@ -782,7 +808,19 @@
     "infoTitle": "À propos de cette matrice",
     "infoBody": "Cette matrice mappe les exigences de l'Art. 21(2) de la Directive NIS2 (EU 2022/2555), transposée en droit italien sous D.Lgs 138/2024 (Art. 24, comma 2). Les contrôles automatisés vérifient TLS, DNS, en-têtes HTTP, chiffrement, gestion des incidents. Les entrées \"Vérification Manuelle\" nécessitent une attestation de l'équipe conformité.",
     "disclaimerTitle": "Heuristique pédagogique, pas le cadre ACN",
-    "disclaimerBody": "La checklist de 30 items et cette matrice de 10 lignes sont une heuristique pédagogique maintenue par la communauté, mappée à haut niveau sur les dix sous-paragraphes de l'Art. 21(2). Elles ne sont pas une reproduction intégrale du cadre officiel de l'ACN italienne (dérivé du NIST, détaillé dans les Determinazioni 127434/2026 et suivantes). Pour toute posture de conformité en production, référez-vous directement aux directives ACN et engagez un conseil qualifié."
+    "disclaimerBody": "La checklist de 30 items et cette matrice de 10 lignes sont une heuristique pédagogique maintenue par la communauté, mappée à haut niveau sur les dix sous-paragraphes de l'Art. 21(2). Elles ne sont pas une reproduction intégrale du cadre officiel de l'ACN italienne (dérivé du NIST, détaillé dans les Determinazioni 127434/2026 et suivantes). Pour toute posture de conformité en production, référez-vous directement aux directives ACN et engagez un conseil qualifié.",
+    "deadlines": {
+      "title": "Échéances réglementaires",
+      "subtitle": "Dates légales issues du D.Lgs 138/2024 et des déterminations ACN.",
+      "overdueCount": "{count} en retard",
+      "daysRemaining": "{count} jours restants",
+      "daysOverdue": "{count} jours de retard",
+      "urgency_overdue": "En retard",
+      "urgency_critical": "Critique",
+      "urgency_urgent": "Urgent",
+      "urgency_warning": "À venir",
+      "urgency_on_track": "Dans les temps"
+    }
   },
   "auditLogPage": {
     "title": "Journal d'Audit",
@@ -1261,5 +1299,12 @@
     "processCreateFailed": "Impossible d'ajouter le processus",
     "processUpdateFailed": "Impossible de mettre à jour le processus",
     "processDeleteFailed": "Impossible de supprimer le processus"
+  },
+  "acnExport": {
+    "art18": "Export ACN Art. 18",
+    "bia": "Export ACN BIA",
+    "done": "Export téléchargé",
+    "failed": "Échec de l'export",
+    "preliminaryNotice": "Schéma préliminaire — à revalider sur le modèle de catégorisation ACN officiel dès sa publication."
   }
 }
