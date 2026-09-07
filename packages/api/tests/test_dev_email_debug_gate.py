@@ -42,9 +42,17 @@ def _settings(**overrides):
     assertions describe the code's behaviour rather than the current machine's.
     Every field the production validator requires is supplied explicitly.
     """
+    # A low-entropy repeated character rather than a random-looking literal.
+    # The first version used a 32-char pseudo-random string, which gitleaks
+    # flagged as generic-api-key and turned the secret-scanning job red on every
+    # run. A test fixture that trips the secret scanner trains people to ignore
+    # it, so the fixture changes rather than the scanner being allowlisted.
+    # This still satisfies both production checks: >= 32 characters and no
+    # placeholder marker (see test_env_example_placeholders.py, which pins
+    # exactly this shape as a legitimate secret).
     base = dict(
         environment="production",
-        jwt_secret="Yb2Q8vT1nR7wLm4Kd6Xs9Fj3Hc5Zp0Ag",  # 32 chars, no marker
+        jwt_secret="x" * 40,
         cors_origins="https://nis2.example.com",
         _env_file=None,
     )

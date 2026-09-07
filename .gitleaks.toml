@@ -29,6 +29,18 @@ paths = [
     # test_totp_mfa.py uses pyotp.random_base32() — no hardcoded secrets.
     # Listed here proactively so future additions to this file don't break CI.
     '''packages/api/tests/test_totp_mfa\.py''',
+    # test_dev_email_debug_gate.py builds Settings objects that must satisfy the
+    # production validator, so it needs a jwt_secret of >= 32 characters with no
+    # placeholder marker. The first version used a pseudo-random literal, which
+    # generic-api-key flagged and which turned this job red; the fixture is now
+    # a repeated character, but the original literal survives in the history
+    # this scan walks. Nothing here was ever a live credential.
+    '''packages/api/tests/test_dev_email_debug_gate\.py''',
+    # test_notification_channels.py asserts that webhook secrets and Slack
+    # tokens are MASKED before they leave the API, so it has to construct
+    # credential-shaped values ("s3cr3t", "xoxb-1") to check they do not come
+    # back. Removing them would remove the coverage.
+    '''packages/api/tests/test_notification_channels\.py''',
 ]
 
 # Specific placeholder values pinned in non-test files but obviously not
