@@ -52,9 +52,13 @@ class CertificateInfo:
     expiry_risk: str = "OK"  # OK, WARNING_30D, CRITICAL_7D, EXPIRED
 
     # Key
-    key_type: str = ""  # RSA, ECDSA, Ed25519
+    key_type: str = ""  # RSA, ECDSA, Ed25519, DSA
     key_size: int = 0
-    key_strength: str = ""  # WEAK, ACCEPTABLE, STRONG
+    key_strength: str = ""  # WEAK, ACCEPTABLE, STRONG, UNDETERMINED
+    # The certificate as sent, kept so the public key can be read from it. The
+    # key used to be inferred from the negotiated cipher suite instead, which
+    # describes the session, not the certificate.
+    der: bytes = b""
 
     # Chain
     chain_length: int = 0
@@ -80,7 +84,12 @@ class CertificateInfo:
     ocsp_url: str = ""
 
     # CT Logs
-    ct_logged: bool = False
+    # Tri-state. False means crt.sh answered and had nothing; None means the
+    # query never completed. They were the same value, so a timeout or a rate
+    # limit from crt.sh — neither rare — was reported as "this certificate is
+    # not in any Certificate Transparency log", about certificates that plainly
+    # are.
+    ct_logged: Optional[bool] = None
     ct_log_count: int = 0
     ct_first_seen: Optional[str] = None
 
@@ -215,6 +224,7 @@ class CertificateAnalyzer:
 
         # Fingerprint
         info.fingerprint_sha256 = hashlib.sha256(cert_bin).hexdigest()
+        info.der = cert_bin
 
         # Validity
         not_before = cert.get("notBefore")
@@ -237,9 +247,11 @@ class CertificateAnalyzer:
         cipher = ssl_obj.cipher()
         info.cipher_suite = cipher[0] if cipher else ""
 
-        # Key info from cipher
-        if cipher and len(cipher) >= 3:
-            info.key_size = cipher[2] if isinstance(cipher[2], int) else 0
+        # cipher[2] is the SYMMETRIC key length of the negotiated suite. It was
+        # assigned to `key_size` and then compared against RSA thresholds, so a
+        # TLS 1.2 RSA session with AES-256 reported "Weak RSA key: 256 bits" —
+        # a fabricated HIGH finding on a sound 2048-bit certificate. The
+        # certificate's key is read from the certificate, below.
 
     def _analyze_expiry(self, info: CertificateInfo) -> None:
         """Analyze certificate expiry and set risk level."""
@@ -271,23 +283,68 @@ class CertificateAnalyzer:
             })
 
     def _analyze_key_strength(self, info: CertificateInfo) -> None:
-        """Analyze cryptographic key strength."""
-        cipher = info.cipher_suite.upper()
-        if "ECDSA" in cipher or "ECDHE" in cipher:
-            info.key_type = "ECDSA"
-        elif "RSA" in cipher:
+        """Read the certificate's public key and rate it.
+
+        It used to be inferred from the negotiated cipher suite, two ways and
+        both wrong. The type came from the suite NAME — but TLS 1.3 suites
+        ("TLS_AES_128_GCM_SHA256") name no authentication algorithm at all, so
+        every modern handshake fell through to "Unknown" and the check silently
+        did nothing. And the size came from `ssl_object.cipher()[2]`, which is
+        the SYMMETRIC key length of the session, then compared against RSA
+        thresholds: a TLS 1.2 RSA session with AES-256 produced "Weak RSA key:
+        256 bits", a HIGH finding invented about a sound 2048-bit certificate.
+
+        The certificate's key is in the certificate. `cryptography` is imported
+        lazily so a scanner installed without it degrades to UNDETERMINED
+        rather than failing — but UNDETERMINED, never a guess.
+        """
+        if not info.der:
+            info.key_type = "Unknown"
+            info.key_strength = "UNDETERMINED"
+            return
+
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+        except ImportError:
+            info.key_type = "Unknown"
+            info.key_strength = "UNDETERMINED"
+            info.errors.append(
+                "Key strength not assessed: the `cryptography` package is not installed."
+            )
+            return
+
+        try:
+            public_key = x509.load_der_x509_certificate(info.der).public_key()
+        except Exception as exc:
+            logger.debug("Certificate parse failed for %s: %s", info.domain, exc)
+            info.key_type = "Unknown"
+            info.key_strength = "UNDETERMINED"
+            return
+
+        if isinstance(public_key, rsa.RSAPublicKey):
             info.key_type = "RSA"
-        elif "ED25519" in cipher:
-            info.key_type = "Ed25519"
+            info.key_size = public_key.key_size
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            info.key_type = "ECDSA"
+            info.key_size = public_key.curve.key_size
+        elif isinstance(public_key, dsa.DSAPublicKey):
+            info.key_type = "DSA"
+            info.key_size = public_key.key_size
+        elif isinstance(public_key, (ed25519.Ed25519PublicKey, ed448.Ed448PublicKey)):
+            # Fixed-parameter curves: there is no size to compare, and both are
+            # at or above the 128-bit security level.
+            info.key_type = "Ed25519" if isinstance(public_key, ed25519.Ed25519PublicKey) else "Ed448"
             info.key_strength = "STRONG"
             return
         else:
             info.key_type = "Unknown"
+            info.key_strength = "UNDETERMINED"
             return
 
         thresholds = self.KEY_STRENGTH.get(info.key_type, {})
         if not thresholds or info.key_size == 0:
-            info.key_strength = "UNKNOWN"
+            info.key_strength = "UNDETERMINED"
             return
 
         if info.key_size < thresholds.get("acceptable", 0):
@@ -295,7 +352,11 @@ class CertificateAnalyzer:
             info.findings.append({
                 "severity": "HIGH",
                 "message": f"Weak {info.key_type} key: {info.key_size} bits",
-                "remediation": f"Regenerate with minimum {thresholds['acceptable']} bits",
+                "detail": (
+                    f"The certificate's public key is {info.key_size} bits; "
+                    f"{thresholds.get('acceptable')} is the minimum currently considered acceptable."
+                ),
+                "remediation": "Reissue the certificate with a stronger key.",
             })
         elif info.key_size >= thresholds.get("strong", 0):
             info.key_strength = "STRONG"
@@ -405,22 +466,37 @@ class CertificateAnalyzer:
             info.ocsp_status = "UNKNOWN"
 
     async def _query_ct_logs(self, info: CertificateInfo) -> None:
-        """Query Certificate Transparency logs via crt.sh."""
+        """Query Certificate Transparency logs via crt.sh.
+
+        `ct_logged` stays None unless crt.sh actually answered. It used to
+        default to False, so a timeout, a rate limit or an offline scanner —
+        none of them rare against crt.sh — reported "not present in any
+        Certificate Transparency log" about certificates that plainly are.
+        Every CA-issued certificate since 2018 is logged; reading that False as
+        a fact meant the report contradicted an easily checked public record,
+        and the health score silently withheld its CT bonus for it.
+        """
         try:
             url = f"https://crt.sh/?q={info.domain}&output=json"
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json(content_type=None)
-                        if data:
-                            info.ct_logged = True
-                            info.ct_log_count = len(data)
-                            # Find first seen
-                            dates = [e.get("entry_timestamp", "") for e in data if e.get("entry_timestamp")]
-                            if dates:
-                                info.ct_first_seen = min(dates)
+                    if resp.status != 200:
+                        info.errors.append(
+                            f"Certificate Transparency lookup unavailable (crt.sh returned {resp.status})."
+                        )
+                        return
+                    data = await resp.json(content_type=None)
+                    # An answer, so the question is settled either way.
+                    info.ct_logged = bool(data)
+                    info.ct_log_count = len(data) if data else 0
+                    dates = [e.get("entry_timestamp", "") for e in (data or []) if e.get("entry_timestamp")]
+                    if dates:
+                        info.ct_first_seen = min(dates)
         except Exception as e:
             logger.debug(f"CT log query failed for {info.domain}: {e}")
+            info.errors.append(
+                "Certificate Transparency lookup did not complete; CT presence is undetermined."
+            )
 
     async def _check_pinning_headers(self, info: CertificateInfo) -> None:
         """Check for certificate pinning headers."""
@@ -489,7 +565,9 @@ class CertificateAnalyzer:
         # Bonuses
         if info.chain_valid:
             score = min(100, score + 5)
-        if info.ct_logged:
+        # `is True` on purpose: an undetermined lookup must not be scored as
+        # an absence.
+        if info.ct_logged is True:
             score = min(100, score + 5)
         if info.key_strength == "STRONG":
             score = min(100, score + 5)

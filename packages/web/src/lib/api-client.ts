@@ -487,6 +487,19 @@ class ApiClient {
     })
   }
 
+  // ------------------------------------------------------ Certificate analysis
+
+  /** Deep certificate analysis for one host: chain, key strength, CT logs,
+   *  OCSP, SANs and an expiry risk band. The endpoint has always existed and
+   *  no screen ever called it, so the only certificate signal the product
+   *  surfaced was the scanner's expiry check. */
+  async checkCertificate(domain: string, port = 443) {
+    return this.request<any>('/api/v1/certificates/check', {
+      method: 'POST',
+      body: JSON.stringify({ domain, port }),
+    })
+  }
+
   // ------------------------------------------------------- ACN (Italy) / CSIRT
 
   /** The regulatory countdown: D.Lgs 138/2024 and the ACN determine, with days

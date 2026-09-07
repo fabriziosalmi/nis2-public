@@ -440,7 +440,19 @@
     "expired": "Expired",
     "daysRemaining": "{days} days remaining",
     "expiringCritical": "Expiring in {days} days — critical!",
-    "expiringWarning": "Expiring in {days} days — renew soon"
+    "expiringWarning": "Expiring in {days} days — renew soon",
+    "subtitle": "Deep TLS certificate analysis — Art. 21(2)(h), cryptography",
+    "domainPlaceholder": "example.com",
+    "checkFailed": "Certificate analysis failed",
+    "publicOnlyNote": "The target is resolved and pinned before connecting; private, reserved and blocked ranges are refused.",
+    "tlsVersion": "TLS version",
+    "ctLogged": "In {count} logs",
+    "ctNotLogged": "Not found",
+    "sans": "Subject alternative names",
+    "findingsTitle": "Findings",
+    "noFindings": "No certificate issues found.",
+    "ctUndetermined": "Not determined",
+    "notAssessed": "Checks that did not complete"
   },
   "remediation": {
     "title": "Remediation",

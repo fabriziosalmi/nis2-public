@@ -440,7 +440,19 @@
     "expired": "Vencido",
     "daysRemaining": "{days} días restantes",
     "expiringCritical": "Vence en {days} días — ¡crítico!",
-    "expiringWarning": "Vence en {days} días — renovar pronto"
+    "expiringWarning": "Vence en {days} días — renovar pronto",
+    "subtitle": "Análisis profundo del certificado TLS — Art. 21(2)(h), criptografía",
+    "domainPlaceholder": "ejemplo.es",
+    "checkFailed": "El análisis del certificado ha fallado",
+    "publicOnlyNote": "El objetivo se resuelve y se fija antes de conectar; los rangos privados, reservados y bloqueados se rechazan.",
+    "tlsVersion": "Versión TLS",
+    "ctLogged": "En {count} registros",
+    "ctNotLogged": "No encontrado",
+    "sans": "Nombres alternativos del sujeto",
+    "findingsTitle": "Hallazgos",
+    "noFindings": "No se han detectado problemas en el certificado.",
+    "ctUndetermined": "No determinado",
+    "notAssessed": "Comprobaciones no completadas"
   },
   "remediation": {
     "title": "Remediación",

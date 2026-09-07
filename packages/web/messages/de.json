@@ -440,7 +440,19 @@
     "expired": "Abgelaufen",
     "daysRemaining": "{days} Tage verbleibend",
     "expiringCritical": "Läuft in {days} Tagen ab — kritisch!",
-    "expiringWarning": "Läuft in {days} Tagen ab — bald erneuern"
+    "expiringWarning": "Läuft in {days} Tagen ab — bald erneuern",
+    "subtitle": "Tiefgehende TLS-Zertifikatsanalyse — Art. 21(2)(h), Kryptographie",
+    "domainPlaceholder": "beispiel.de",
+    "checkFailed": "Zertifikatsanalyse fehlgeschlagen",
+    "publicOnlyNote": "Das Ziel wird vor dem Verbindungsaufbau aufgelöst und festgelegt; private, reservierte und gesperrte Bereiche werden abgelehnt.",
+    "tlsVersion": "TLS-Version",
+    "ctLogged": "In {count} Logs",
+    "ctNotLogged": "Nicht gefunden",
+    "sans": "Alternative Antragstellernamen",
+    "findingsTitle": "Feststellungen",
+    "noFindings": "Keine Zertifikatsprobleme gefunden.",
+    "ctUndetermined": "Nicht ermittelt",
+    "notAssessed": "Nicht abgeschlossene Prüfungen"
   },
   "remediation": {
     "title": "Behebung",

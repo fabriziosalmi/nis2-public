@@ -440,7 +440,19 @@
     "expired": "Expiré",
     "daysRemaining": "{days} jours restants",
     "expiringCritical": "Expire dans {days} jours — critique !",
-    "expiringWarning": "Expire dans {days} jours — renouvelez bientôt"
+    "expiringWarning": "Expire dans {days} jours — renouvelez bientôt",
+    "subtitle": "Analyse approfondie du certificat TLS — Art. 21(2)(h), cryptographie",
+    "domainPlaceholder": "exemple.fr",
+    "checkFailed": "Échec de l'analyse du certificat",
+    "publicOnlyNote": "La cible est résolue et figée avant la connexion ; les plages privées, réservées et bloquées sont refusées.",
+    "tlsVersion": "Version TLS",
+    "ctLogged": "Dans {count} journaux",
+    "ctNotLogged": "Introuvable",
+    "sans": "Autres noms du sujet",
+    "findingsTitle": "Constats",
+    "noFindings": "Aucun problème de certificat détecté.",
+    "ctUndetermined": "Non déterminé",
+    "notAssessed": "Vérifications non abouties"
   },
   "remediation": {
     "title": "Remédiation",

@@ -440,7 +440,19 @@
     "expired": "Scaduto",
     "daysRemaining": "{days} giorni rimanenti",
     "expiringCritical": "Scade tra {days} giorni — critico!",
-    "expiringWarning": "Scade tra {days} giorni — rinnovare presto"
+    "expiringWarning": "Scade tra {days} giorni — rinnovare presto",
+    "subtitle": "Analisi approfondita del certificato TLS — Art. 21(2)(h), crittografia",
+    "domainPlaceholder": "esempio.it",
+    "checkFailed": "Analisi del certificato non riuscita",
+    "publicOnlyNote": "Il target viene risolto e fissato prima della connessione; gli intervalli privati, riservati e bloccati vengono rifiutati.",
+    "tlsVersion": "Versione TLS",
+    "ctLogged": "In {count} log",
+    "ctNotLogged": "Non trovato",
+    "sans": "Nomi alternativi del soggetto",
+    "findingsTitle": "Rilievi",
+    "noFindings": "Nessun problema rilevato sul certificato.",
+    "ctUndetermined": "Non determinato",
+    "notAssessed": "Verifiche non completate"
   },
   "remediation": {
     "title": "Remediation",
