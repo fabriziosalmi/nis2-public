@@ -107,6 +107,7 @@ docs/.vitepress/dist/
 music.mp3
 packages/scanner/reports/
 DRACONIAN-REVIEW-*.md
+REVIEW.md
 WORK-LOG-*.md
 
 # TypeScript incremental build cache — regenerated on every compile.
