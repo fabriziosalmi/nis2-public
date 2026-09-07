@@ -150,7 +150,12 @@ services:
       - /app/.next
     # Security: loopback-only (see postgres). Off-host access is opt-in.
     ports: ["127.0.0.1:8077:3000"]
-    env_file: ../../.env
+    # No env_file: the web service reads only the three variables below.
+    # See the note on the same service in docker-compose.prod.yml — loading the
+    # whole .env handed the frontend container the JWT signing key and the
+    # database credentials it has no use for, and risks publishing anything
+    # NEXT_PUBLIC_*-prefixed into the browser bundle. Kept symmetric with prod
+    # so the two files do not drift.
     environment:
       # Browser-side: where the user's browser reaches the API directly.
       - NEXT_PUBLIC_API_URL=http://localhost:8000

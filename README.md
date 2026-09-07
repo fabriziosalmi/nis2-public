@@ -148,7 +148,7 @@ The governance checklist maps to NIS2 Art. 21 at the EU level. National-specific
 | **Docker** + **Docker Compose v2.20+** | Runs the API, web, scanner, postgres, redis, celery containers | `compose v2.20` is required for `--wait` on healthchecks (`make dev` / `make prod` rely on it) |
 | **GNU Make** | Drives the standardised targets (`dev`, `prod`, `clean`, `test`, etc.) | Pre-installed on macOS / Linux. On Windows: install via Git Bash, WSL2, or Chocolatey |
 | **Python 3.10+** on the host | Used by `make clean`, `make clean-all`, and `make test-*` (pytest) | Linux/macOS package manager works; on Windows install from python.org (the Microsoft Store stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` is **not** a real Python — disable that alias in Settings → Apps → Apps & Features → App execution aliases). The Makefile detects `python3` / `py` / `python` in that order. |
-| **`openssl`** (or any random-bytes generator) | Generates `JWT_SECRET` and `NEXTAUTH_SECRET` for production deploys | `openssl rand -base64 32` is the canonical recipe |
+| **`openssl`** (or any random-bytes generator) | Generates `JWT_SECRET`, `POSTGRES_PASSWORD`, `NIS2_APP_PASSWORD` and `REDIS_PASSWORD` for production deploys | `openssl rand -base64 32` is the canonical recipe |
 
 > The platform itself runs inside containers and pulls all its runtime deps from the images — Node, Postgres, Redis, the Python interpreter for the API, etc. The host-side prerequisites above only drive build / clean / test from the Makefile.
 
@@ -177,8 +177,12 @@ sed -i.bak 's|^POSTGRES_PASSWORD=.*$|POSTGRES_PASSWORD='$(openssl rand -base64 2
 # JWT secret — must be ≥32 chars; the API refuses to start otherwise
 sed -i.bak 's|^JWT_SECRET=.*$|JWT_SECRET='$(openssl rand -base64 32)'|' .env
 
-# NextAuth secret
-sed -i.bak 's|^NEXTAUTH_SECRET=.*$|NEXTAUTH_SECRET='$(openssl rand -base64 32)'|' .env
+# Runtime database role — must match the password embedded in DATABASE_URL.
+# The API refuses to start on a superuser role, because Postgres bypasses RLS
+# for one and tenant isolation would rest on app-level filters alone.
+APP_PW=$(openssl rand -base64 24)
+sed -i.bak "s|^NIS2_APP_PASSWORD=.*$|NIS2_APP_PASSWORD=${APP_PW}|" .env
+sed -i.bak "s|CHANGE_ME_APP_ROLE_PASSWORD|${APP_PW}|g" .env
 
 # Redis password
 sed -i.bak 's|^REDIS_PASSWORD=.*$|REDIS_PASSWORD='$(openssl rand -base64 24)'|' .env

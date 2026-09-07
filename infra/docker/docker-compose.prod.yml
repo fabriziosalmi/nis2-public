@@ -228,7 +228,20 @@ services:
     # crashed with `sh: next: not found` and the container restart-looped
     # forever (reported by Davide on Docker Desktop / WSL2). Letting
     # the Dockerfile CMD run is the only correct option.
-    env_file: ../../.env
+    # NO env_file HERE, deliberately.
+    #
+    # This service used to load the whole of ../../.env, which handed the
+    # Next.js container JWT_SECRET, POSTGRES_PASSWORD, NIS2_APP_PASSWORD,
+    # DATA_ENCRYPTION_KEY, SMTP_PASSWORD and OPENAI_API_KEY. It reads exactly
+    # three variables (NODE_ENV, NEXT_PUBLIC_API_URL, INTERNAL_API_URL) and uses
+    # none of the rest. The frontend is the most exposed surface in the stack,
+    # so a template-injection or path-traversal bug there was handing over the
+    # JWT signing key and the database credentials for free.
+    #
+    # A second reason to keep this list explicit: Next.js inlines every
+    # NEXT_PUBLIC_*-prefixed variable into the browser bundle at build time.
+    # With the whole .env loaded, adding one carelessly named variable to it
+    # publishes that value to every visitor.
     environment:
       # Browser-side: the public domain (in front of Caddy).
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost}

@@ -312,14 +312,29 @@ class TestOpenAPI:
 # MCP Rate Limiting
 # ---------------------------------------------------------------------------
 
+def _fake_membership(role: str):
+    """Minimal (user, membership) pair for MCP dependency overrides.
+
+    The MCP router now needs the membership ROLE, not just the org id, so
+    overrides must supply an object carrying `.role`. SimpleNamespace keeps the
+    tests free of a DB round-trip.
+    """
+    import uuid
+    from types import SimpleNamespace
+
+    user = SimpleNamespace(id=uuid.uuid4())
+    membership = SimpleNamespace(role=role, organization_id=uuid.uuid4())
+    return user, membership
+
+
 class TestMcpRateLimit:
     def test_mcp_call_rate_limit(self, client, app):
-        from app.dependencies import get_current_user_org
+        from app.dependencies import get_current_org
         from app.routers.auth import limiter
-        import uuid
 
-        # Override auth dependency to bypass DB lookup and return a fake user & org UUID
-        app.dependency_overrides[get_current_user_org] = lambda: (None, uuid.uuid4())
+        # `viewer` is enough for list_governance_items (a read-only tool) and
+        # keeps this test about rate limiting rather than authorisation.
+        app.dependency_overrides[get_current_org] = lambda: _fake_membership("viewer")
 
         limiter.enabled = True
         try:
@@ -334,6 +349,107 @@ class TestMcpRateLimit:
             assert resp.status_code == 429
         finally:
             limiter.enabled = False
-            if get_current_user_org in app.dependency_overrides:
-                del app.dependency_overrides[get_current_user_org]
+            if get_current_org in app.dependency_overrides:
+                del app.dependency_overrides[get_current_org]
+
+
+class TestMcpAuthorization:
+    """Per-tool RBAC on the MCP surface.
+
+    Before this gate every tool ran behind membership alone, so the read-only
+    `viewer` role could invoke `scan_target` -- a full port scan, AXFR attempt
+    and HTTP probe of an arbitrary internet host -- and `check_certificate`.
+    The REST equivalents (POST /scans, the /certificates router) require admin
+    or auditor, and MCP scans are not persisted as Scan rows, so the bypass also
+    left no org-visible trace.
+    """
+
+    def _override(self, app, role: str):
+        from app.dependencies import get_current_org
+
+        app.dependency_overrides[get_current_org] = lambda: _fake_membership(role)
+        return get_current_org
+
+    def teardown_method(self):
+        pass
+
+    @pytest.mark.parametrize("tool", ["scan_target", "check_certificate"])
+    def test_viewer_cannot_invoke_outbound_tools(self, client, app, tool):
+        """The bypass, stated directly."""
+        dep = self._override(app, "viewer")
+        try:
+            resp = client.post(
+                "/api/v1/mcp/call",
+                json={"name": tool, "arguments": {"target": "example.com", "domain": "example.com"}},
+            )
+            assert resp.status_code == 403, resp.text
+            assert "admin" in resp.json()["detail"]
+        finally:
+            del app.dependency_overrides[dep]
+
+    @pytest.mark.parametrize("role", ["admin", "auditor"])
+    def test_privileged_roles_pass_the_gate(self, client, app, role):
+        """The gate must not simply block everyone.
+
+        A blocked target is fine here -- it proves the request got past
+        authorisation and into the tool, which is what this asserts. The
+        SSRF validator rejecting the domain is a separate control.
+        """
+        dep = self._override(app, role)
+        try:
+            resp = client.post(
+                "/api/v1/mcp/call",
+                json={"name": "check_certificate", "arguments": {"domain": "localhost"}},
+            )
+            assert resp.status_code != 403, resp.text
+        finally:
+            del app.dependency_overrides[dep]
+
+    def test_unknown_tool_is_denied_not_dispatched(self, client, app):
+        """Default deny: a tool missing from MCP_TOOL_ROLES is unreachable, so
+        adding one to MCP_TOOLS without deciding its authorisation fails closed
+        instead of inheriting the weakest gate in the file."""
+        dep = self._override(app, "admin")
+        try:
+            resp = client.post("/api/v1/mcp/call", json={"name": "not_a_real_tool"})
+            assert resp.status_code == 403, resp.text
+            assert resp.json()["detail"] == "Unknown tool"
+        finally:
+            del app.dependency_overrides[dep]
+
+    def test_tool_listing_is_filtered_by_role(self, client, app):
+        """Advertising a tool that would 403 invites an AI assistant to plan
+        around a capability it does not have."""
+        dep = self._override(app, "viewer")
+        try:
+            names = {t["name"] for t in client.get("/api/v1/mcp/tools").json()["tools"]}
+            assert "scan_target" not in names
+            assert "check_certificate" not in names
+            assert "list_governance_items" in names
+        finally:
+            del app.dependency_overrides[dep]
+
+        dep = self._override(app, "admin")
+        try:
+            names = {t["name"] for t in client.get("/api/v1/mcp/tools").json()["tools"]}
+            assert "scan_target" in names
+        finally:
+            del app.dependency_overrides[dep]
+
+    def test_every_declared_tool_has_an_explicit_role(self):
+        """MCP_TOOLS and MCP_TOOL_ROLES must not drift.
+
+        A tool declared but unmapped is unreachable (default deny), which is
+        safe but silently broken; catching it here beats discovering it from a
+        403 in production.
+        """
+        from app.mcp_server import MCP_TOOL_ROLES, MCP_TOOLS
+
+        declared = {t["name"] for t in MCP_TOOLS}
+        mapped = set(MCP_TOOL_ROLES)
+        assert declared == mapped, (
+            f"MCP_TOOLS and MCP_TOOL_ROLES disagree — "
+            f"declared but unmapped (unreachable): {sorted(declared - mapped)}; "
+            f"mapped but not declared: {sorted(mapped - declared)}"
+        )
 

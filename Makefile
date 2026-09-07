@@ -229,7 +229,7 @@ prod-preflight:
 	  echo "      POSTGRES_PASSWORD   (any non-empty string)"; \
 	  echo "      REDIS_PASSWORD      (any non-empty string)"; \
 	  echo "      JWT_SECRET          (run:  openssl rand -base64 32 )"; \
-	  echo "      NEXTAUTH_SECRET     (run:  openssl rand -base64 32 )"; \
+	  echo "      NIS2_APP_PASSWORD   (runtime DB role; must match DATABASE_URL)"; \
 	  echo "      CORS_ORIGINS        (comma-separated, no wildcards)"; \
 	  echo "                          example:  https://nis2.example.com"; \
 	  echo "      DOMAIN              (your public host for Caddy HTTPS)"; \
@@ -250,7 +250,7 @@ prod-preflight:
 	  echo "      POSTGRES_PASSWORD=$$(openssl rand -base64 24)"; \
 	  echo ""; \
 	  exit 1 )
-	@if grep -iqE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env; then \
+	@if grep -iqE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env; then \
 	  echo ""; \
 	  echo "==================================================================="; \
 	  echo "  ERROR -- one or more secrets in .env are still placeholders"; \
@@ -258,7 +258,7 @@ prod-preflight:
 	  echo ""; \
 	  echo "  Offending lines (value redacted):"; \
 	  echo ""; \
-	  grep -inE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env \
+	  grep -inE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env \
 	    | sed -E 's/=.*/=<PLACEHOLDER>/' | sed 's/^/      /'; \
 	  echo ""; \
 	  echo "  These are the literal values published in .env.example. A"; \

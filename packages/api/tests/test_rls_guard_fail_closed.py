@@ -228,6 +228,36 @@ class TestInitdbIsActuallyWired:
             "the initdb mount should be read-only"
         )
 
+    @pytest.mark.parametrize(
+        "compose_file",
+        ["docker-compose.prod.yml", "docker-compose.dev.yml"],
+    )
+    def test_web_service_does_not_load_the_whole_env(self, compose_file: str):
+        """The frontend must not be handed the backend's secrets.
+
+        Both compose files used to put `env_file: ../../.env` on the web
+        service, which gave the Next.js container JWT_SECRET,
+        POSTGRES_PASSWORD, NIS2_APP_PASSWORD, DATA_ENCRYPTION_KEY,
+        SMTP_PASSWORD and OPENAI_API_KEY. It reads three variables and uses
+        none of those. The frontend is the most exposed surface in the stack,
+        so any file-read or template-injection bug there disclosed the JWT
+        signing key and the database credentials.
+
+        Second hazard: Next.js inlines every NEXT_PUBLIC_*-prefixed variable
+        into the browser bundle at build time, so loading the whole .env makes
+        one carelessly named variable a public disclosure.
+        """
+        import yaml
+
+        compose = API_ROOT.parents[1] / "infra/docker" / compose_file
+        spec = yaml.safe_load(compose.read_text())
+        web = spec["services"]["web"]
+        assert "env_file" not in web, (
+            f"{compose_file}: the web service loads the whole .env again. It "
+            f"needs only NEXT_PUBLIC_API_URL and INTERNAL_API_URL; everything "
+            f"else in that file is a backend secret."
+        )
+
     @pytest.mark.parametrize("service", ["api", "celery-worker", "celery-beat"])
     def test_prod_compose_pins_production_environment(self, service: str):
         import yaml

@@ -18,13 +18,17 @@ import asyncio
 import json
 import logging
 import sys
-import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.dependencies import get_current_user_org
+from app.dependencies import (
+    ROLES_ANY,
+    ROLES_AUDITOR_OR_ADMIN,
+    get_current_org,
+)
 from app.routers.auth import limiter
+from app.models.membership import Membership
 from app.models.user import User
 
 logger = logging.getLogger("nis2.mcp")
@@ -395,12 +399,54 @@ def run_mcp_stdio():
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
+# Per-tool role requirements.
+#
+# This endpoint was an RBAC bypass. Every tool ran behind
+# `Depends(get_current_user_org)`, which proves membership of an organisation
+# and nothing else — so a `viewer`, the read-only role, could POST
+# /api/v1/mcp/call and reach the two tools that generate outbound traffic:
+#
+#   scan_target       -> full port scan, AXFR attempts, HTTP probing of an
+#                        arbitrary internet host
+#   check_certificate -> TLS/CT-log analysis of an arbitrary host
+#
+# Their REST equivalents are gated: POST /scans and the whole /certificates
+# router require admin or auditor. The MCP surface simply skipped that, and
+# because MCP scans are not persisted as Scan rows they also left no
+# org-visible trace.
+#
+# Default is DENY: a tool absent from this map cannot be called at all, so
+# adding a tool to MCP_TOOLS without deciding its authorisation fails closed
+# instead of inheriting the weakest gate in the file.
+MCP_TOOL_ROLES: dict[str, tuple[str, ...]] = {
+    # Outbound network actions — mirror the REST gates.
+    "check_certificate": ROLES_AUDITOR_OR_ADMIN,
+    "scan_target": ROLES_AUDITOR_OR_ADMIN,
+    # Read-only lookups against local data or static playbooks.
+    "search_playbooks": ROLES_ANY,
+    "get_playbook": ROLES_ANY,
+    "estimate_remediation": ROLES_ANY,
+    "list_governance_items": ROLES_ANY,
+}
+
+
+def _tool_is_allowed(tool_name: str, role: str) -> bool:
+    return role in MCP_TOOL_ROLES.get(tool_name, ())
+
+
 @router.get("/tools")
 async def list_tools(
-    auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
+    current_org: tuple[User, Membership] = Depends(get_current_org),
 ):
-    """List available MCP tools."""
-    return {"tools": MCP_TOOLS}
+    """List the MCP tools the caller is actually allowed to invoke.
+
+    Filtered rather than complete: advertising a tool that would 403 on call
+    invites an AI assistant to plan around a capability it does not have.
+    """
+    _, membership = current_org
+    return {
+        "tools": [t for t in MCP_TOOLS if _tool_is_allowed(t["name"], membership.role)]
+    }
 
 
 @router.post("/call")
@@ -408,7 +454,7 @@ async def list_tools(
 async def call_tool(
     request: Request,
     payload: dict,
-    auth: tuple[User, uuid.UUID] = Depends(get_current_user_org),
+    current_org: tuple[User, Membership] = Depends(get_current_org),
 ):
     """Execute an MCP tool call via HTTP.
 
@@ -416,10 +462,32 @@ async def call_tool(
     client receives a generic error string. Pre-fix, ``str(e)`` leaked
     filesystem paths, connection-string fragments, and table names.
     """
+    user, membership = current_org
     name = payload.get("name", "")
     arguments = payload.get("arguments", {})
     if not name:
         return {"error": "Missing tool name"}
+
+    # Authorise BEFORE dispatch. Unknown tools fall through to the empty tuple
+    # in MCP_TOOL_ROLES and are refused.
+    if not _tool_is_allowed(name, membership.role):
+        allowed = MCP_TOOL_ROLES.get(name)
+        logger.warning(
+            "MCP tool %r denied for user=%s org=%s role=%s",
+            name,
+            user.id,
+            membership.organization_id,
+            membership.role,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"This tool requires one of: {', '.join(allowed)}"
+                if allowed
+                else "Unknown tool"
+            ),
+        )
+
     try:
         result = await handle_tool_call(name, arguments)
         return {"result": result}
