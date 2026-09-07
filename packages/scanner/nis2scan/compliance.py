@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .scanner import ScanResult
+from . import cvss
 from .summary import SummaryGenerator
 
 # Canonical NIS2 Art. 21(2) sub-paragraphs (a–j) — single source of truth for
@@ -37,13 +38,34 @@ class ComplianceFinding:
     reference: str = "" # e.g. "D.Lgs 138/2024 Art. 21"
 
     # Report 2.0 Enhanced Fields
-    cvss_base_score: float = 0.0
+    #
+    # `cvss_base_score` is DERIVED from `cvss_vector` in __post_init__ — any
+    # value passed in is ignored. A CVSS base score is, by specification, a
+    # function of its vector, so a hand-picked number is not a CVSS score.
+    #
+    # It mattered: of the 28 findings that declared one, exactly 7 agreed with
+    # the vector printed beside them in the dossier. Nine contradicted it — an
+    # expired certificate was labelled 7.5 where its own vector computes 8.2, an
+    # open AXFR 9.0 where it computes 8.6 — and twelve carried a number with no
+    # vector at all, including a 9.8 that would have required a confidentiality,
+    # integrity AND availability impact for reading a file.
+    #
+    # Findings with no defensible vector now publish NO score. An empty cell an
+    # auditor can ask about beats a number nobody can justify, and several of
+    # these are not vulnerabilities at all: a missing P.IVA or cookie banner is
+    # a GDPR / consumer-law matter with no CVSS meaning.
+    cvss_base_score: Optional[float] = None
     cvss_vector: str = "" # e.g. "CVSS:3.1/AV:N/AC:L..."
     technical_detail: str = "" # Evidence like "TLS 1.1 enabled"
     remediation: str = "" # Actionable step
     remediation_cost: str = "Medium" # Low, Medium, High
     remediation_effort: str = "Medium" # Low, Medium, High
     compliance_article: str = "" # Mapping to specific Art 21 point
+
+    def __post_init__(self) -> None:
+        # Derive, never trust. One source of truth — the vector — is what stops
+        # the two numbers drifting apart again.
+        self.cvss_base_score = cvss.score_for(self.cvss_vector)
 
 @dataclass
 class ComplianceReport:
@@ -165,7 +187,6 @@ class ComplianceEngine:
                         rationale="Critical infrastructure services must not be exposed directly to the public internet.",
                         target=host.ip,
                         reference="D.Lgs 138/2024 Art. 21.2.i (Access Control)",
-                        cvss_base_score=9.1,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
                         technical_detail=f"Port {port} is open and accepting connections from public IP.",
                         remediation="Block access to this port immediately via Firewall/ACL. Use VPN for administrative access.",
@@ -184,7 +205,6 @@ class ComplianceEngine:
                     rationale="Use of insecure legacy protocols exposing cleartext credentials.",
                     target=host.ip,
                     reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                    cvss_base_score=7.5,
                     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                     technical_detail="Telnet service detected. Credential sniffing possible.",
                     remediation="Disable Telnet and replace with SSH. Ensure port 23 is closed.",
@@ -202,7 +222,6 @@ class ComplianceEngine:
                     rationale="Legacy protocol usage should be minimized. Ensure FTPS is enforced.",
                     target=host.ip,
                     reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                    cvss_base_score=5.3,
                     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
                     technical_detail="Unencrypted FTP service reachable.",
                     remediation="Migrate to SFTP/SCP or enforce FTPS (TLS).",
@@ -229,7 +248,6 @@ class ComplianceEngine:
                             rationale="Data in transit must be encrypted.",
                             target=host.ip,
                             reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_base_score=3.1,
                             cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
                             technical_detail="HTTP response code 200 OK on port 80 without redirect location.",
                             remediation="Configure web server to Redirect (301) all HTTP traffic to HTTPS.",
@@ -245,7 +263,6 @@ class ComplianceEngine:
                 # 'unsafe-inline', a wildcard script source, max-age=1, or
                 # max-age=0 (which instructs browsers to forget the policy) all
                 # used to count as satisfied controls.
-                _SEVERITY_CVSS = {"HIGH": 6.5, "MEDIUM": 4.3, "LOW": 3.1}
                 for issue in info.get('header_issues', []):
                     # The plain "header absent" cases are already covered by the
                     # dedicated findings below and in the missing-headers list;
@@ -262,7 +279,6 @@ class ComplianceEngine:
                         ),
                         target=f"{host.ip}:{port}",
                         reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                        cvss_base_score=_SEVERITY_CVSS.get(issue['severity'], 3.1),
                         technical_detail=issue['detail'],
                         remediation="Tighten the header — see the technical detail.",
                         remediation_cost="Low",
@@ -280,7 +296,6 @@ class ComplianceEngine:
                         rationale="Prevents downgrade attacks to insecure protocols.",
                         target=host.ip,
                         reference="NIS2 Directive Art. 21.2.g (Cyber Hygiene)",
-                        cvss_base_score=4.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail="Strict-Transport-Security header not returned by server.",
                         remediation="Enable HSTS headers (max-age=31536000; includeSubDomains).",
@@ -299,10 +314,10 @@ class ComplianceEngine:
                             severity="LOW",
                             category="CYBER HYGIENE",
                             message="Cookie Missing 'Secure' Flag",
+                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
                             rationale="Cookies without the Secure flag can be transmitted over unencrypted connections.",
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            cvss_base_score=3.0,
                             technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
                             remediation="Set the 'Secure' flag for all sensitive cookies.",
                             remediation_cost="Low",
@@ -326,7 +341,6 @@ class ComplianceEngine:
                             ),
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            cvss_base_score=3.1,
                             technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
                             remediation="Use SameSite=Lax or Strict unless the cookie is genuinely needed cross-site.",
                             remediation_cost="Low",
@@ -341,10 +355,10 @@ class ComplianceEngine:
                             severity="LOW",
                             category="CYBER HYGIENE",
                             message="Cookie Missing 'HttpOnly' Flag",
+                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
                             rationale="Cookies without HttpOnly are accessible to JavaScript, increasing XSS risk.",
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            cvss_base_score=3.0,
                             technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
                             remediation="Set the 'HttpOnly' flag for session cookies.",
                             remediation_cost="Low",
@@ -362,10 +376,10 @@ class ComplianceEngine:
                             severity="MEDIUM",
                             category="SUPPLY CHAIN SECURITY",
                             message="Subresource Integrity (SRI) Missing",
+                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N",
                             rationale="External scripts without SRI can be tampered with to inject malware.",
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.d (Supply Chain Security)",
-                            cvss_base_score=5.0,
                             technical_detail=f"Script: {src}",
                             remediation="Add 'integrity' and 'crossorigin' attributes to external script tags.",
                             remediation_cost="Low",
@@ -386,7 +400,6 @@ class ComplianceEngine:
                         rationale="Weak cryptography.",
                         target=host.ip,
                         reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                        cvss_base_score=7.5,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                         technical_detail=f"Server negotiated {version} which is deprecated.",
                         remediation="Disable support for TLS 1.0 and 1.1. Enforce TLS 1.2 or 1.3.",
@@ -403,10 +416,10 @@ class ComplianceEngine:
                         severity="HIGH",
                         category="ENCRYPTION",
                         message=f"Weak TLS Versions Supported ({', '.join(weak_versions)}) on port {port}",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
                         rationale="Server supports obsolete protocols (TLS 1.0/1.1) allowing downgrade attacks.",
                         target=host.ip,
                         reference="NIS2 Art. 21.2.h (Cryptography)",
-                        cvss_base_score=7.5,
                         technical_detail=f"Accepted connection using: {', '.join(weak_versions)}",
                         remediation="Disable TLS 1.0 and TLS 1.1 in server configuration.",
                         remediation_cost="Medium",
@@ -423,10 +436,10 @@ class ComplianceEngine:
                         severity="MEDIUM",
                         category="ENCRYPTION",
                         message=f"Weak Cipher Suite Negotiated ({cipher}) on port {port}",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
                         rationale="The server negotiated a cipher suite known to be weak.",
                         target=host.ip,
                         reference="NIS2 Art. 21.2.h (Cryptography)",
-                        cvss_base_score=5.0,
                         technical_detail=f"Cipher: {cipher}",
                         remediation="Reconfigure server to prioritize strong ciphers (AES-GCM, ChaCha20) and disable weak ones.",
                         remediation_cost="Medium",
@@ -444,7 +457,6 @@ class ComplianceEngine:
                         rationale="Certificate is invalid, self-signed, or untrusted.",
                         target=host.ip,
                         reference="NIS2 Directive Art. 21.2.h (Cryptography)",
-                        cvss_base_score=5.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail=f"TLS Error: {info.get('error')}",
                         remediation="Ensure a valid, trusted certificate is installed (e.g. Let's Encrypt).",
@@ -474,7 +486,6 @@ class ComplianceEngine:
                             ),
                             target=host.ip,
                             reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_base_score=5.9,
                             cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
                             technical_detail=f"Verification (with SNI): {detail}",
                             remediation="Install a certificate whose SAN list covers this hostname.",
@@ -493,7 +504,6 @@ class ComplianceEngine:
                             ),
                             target=host.ip,
                             reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_base_score=7.4,
                             cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
                             technical_detail=f"Verification (with SNI): {detail}",
                             remediation=(
@@ -543,7 +553,6 @@ class ComplianceEngine:
                         rationale="Failure to maintain security infrastructure.",
                         target=host.ip,
                         reference="NIS2 Directive Art. 21.2.h (Cryptography)",
-                        cvss_base_score=7.5,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
                         technical_detail="Certificate date is past 'notAfter' field.",
                         remediation="Renew the SSL certificate immediately.",
@@ -563,7 +572,6 @@ class ComplianceEngine:
                         rationale="Public disclosure of entire DNS zone is a severe information leak.",
                         target=host.target,
                         reference="NIS2 Directive Art. 21.2.e (Network Security)",
-                        cvss_base_score=9.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
                         technical_detail="Nameserver allowed AXFR query resulting in full zone dump.",
                         remediation="Restrict AXFR (Zone Transfers) to trusted secondary nameservers only.",
@@ -581,7 +589,6 @@ class ComplianceEngine:
                         rationale="Domain does not integrity-protect its records.",
                         target=host.ip,
                         reference="NIS2 Directive Art. 21.2.e (Network Security)",
-                        cvss_base_score=4.0,
                         cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail=(
                             "Zone is signed (DNSKEY present) but the parent publishes no DS "
@@ -607,7 +614,6 @@ class ComplianceEngine:
                         rationale="Lack of SPF allows attackers to spoof emails from your domain.",
                         target=host.target, # Domain level
                         reference="NIS2 Art. 21.2.j (Secured Communications)",
-                        cvss_base_score=4.3,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail="No TXT record starting with 'v=spf1' found.",
                         remediation="Configure SPF record (e.g., 'v=spf1 mx -all') to authorize senders.",
@@ -626,7 +632,6 @@ class ComplianceEngine:
                         rationale="DMARC is essential for email authentication and reporting spoofing attempts.",
                         target=host.target, # Domain level
                         reference="NIS2 Art. 21.2.j (Secured Communications)",
-                        cvss_base_score=4.3,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
                         technical_detail="No TXT record found at _dmarc subdomain.",
                         remediation="Implement DMARC policy (start with p=none for monitoring).",
@@ -646,11 +651,16 @@ class ComplianceEngine:
                             severity="CRITICAL",
                             category="DATA PROTECTION",
                             message=f"Leaked Secret Detected: {secret['type']}",
-                            rationale="Exposed credentials or API keys pose immediate security risk.",
+                            rationale=(
+                                "A credential is readable by anyone who requests the page. Scored "
+                                "for the disclosure that was actually observed (C:H); the previous "
+                                "9.8 additionally claimed integrity and availability impact, which "
+                                "would require knowing what the key is authorised to do — the scan "
+                                "cannot see that, and the true impact may be higher."
+                            ),
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.h (Cryptography)",
-                            cvss_base_score=9.8,
-                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                             technical_detail=f"Found {secret['type']} at position {secret['position']}",
                             remediation="Immediately rotate exposed credentials. Remove secrets from code/responses. Use environment variables or secret management systems.",
                             remediation_cost="High",
@@ -671,7 +681,6 @@ class ComplianceEngine:
                         rationale="Domain expiration can cause service disruption and loss of control.",
                         target=host.ip,
                         reference="NIS2 Art. 21.2.c (Business Continuity)",
-                        cvss_base_score=6.5,
                         cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L",
                         technical_detail=f"Domain expires: {host.whois_info.get('expiry_date', 'Unknown')}",
                         remediation="Renew domain registration immediately. Enable auto-renewal.",
@@ -692,7 +701,6 @@ class ComplianceEngine:
                         rationale="Entities must ensure domain registration data is accurate and complete.",
                         target=host.ip,
                         reference="NIS2 Art. 28 (Domain Registration Data)",
-                        cvss_base_score=0.0,
                         technical_detail="Registrar or Organization field missing in WHOIS data.",
                         remediation="Verify domain registration details with your registrar.",
                         remediation_cost="Low",
@@ -726,7 +734,6 @@ class ComplianceEngine:
                             rationale="Italian companies must display VAT number (P.IVA) on their website.",
                             target=f"{host.ip}:{port}",
                             reference="Italian D.Lgs 138/2024",
-                            cvss_base_score=0.0,
                             technical_detail="P.IVA pattern not detected in HTML",
                             remediation="Add P.IVA to website footer or legal notice section.",
                             remediation_cost="Low",
@@ -744,7 +751,6 @@ class ComplianceEngine:
                             rationale="GDPR and Italian law require accessible privacy policy.",
                             target=f"{host.ip}:{port}",
                             reference="GDPR Art. 13, D.Lgs 196/2003",
-                            cvss_base_score=3.1,
                             technical_detail="Privacy policy keywords not detected",
                             remediation="Add visible Privacy Policy link to website.",
                             remediation_cost="Low",
@@ -763,7 +769,6 @@ class ComplianceEngine:
                             rationale="GDPR requires explicit consent for non-essential cookies.",
                             target=f"{host.ip}:{port}",
                             reference="GDPR Art. 7, ePrivacy Directive",
-                            cvss_base_score=3.1,
                             technical_detail="Cookie consent keywords not found",
                             remediation="Implement cookie consent banner (e.g., Cookiebot, OneTrust).",
                             remediation_cost="Medium",
@@ -786,7 +791,6 @@ class ComplianceEngine:
                             rationale="A security.txt file helps security researchers report vulnerabilities safely and supports incident reporting obligations.",
                             target=f"{host.ip}:{port}",
                             reference="RFC 9116, NIS2 Art. 21.2.e & Art. 23 (Reporting)",
-                            cvss_base_score=0.0,
                             technical_detail="File not found at /.well-known/security.txt or /security.txt",
                             remediation="Publish a security.txt file with contact details.",
                             remediation_cost="Low",
@@ -802,10 +806,10 @@ class ComplianceEngine:
                             severity="CRITICAL",
                             category="SUPPLY CHAIN SECURITY",
                             message=f"Sensitive File Exposed ({sfile})",
+                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
                             rationale="Exposed configuration or version control files can lead to full system compromise.",
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.d (Supply Chain Security)",
-                            cvss_base_score=9.8,
                             technical_detail=f"Found accessible {sfile}",
                             remediation=f"Immediately remove or deny access to {sfile}.",
                             remediation_cost="Low",
@@ -827,7 +831,6 @@ class ComplianceEngine:
                             rationale="Revealing server versions helps attackers target specific vulnerabilities.",
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            cvss_base_score=0.0,
                             technical_detail=f"Header {h_name}: {h_val}",
                             remediation="Configure server to suppress version banners.",
                             remediation_cost="Low",
@@ -847,7 +850,6 @@ class ComplianceEngine:
                         rationale="Exposing detailed version information aids attackers in targeting specific vulnerabilities.",
                         target=f"{host.ip}:{port}",
                         reference="NIS2 Art. 21.2.e (Security in Acquisition)",
-                        cvss_base_score=2.6,
                         cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
                         technical_detail=f"Headers found: {', '.join(http_data['tech_stack'])}",
                         remediation="Configure web server to suppress 'X-Powered-By', 'X-AspNet-Version' and similar headers.",
@@ -878,11 +880,18 @@ class ComplianceEngine:
                             severity="HIGH",
                             category="VULNERABILITY",
                             message="Obsolete/EOL Software Detected",
-                            rationale="Using End-of-Life software guarantees unpatched vulnerabilities.",
+                            rationale=(
+                                "End-of-life software receives no security patches. This is a "
+                                "vulnerability-management failure, not an observed vulnerability: "
+                                "no CVSS score is published because none can be computed. The "
+                                "previous 9.8 was annotated in the source as 'assuming critical "
+                                "CVEs exist' — CVSS scores a specific vulnerability, and a banner "
+                                "match is not one. Banners are also spoofable and routinely stale "
+                                "where a distribution backports fixes without changing the version "
+                                "string, so the evidence here is the banner and nothing more."
+                            ),
                             target=f"{host.ip}:{port}",
                             reference="NIS2 Art. 21.2.e (Vulnerability Handling)",
-                            cvss_base_score=9.8, # Assuming critical CVEs exist for EOL software
-                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
                             technical_detail=f"Banner matched: {reason} (Source: {server_header})",
                             remediation="Upgrade to a supported version immediately.",
                             remediation_cost="High",
