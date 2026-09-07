@@ -17,9 +17,17 @@ We support the **current minor** and the **previous minor** with security patche
 
 | Version | Status | Security patches |
 |---------|--------|------------------|
-| 2.5.x   | Current | Yes |
-| 2.4.x   | Previous | Yes (until 2026-10-30) |
-| ≤ 2.3   | End-of-life | No — please upgrade |
+| 2.6.x   | Current | Yes |
+| 2.5.x   | Previous | Yes (until 2026-12-31) |
+| ≤ 2.4   | End-of-life | No — please upgrade |
+
+<!--
+  KEEP THIS TABLE IN STEP WITH THE RELEASE. It sat at "2.5.x Current" for the
+  whole 2.6 series — eleven releases — while telling operators on 2.4.x that
+  they were still receiving patches. A support policy that names the wrong
+  supported version is itself a security defect: it is the table people consult
+  when deciding whether they need to upgrade.
+-->
 
 The platform is distributed under AGPL-3.0 §15-16 *as is, without warranty of any kind*. The maintainer's commitment to patch supported versions is good-faith and best-effort — read the LICENSE before relying on it for a production NIS2 obligation.
 

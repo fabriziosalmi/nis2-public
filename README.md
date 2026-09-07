@@ -50,10 +50,39 @@ This is **not** a scanner that calls itself a compliance platform. It's a GRC la
 | Layer | What it does |
 |-------|--------------|
 | **Governance Framework** | 30-item checklist cross-referenced to NIS2 Art. 21 sub-paragraphs, document tracking, owner assignment |
-| **Remediation and Execution Control** | Structured playbooks, optional AI copilot (Ollama/OpenAI), open/acknowledged/resolved workflow |
+| **Remediation and Execution Control** | Structured playbooks, open/acknowledged/resolved workflow. An optional LLM copilot exists as an API endpoint (see below) but has no dashboard screen |
 | **Technical Validation Engine** | 30+ automated checks (TLS, DNS, ports, certificates, headers, secrets) — the probe that verifies if the network reflects the policy |
 
 The scanner is the technical probe. The governance framework is where the substantive NIS2 work lives — and most of it is human work, not automation.
+
+---
+
+## What is usable from the dashboard today
+
+Read this before the feature tables below. Several modules exist as a working REST API but have **no write path in the web UI** — records must be created with `curl`, an API key, or the MCP tools. That is a real limitation for the audience this platform targets, and it is stated here rather than buried.
+
+| Module | Dashboard | API |
+|---|---|---|
+| Assets, Scans, Findings, Reports | full read + write | full |
+| Governance checklist (Art. 21) | full read + write | full |
+| Organizations, members, API keys, audit log | full read + write | full |
+| **Vendors / supply chain (Art. 18)** | **read-only** — inventory and scores display; vendors cannot be added or edited | full CRUD |
+| **Business Impact Analysis** | **read-only** — matrix and gaps display; processes cannot be added or edited | full CRUD |
+| **Incidents (Art. 23)** | **read-only** — the 24h/72h/1-month countdown is live, but incidents cannot be opened, updated or closed | full CRUD |
+| **Notification channels** | **not implemented** — the settings screen is a non-functional placeholder that keeps channels in browser state and discards them | **no endpoint exists** |
+| **CSIRT "Red Button"** | **no UI** | `POST /csirt/emergency` |
+| **ACN export (Italy)** | **no UI** | `GET /acn-export/art18`, `/bia` |
+| **Compliance deadline countdown** | **no UI** | `GET /deadlines` |
+| **Deep certificate analysis** | **no UI** | `/certificates` (3 endpoints) |
+| **AI remediation copilot** | **no UI** — findings show only the scanner's static remediation string | `POST /remediation/explain` |
+| **TOTP MFA** | **no UI** — and enrolling via the API locks you out of the dashboard (see the warning under Art. 21) | `/auth/totp/setup\|verify\|disable` |
+
+Two consequences worth being explicit about:
+
+- **Art. 23 incident alerting does not work out of the box.** The Celery beat task that dispatches 24h/72h/1-month deadline alerts reads `NotificationChannel` rows, and there is no endpoint or screen that creates one — only a direct SQL `INSERT`. Without a row, the task falls back to emailing organisation admins, which requires `SMTP_*` to be configured. On a deployment with neither, the alert for a legally binding 24-hour deadline is written to the application log. The webhook (HMAC-SHA256) and Slack channels described below are implemented in the dispatcher but currently unreachable.
+- **A consultant cannot run an Art. 18 or BIA engagement from the UI alone.** Both modules read data they give you no way to enter.
+
+Contributions closing any of these gaps are welcome; they are the highest-value work in the project.
 
 ---
 
@@ -66,51 +95,78 @@ The compliance matrix references all ten sub-paragraphs (a) through (j). Several
 | Sub-paragraph | Scope | Implementation status | How the platform supports it |
 |---------------|-------|-----------------------|------------------------------|
 | (a) Risk analysis policies | Methodology, periodic updates | **Partial** — automated bridge from scanner findings | Governance checklist + `POST /governance/sync-risk` automatically escalates checklist items when HIGH/CRITICAL scanner findings are open; risk summary via `GET /governance/risk-summary` |
-| (b) Incident handling | Detection, response, CSIRT notification | **Implemented** — automated deadline enforcement | Incident module + Art. 23 lifecycle + Celery beat task checks every 15 min and dispatches alerts (email/webhook/Slack) at 24 h / 72 h / 1-month thresholds with Redis-backed dedup |
-| (c) Business continuity | BCP, DRP, backup, periodic testing | **Implemented** — manual verification | BIA module (RTO/RPO/MTPD), impact scoring, gap detection |
-| (d) Supply chain security | Vendor assessment, contracts, monitoring | **Implemented** — transparent scoring formula | Vendor Risk module (Art. 18) with documented 100-point scoring formula (certification, data access, audit recency, geography, security clauses); auditor-facing `GET /vendors/score-formula` |
+| (b) Incident handling | Detection, response, CSIRT notification | **Partial** — API complete, dashboard read-only, alerting needs manual setup | Incident module + Art. 23 lifecycle; Celery beat checks every 15 min and dispatches alerts at 24 h / 72 h / 1-month with Redis-backed dedup — but incidents can only be created through the API, and the notification channels the dispatcher reads have no endpoint that creates them (see [What is usable from the dashboard today](#what-is-usable-from-the-dashboard-today)) |
+| (c) Business continuity | BCP, DRP, backup, periodic testing | **Partial** — API complete, dashboard read-only | BIA module (RTO/RPO/MTPD), impact scoring, gap detection. Processes must be created through the API; the dashboard only displays them |
+| (d) Supply chain security | Vendor assessment, contracts, monitoring | **Partial** — API complete, dashboard read-only | Vendor Risk module (Art. 18) with documented 100-point scoring formula (certification, data access, audit recency, geography, security clauses); auditor-facing `GET /vendors/score-formula`. Vendors must be created through the API |
 | (e) Secure acquisition and development | SDLC, code review, vulnerability management | **Partial** — scanner automates surface checks | Technical validation engine (TLS, headers, secrets, ports) + governance checklist for organisational controls |
 | (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | **Partial** — scan-driven | Technical validation engine + checklist |
 | (g) Cyber hygiene and training | Awareness, phishing simulation | **Manual** | Governance checklist (human verification required by design) |
 | (h) Cryptography | Crypto policy, key management | **Partial** — automated for public-facing TLS | Technical validation (TLS version, cipher suites, cert expiry, HSTS) + checklist for key-management policy |
 | (i) Human resources security | Onboarding/offboarding, screening, PAM | **Manual** | Governance checklist (human verification required by design) |
-| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Implemented** — TOTP MFA, RBAC, audit log, API key scopes | TOTP MFA (`POST /auth/totp/setup\|verify\|disable`), MFA-gated login flow, role-based access (owner/admin/auditor/viewer), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` |
+| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Partial** — RBAC and access logging complete; **MFA is API-only and currently unusable** | Role-based access (owner/admin/auditor/viewer), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` — all reachable from the dashboard. TOTP MFA exists as three endpoints (`POST /auth/totp/setup\|verify\|disable`) with **no dashboard screen at all** — see the warning below before enabling it |
 
-**Legend**: *Implemented* = fully automated with no manual step required. *Partial* = automated checks cover the technically observable surface; organisational controls require human verification. *Manual* = the directive explicitly requires human judgement — automation cannot substitute.
+> ### ⚠ Do not enable TOTP MFA on this release
+>
+> There is no MFA screen anywhere in the web application — no component and no
+> translation key references TOTP, MFA or 2FA. Enrolment is possible only by
+> calling `POST /api/v1/auth/totp/setup` and `/verify` directly.
+>
+> **Enrolling locks you out of the dashboard.** With MFA active, `POST /auth/login`
+> returns `{"mfa_required": true, "partial": true}` and sets no session cookie.
+> The login page does not inspect the response: it stores the (absent) user and
+> redirects to `/dashboard`, which has no session, 401s, and bounces back to
+> login — a loop with no way out. `POST /auth/totp/disable` requires an
+> authenticated session, so recovery is only possible by completing the MFA login
+> against the API and calling `/disable` from there.
+>
+> Art. 21(2)(j) explicitly concerns multi-factor authentication, so this gap is
+> named rather than glossed. Until an MFA screen exists, treat MFA on this
+> platform as not shipped.
+
+**Legend**: *Implemented* = available end-to-end, dashboard included, with no manual step required. *Partial* = either the automated checks cover only the technically observable surface and organisational controls need human verification, or the capability exists in the API but not yet in the dashboard — the "How the platform supports it" column says which. *Manual* = the directive explicitly requires human judgement; automation cannot substitute.
 
 ### Art. 23 — Incident reporting (CSIRT)
 
 Incident lifecycle aligned with the legal deadlines:
 
-| Phase | Deadline | Platform support |
-|-------|----------|------------------|
-| Early Warning | 24 hours | "Red Button" generates a CSIRT-ready Early Warning JSON + **automated alert 2 h before / on breach** via email, webhook (HMAC-SHA256 signed), or Slack |
-| Incident Notification | 72 hours | Structured form with taxonomy, IOCs, timeline + **automated alert 2 h before / on breach** |
-| Final Report | 1 month | Aggregated data, impact assessment, lessons learned + **automated alert 2 h before / on breach** |
+| Phase | Deadline | Platform support | Reachable from |
+|-------|----------|------------------|----------------|
+| Early Warning | 24 hours | "Red Button" generates a CSIRT-ready Early Warning JSON; alert 2 h before / on breach | API only (`POST /csirt/emergency`) |
+| Incident Notification | 72 hours | Structured taxonomy, IOCs, timeline; alert 2 h before / on breach | API only (`POST /incidents`) |
+| Final Report | 1 month | Aggregated data, impact assessment, lessons learned; alert 2 h before / on breach | API only |
+| Live countdown across open incidents | — | 24h / 72h / 1-month clocks, per incident | **Dashboard** (read-only) |
 
-> Note: The platform produces the artefacts, tracks the deadlines, and dispatches alerts automatically via configured notification channels. **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push to the CSIRT portal.
+> **Read this before relying on the alerting.** The deadline monitor runs every 15 minutes and dispatches through `NotificationChannel` rows — and **no endpoint or screen creates those rows**; only a direct SQL `INSERT` does. With none configured the task falls back to emailing organisation admins, which needs `SMTP_*` set. With neither, the alert for a legally binding 24-hour deadline goes to the application log. The webhook (HMAC-SHA256 signed) and Slack transports are implemented in the dispatcher but currently unreachable.
+>
+> Incidents themselves are created, updated and closed **through the API**; the dashboard displays them and their countdowns but cannot open one.
+>
+> **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push to the CSIRT portal.
 
 ### Art. 18 — Supply chain (Vendor Risk Management)
 
-| Feature | Status |
-|---------|--------|
-| Vendor inventory with criticality classification (1-4) | Implemented |
-| Security assessment scoring (0-100) | Implemented |
-| Contract tracking (SLA, audit rights, security clauses) | Implemented |
-| Geographic location and data access level | Implemented |
-| Certification tracking (ISO 27001, SOC2, CSA STAR) | Implemented |
-| ACN Art. 18 relevance flagging (Italy) | Implemented |
+> **Dashboard is read-only.** Every field below is a working API capability; vendors must be created and edited through `POST`/`PATCH /vendors`. The dashboard renders the inventory, the scores and the ACN flags but offers no form.
+
+| Feature | API | Dashboard |
+|---------|-----|-----------|
+| Vendor inventory with criticality classification (1-4) | Implemented | read-only |
+| Security assessment scoring (0-100) | Implemented | read-only |
+| Contract tracking (SLA, audit rights, security clauses) | Implemented | read-only |
+| Geographic location and data access level | Implemented | read-only |
+| Certification tracking (ISO 27001, SOC2, CSA STAR) | Implemented | read-only |
+| ACN Art. 18 relevance flagging (Italy) | Implemented | read-only |
 
 ### Business Impact Analysis (BIA)
 
-| Feature | Status |
-|---------|--------|
-| Business process inventory with criticality levels | Implemented |
-| RTO/RPO/MTPD definition per process | Implemented |
-| 5-dimension impact scoring (financial, operational, reputational, regulatory, safety) | Implemented |
-| Asset and vendor dependency mapping | Implemented |
-| BCP/DRP gap detection | Implemented |
-| Impact matrix with automatic gap identification | Implemented |
+> **Dashboard is read-only**, same as Art. 18 above: processes are created through `POST /bia`, and the dashboard renders the matrix and the detected gaps.
+
+| Feature | API | Dashboard |
+|---------|-----|-----------|
+| Business process inventory with criticality levels | Implemented | read-only |
+| RTO/RPO/MTPD definition per process | Implemented | read-only |
+| 5-dimension impact scoring (financial, operational, reputational, regulatory, safety) | Implemented | read-only |
+| Asset and vendor dependency mapping | Implemented | read-only |
+| BCP/DRP gap detection | Implemented | read-only |
+| Impact matrix with automatic gap identification | Implemented | read-only |
 
 ---
 
@@ -126,8 +182,8 @@ The NIS2 Directive requires each EU member state to transpose it into national l
 | Determina ACN 127434/2026 | Technical baseline references in the compliance matrix |
 | Determina ACN 127437/2026 | Art. 18 vendor inventory with ACN-specific fields |
 | ACN BIA template | Internal model in place; alignment to the official ACN model pending publication |
-| Compliance deadlines API | Real countdowns: CSIRT referent (Dec 2026), 24h notification (Jan 2027), baseline measures (Jul 2027) |
-| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia` |
+| Compliance deadlines API | Real countdowns: CSIRT referent (Dec 2026), 24h notification (Jan 2027), baseline measures (Jul 2027). **API only — `GET /deadlines`; no dashboard screen** |
+| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia`. **API only — no export button in the dashboard** |
 
 > **ACN export — preliminary schema.** The official *modello di categorizzazione* announced by ACN (publication expected May/June 2026 per the Tavolo NIS) has not been released yet. The current export is a best-effort structural mapping based on Determina 127437/2026; field names and shape will be re-validated and may change once the official template is published.
 
@@ -195,7 +251,13 @@ rm -f .env.bak
 
 (macOS users: that's GNU `sed` syntax. For BSD `sed` drop the `.bak` argument or use a different editor — the goal is "replace the placeholder line with a real secret".)
 
-For air-gapped environments: Ollama AI copilot runs entirely local.
+**On the optional LLM copilot.** `POST /api/v1/remediation/explain` can call a local OpenAI-compatible server or OpenAI itself; OpenAI egress stays off unless `ENABLE_OPENAI=true`. Three caveats before planning around it:
+
+- It has **no dashboard screen**. Findings display the scanner's static remediation string only.
+- The shipped default `LLM_API_URL=http://localhost:1234/v1` is LM Studio's port (Ollama listens on 11434), and `localhost` *inside the API container* is that container — not your host. A local model server needs the container-reachable address, e.g. `http://host.docker.internal:11434/v1` on Docker Desktop.
+- With `model: "auto"` the request sends the literal model name `default`, which LM Studio accepts and Ollama rejects. Pass a real model name for Ollama.
+
+Finding text is interpolated into the prompt, and that text derives from content fetched from scanned third-party sites. Treat generated remediation commands as untrusted input to be reviewed, never as something to paste into a shell unread.
 
 ---
 
@@ -203,15 +265,19 @@ For air-gapped environments: Ollama AI copilot runs entirely local.
 
 These automated checks verify whether the security measures documented in your governance framework are actually implemented on the network:
 
-| Category | Checks |
-|----------|--------|
-| **Certificates** | Chain validation, CT log monitoring (crt.sh), OCSP, key strength (RSA/ECDSA), SAN coverage, expiry prediction, health scoring 0-100 |
-| **TLS/SSL** | Protocol versions, cipher suites, weak protocols, HSTS enforcement |
-| **DNS security** | DNSSEC, SPF, DMARC, DKIM, zone transfer protection, MX redundancy |
-| **HTTP headers** | CSP, X-Frame-Options, cookie flags, SRI, security.txt |
-| **Port exposure** | 14 critical ports (SSH, RDP, SMB, MySQL, PostgreSQL, Redis, MongoDB) |
-| **Resilience** | WAF/CDN detection, version disclosure, SSH hardening |
-| **Secrets** | AWS keys, GitHub tokens, private keys, JWT in responses |
+These checks run as part of a scan unless the table says otherwise. Read the right-hand column before quoting any of this to an auditor: several checks verify that a control is *present*, not that it is *correct*, and one whole category is not part of a scan at all.
+
+| Category | Checks | What the check actually establishes |
+|----------|--------|-------------------------------------|
+| **TLS/SSL** | Negotiated protocol version and cipher; attempts TLS 1.0 / 1.1 handshakes; HSTS header present | The connection is made **without SNI** and with `check_hostname=False` / `CERT_OPTIONAL`, so against any shared IP, CDN or load balancer the server answers with its *default* certificate and the chain is not validated. Only the **negotiated** cipher is recorded — there is no cipher-suite enumeration. HSTS is checked for presence only, not `max-age` / `includeSubDomains`. On the shipped Debian bookworm image, OpenSSL's system-wide `SECLEVEL=2` refuses TLS < 1.2 client-side, so the weak-protocol probe cannot report a positive |
+| **DNS security** | DNSSEC, SPF, DMARC, zone transfer (AXFR), MX redundancy | DNSSEC is inferred from the **presence of a DNSKEY record**; the parent DS record is not checked, so a signed-but-undelegated zone — the most common DNSSEC misconfiguration — reads as enabled |
+| **HTTP headers** | CSP, HSTS, X-Frame-Options, cookie flags, SRI, security.txt | **Presence only.** `Content-Security-Policy: default-src *; script-src 'unsafe-inline'` passes. Cookie flags are matched as substrings of the raw `Set-Cookie`, so `SameSite=None` is indistinguishable from `SameSite=Strict`. SRI covers `<script src>` on external origins, not stylesheets |
+| **Port exposure** | 14 critical ports (SSH, RDP, SMB, MySQL, PostgreSQL, Redis, MongoDB) | TCP reachability from the scanner's vantage point |
+| **Resilience** | WAF/CDN detection, version disclosure | Header and cookie fingerprinting |
+| **Secrets** | AWS keys, GitHub tokens, private keys, JWT in responses | Pattern matching over the first 1 MB of the response body |
+| **Certificates** — chain validation, CT logs (crt.sh), OCSP, key strength, SAN coverage, expiry prediction, 0-100 health score | **not part of a scan** | This is the one genuinely deep analyser in the codebase, and `scanner.py` never calls it. It is reachable only through `POST /api/v1/certificates/check` and the MCP `check_certificate` tool — neither of which has a dashboard screen. Scans, reports and the compliance score do not include it |
+
+> **CVSS scores in findings are fixed per check type**, not computed from the target's context, exposure or compensating controls. Treat them as severity labels, not as CVSS assessments.
 
 ### EU Privacy / GDPR Posture (separate from NIS2)
 
@@ -234,16 +300,16 @@ These automated checks verify whether the security measures documented in your g
 | `/api/v1/api-keys` | 3 | Long-lived `nis2_*` Bearer tokens for CI/CD pipelines (raw value shown once) |
 | `/api/v1/audit-logs` | 1 | Read-only org-scoped audit trail (90-day retention) |
 | `/api/v1/organizations` | 8 | Org settings, members, role management, **self-serve org creation** |
-| `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
-| `/api/v1/bia` | 5 | Business Impact Analysis |
-| `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT) |
+| `/api/v1/vendors` | 5 | Vendor risk management (Art. 18). Dashboard read-only |
+| `/api/v1/bia` | 5 | Business Impact Analysis. Dashboard read-only |
+| `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT). Dashboard read-only |
 | `/api/v1/incident-monitor` | 2 | Art. 23 deadline monitor — live 24h/72h/1-month countdowns (drives the Incidents page) |
 | `/api/v1/governance` | 8 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
-| `/api/v1/certificates` | 3 | Deep certificate analysis |
-| `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation |
-| `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema) |
-| `/api/v1/deadlines` | 1 | Compliance deadline countdown |
-| `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload |
+| `/api/v1/certificates` | 3 | Deep certificate analysis. No dashboard screen |
+| `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation. No dashboard screen |
+| `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema). No dashboard screen |
+| `/api/v1/deadlines` | 1 | Compliance deadline countdown. No dashboard screen |
+| `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload. No dashboard button |
 | `/api/v1/mcp` | 2 | Model Context Protocol for AI assistants |
 | `/.well-known/jwks.json` | 1 | RS256 public key set for JWT verification |
 | `/.well-known/security.txt` | 1 | Responsible disclosure contact |
@@ -273,7 +339,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 | **Backend** | FastAPI, SQLAlchemy (async), Pydantic v2, Celery, Redis, slowapi |
 | **Database** | PostgreSQL 16 |
 | **Scanner** | Python asyncio, aiohttp, dnspython, Playwright, python-whois |
-| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting (SlowAPI), SSRF prevention, API key auth, TOTP MFA, RS256 JWT + JWKS, RLS row-level isolation, audit log retention (90 days) |
+| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting (SlowAPI), SSRF prevention, API key auth, RS256 JWT + JWKS, Postgres RLS tenant isolation under a `NOSUPERUSER NOBYPASSRLS` role, audit log retention (90 days). TOTP MFA is API-only — see the Art. 21(2)(j) warning |
 | **AI / MCP** | MCP Server (stdio + HTTP), Ollama/OpenAI |
 | **Infra** | Docker, Caddy 2 (auto-HTTPS), GitHub Actions CI |
 
@@ -282,7 +348,12 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 | English | Italiano | Français | Deutsch | Español |
 |---------|----------|----------|---------|---------|
 
-189 translation keys across 5 locales. Cookie-based locale switching.
+945 translation keys per locale across 5 locales, at full parity — no locale is missing or
+carrying an extra key. Cookie-based locale switching.
+
+> The documentation site (`docs/`) exists in English and Italian only, so a German,
+> French or Spanish user gets a fully localised application and no documentation in
+> their language.
 
 ---
 

@@ -292,6 +292,53 @@ H5 worker RLS least-privilege, Alembic baseline repair, and dev/security hardeni
 
 - De-flaked the two intermittently-failing E2E tests: the reset-token dev-outbox race (#156) and the multi-org register→invite visibility race (#157).
 
+<!--
+  The 2.5.10 – 2.5.14 entries below were reconstructed from git history on
+  2026-09-07. They were tagged and released but never written up here, so this
+  file claimed a continuous record it did not have — and 2.5.6 in particular
+  carried a security fix (Prometheus removed from the host port) that an
+  operator deciding whether to upgrade had no way to learn about.
+-->
+
+## [2.5.14] - 2026-06-26
+
+### Security
+- Encrypt sensitive JSONB columns at rest (L14).
+- Use `bcrypt_sha256` to avoid bcrypt's 72-byte password truncation (L4).
+- Validate finding-assignee organisation membership (I4).
+
+### Fixed
+- Correct the NIS2 Art. 21(2) sub-paragraph letters in the scanner (I1, I2) — cryptography had been tagged 21.2.g instead of h, and those wrong letters were persisted onto auditable Finding records.
+- Render the report's executive summary instead of escaping it, and escape its data at source.
+- Fix a stale Dockerfile pin comment (I6).
+
+## [2.5.13] - 2026-06-24
+
+### Fixed
+- Resolve an infinite recursion in the database RLS policy.
+- Set the session `user_id` on authentication; use resolvable `nip.io` domains in the E2E suite.
+- Add 10s leeway to JWT verification to absorb clock skew on the `iat` check.
+- Bump aiohttp to 3.14.1 (medium severity).
+
+## [2.5.12] - 2026-05-19
+
+### Security
+- Prevent exception-text leakage in the MCP STDIO handler.
+
+### Changed
+- Remove `next-auth`, which was unused. (`NEXTAUTH_SECRET` remained in `.env.example` and in the production-secrets checklist until 2.6.11, asking operators to generate a credential nothing consumed.)
+- Dependency roll-up: next-intl 4.12.0, playwright 1.60.0, @types/node 25.9.0, @tanstack/react-query 5.100.11.
+
+## [2.5.11] - 2026-05-15
+
+### Added
+- TOTP MFA, RS256 JWT signing with JWKS, and Alembic-managed RLS policies.
+
+## [2.5.10] - 2026-05-15
+
+### Security
+- Ten NIS2/GDPR hardening fixes (#89).
+
 ## [2.5.9] - 2026-05-15
 
 Dependency bump and UI build stabilization.
@@ -325,6 +372,35 @@ Finalized high-fidelity security and usability hardening.
 ### ⚡ Performance
 
 - **Bulk Finding Updates Refactor**: Consolidated multiple network requests into a single, dedicated API endpoint (`/api/v1/findings/bulk`) with atomic transactional guarantees, eliminating race conditions and significantly boosting performance on massive arrays of findings.
+
+## [2.5.7] - 2026-05-15
+
+### Changed
+- UI/UX hardening pass.
+
+## [2.5.6] - 2026-05-08
+
+### Security
+- Full security audit: 26/26 findings resolved.
+- **Remove the Prometheus host port mapping** (`9099:9090`). Prometheus has no built-in authentication, so the mapping exposed internal service names, Docker DNS topology and operational metrics to anyone on the network. It is now reachable only inside the compose network.
+
+### Fixed
+- Revert Node 20 → 22 in CI (GitHub Actions deprecated Node 20); fix recharts TypeScript types.
+- Resolve a TS "format specified twice" error in the reports page.
+- Disable the SlowAPI rate limiter globally in tests; fix a TestClient cookies deprecation warning.
+
+## [2.5.5] - 2026-05-05
+
+### Changed
+- Finalise the native i18n migration for the documentation site.
+- `.env.example` switched from working dev credentials to placeholder values. (The rename from `GENERATE_ME_*` to `CHANGE_ME_*` silently disarmed both placeholder detectors — the exact-match set in `app/config.py` and the `^JWT_SECRET=GENERATE_ME` grep in the Makefile — so from this release until 2.6.11 every secret in the template passed `make prod`'s preflight unedited. Fixed in 2.6.11.)
+
+<!--
+  Versions 2.3.0 – 2.3.6 are tagged in git but were never written up here. They
+  predate the public history and are all end-of-life per SECURITY.md, so they
+  are recorded as a gap rather than reconstructed. `git log v2.3.0..v2.3.6` has
+  the detail if it is ever needed.
+-->
 
 ## [2.5.4] - 2026-04-30
 
