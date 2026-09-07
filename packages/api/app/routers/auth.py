@@ -1561,7 +1561,7 @@ async def totp_disable(
 # Development-only debug helper
 # ---------------------------------------------------------------------------
 
-if settings.environment != "production":
+if settings.environment != "production" and settings.enable_dev_email_debug:
 
     @router.get(
         "/debug/last-email",
@@ -1572,11 +1572,34 @@ if settings.environment != "production":
         """Returns the most recently captured outgoing email when the
         in-memory dev outbox is active (i.e. SMTP_HOST is unset).
 
-        Exists for the e2e tests: they trigger /forgot-password, then
-        read the reset link out of here. Strictly mounted only when
-        environment != "production"; the build refuses to start in
-        production with SMTP_HOST empty (utils/email.py raises), so
-        this surface can never coexist with a real MTA.
+        Exists for the e2e tests: they trigger /forgot-password, then read the
+        reset link out of here (tests/test_e2e_live.py::TestForgotPassword).
+
+        UNAUTHENTICATED BY CONSTRUCTION. There is no token to present at this
+        point in the flow — the caller is someone who cannot log in — so the
+        endpoint cannot be gated on a session. It therefore hands the last
+        outbound email, reset link included, to whoever asks. Mounting it is
+        the entire security decision.
+
+        Two independent conditions are required, deliberately:
+
+          1. environment != "production", and
+          2. ENABLE_DEV_EMAIL_DEBUG, which defaults off even in development.
+
+        The previous version required only (1). That made a single mis-set
+        variable sufficient for full unauthenticated account takeover:
+        POST /auth/forgot-password with any address (public, CSRF-exempt,
+        always 204) -> GET here for the token -> POST /auth/reset-password.
+        And ENVIRONMENT was easy to get wrong, because .env.example shipped
+        `development` while the README told operators to copy it and run
+        `make prod`.
+
+        The old docstring claimed a second line of defence that did not exist:
+        that "the build refuses to start in production with SMTP_HOST empty".
+        Both halves of that sentence read the same variable, so it was one
+        condition stated twice, not defence in depth. Settings now refuses to
+        boot in production when the flag is set — a genuinely independent
+        check, on a variable no real deployment sets.
         """
         outbox = get_dev_outbox()
         if not outbox:

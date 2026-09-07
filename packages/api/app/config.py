@@ -157,6 +157,25 @@ class Settings(BaseSettings):
     # See docs/privacy.md §7.3 (transborder data flow to OpenAI, USA).
     enable_openai: bool = False
 
+    # Mounts GET /api/v1/auth/debug/last-email, which returns the full body of
+    # the most recent outbound email — including the password-reset link — to
+    # ANY caller, with no authentication, no role check and no rate limit.
+    #
+    # It exists because the e2e suite drives the real reset flow end to end
+    # (tests/test_e2e_live.py::TestForgotPassword), which is worth keeping: that
+    # flow is security-critical and deserves live coverage. What is not worth
+    # keeping is the old mount condition — `environment != "production"` alone.
+    # A single mis-set variable then exposed a complete unauthenticated account
+    # takeover: POST /auth/forgot-password for any address (public, CSRF-exempt,
+    # always 204) -> GET here to read the token -> POST /auth/reset-password.
+    #
+    # So the endpoint now needs TWO independent conditions: a non-production
+    # environment AND this flag, which defaults off even in development and
+    # which no real deployment has any reason to set. _validate_runtime_config
+    # additionally REFUSES TO BOOT if it is on in production, so turning it on
+    # by accident fails loudly instead of silently opening the hole.
+    enable_dev_email_debug: bool = False
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @model_validator(mode="after")
@@ -177,6 +196,18 @@ class Settings(BaseSettings):
                     ".env to persist sessions."
                 )
             return self
+
+        # Fail closed rather than fail quiet: this flag mounts an
+        # unauthenticated endpoint that hands out password-reset links. In
+        # production it is never a legitimate setting, so refuse the boot
+        # instead of logging a warning nobody reads.
+        if self.enable_dev_email_debug:
+            raise RuntimeError(
+                "Refusing to start: ENABLE_DEV_EMAIL_DEBUG is set in production. "
+                "It mounts GET /api/v1/auth/debug/last-email, which returns the "
+                "last outbound email — including password-reset links — to any "
+                "unauthenticated caller. Unset it."
+            )
 
         # RS256 in production: require public key too
         if self.jwt_algorithm == "RS256" and not self.jwt_private_key:

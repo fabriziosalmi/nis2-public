@@ -61,6 +61,12 @@ services:
     env_file: ../../.env
     environment:
       ENVIRONMENT: development
+      # Mounts the unauthenticated GET /auth/debug/last-email helper, which the
+      # e2e suite and the local password-reset flow read the reset link from.
+      # Opt-in on purpose: it used to ride on ENVIRONMENT alone, so one wrong
+      # variable exposed a full account-takeover chain. Settings refuses to boot
+      # if this is ever set with ENVIRONMENT=production. Dev stack only.
+      ENABLE_DEV_EMAIL_DEBUG: "true"
       # `uvicorn --reload` uses the `watchfiles` library, which relies on
       # inotify. inotify events do not propagate from a Windows-hosted
       # filesystem through WSL2's `/mnt/c` proxy, so without polling the

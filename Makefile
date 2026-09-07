@@ -321,6 +321,28 @@ prod-preflight:
 	  echo "      ENVIRONMENT=production"; \
 	  echo ""; \
 	  exit 1; fi
+	@if grep -iqE '^ENABLE_DEV_EMAIL_DEBUG=(1|true|yes|on)' .env; then \
+	  echo ""; \
+	  echo "==================================================================="; \
+	  echo "  ERROR -- ENABLE_DEV_EMAIL_DEBUG is enabled"; \
+	  echo "==================================================================="; \
+	  echo ""; \
+	  echo "  This mounts GET /api/v1/auth/debug/last-email, which returns the"; \
+	  echo "  last outbound email -- password-reset link included -- to any"; \
+	  echo "  unauthenticated caller. Together with the public forgot-password"; \
+	  echo "  endpoint that is a complete account-takeover chain against every"; \
+	  echo "  user on the instance."; \
+	  echo ""; \
+	  echo "  The API already refuses to boot in production with this set; the"; \
+	  echo "  check is repeated here so you get a message instead of a"; \
+	  echo "  restart-looping container."; \
+	  echo ""; \
+	  echo "  It is a development-only helper for the e2e suite."; \
+	  echo "  docker-compose.dev.yml sets it for you. Remove it from .env:"; \
+	  echo ""; \
+	  echo "      ENABLE_DEV_EMAIL_DEBUG=false"; \
+	  echo ""; \
+	  exit 1; fi
 	@if grep -qE '^DOMAIN=nis2\.yourdomain\.com' .env; then \
 	  echo ""; \
 	  echo "==================================================================="; \

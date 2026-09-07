@@ -28,4 +28,5 @@ curl -s -o /dev/null -w "  register: %{http_code}\n" -X POST "$BASE/api/v1/auth/
 echo "== run E2E live suite =="
 cd packages/api
 E2E_LIVE_BASE_URL="$BASE" E2E_LIVE_EMAIL="$EMAIL" E2E_LIVE_PASSWORD="$PW" \
-  ENVIRONMENT=development PYTHONPATH=. "$PY" -m pytest tests/test_e2e_live.py "${@:--q}"
+  ENVIRONMENT=development ENABLE_DEV_EMAIL_DEBUG=true PYTHONPATH=. \
+  "$PY" -m pytest tests/test_e2e_live.py "${@:--q}"
