@@ -4,6 +4,7 @@
 import logging
 import os
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -69,6 +70,50 @@ async_session_factory = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+def privileged_engine() -> AsyncEngine:
+    """Engine for DDL: schema bootstrap and RLS/policy setup.
+
+    `engine` above is the RUNTIME identity and must be a NOSUPERUSER
+    NOBYPASSRLS role, or every RLS policy is decorative. Such a role has DML
+    only, so it cannot run create_all, ALTER TABLE ... ENABLE ROW LEVEL
+    SECURITY, CREATE POLICY, CREATE FUNCTION, or the audit-log GRANT/REVOKE.
+    Those need the privileged identity in MIGRATION_DATABASE_URL.
+
+    When no separate URL is configured this returns the runtime `engine`
+    unchanged, which is exactly the historical behaviour — so a deployment that
+    has not split its identities keeps working and simply keeps the posture it
+    already had.
+
+    Callers must dispose the engine when it is not the shared runtime one; use
+    `privileged_engine_scope()` rather than calling this directly.
+    """
+    if not settings.uses_split_db_identities:
+        return engine
+    return create_async_engine(
+        settings.effective_migration_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+
+@asynccontextmanager
+async def privileged_engine_scope() -> AsyncGenerator[AsyncEngine, None]:
+    """Yield a DDL-capable engine, disposing it if it was created for this scope.
+
+    The privileged connection is used for a few seconds at boot and then must go
+    away: holding a superuser pool open for the process lifetime would hand any
+    later code path an RLS-bypassing connection, defeating the whole point of
+    running as nis2_app.
+    """
+    eng = privileged_engine()
+    owned = eng is not engine
+    try:
+        yield eng
+    finally:
+        if owned:
+            await eng.dispose()
 
 
 class Base(DeclarativeBase):
@@ -167,59 +212,60 @@ async def ensure_schema() -> None:
         return
 
     # 1. Create any tables defined in the ORM that don't exist yet.
-    #    On a populated DB this is a fast no-op.
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async with privileged_engine_scope() as eng:
+        #    On a populated DB this is a fast no-op.
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    # 2. Known columns added after the initial schema. ADD COLUMN IF NOT
-    #    EXISTS is idempotent and cheap. Each entry is a (table, column,
-    #    type) tuple — keep it short and append, never rewrite history.
-    additive_columns: list[tuple[str, str, str]] = [
-        # v2.4.0: DNS rebinding TOCTOU mitigation pins the resolved IP
-        # at create-time so the scanner cannot be redirected to a private
-        # range between validation and connection.
-        ("assets", "pinned_ip", "VARCHAR(45)"),
-        # v2.4.13: password-change session invalidation watermark.
-        # NULL on existing rows = "never rotated" — the iat check
-        # treats the token's iat as fresher than NULL automatically.
-        ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
-        # MFA / TOTP (migrations 003, 006) and invite-by-token (migration 004)
-        # were added to the User model after these tables may already exist on an
-        # upgraded volume. create_all does NOT backfill columns, so without these
-        # a dev who made their Postgres volume before the feature 500s on
-        # register/login with "column users.totp_secret does not exist" (found in
-        # the 2026-06-26 live validation). Types match the model + the migrations'
-        # end state. Prod is unaffected — it runs Alembic.
-        ("users", "totp_secret", "VARCHAR(256)"),
-        ("users", "totp_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
-        ("users", "totp_recovery_codes", "VARCHAR(1024)"),
-        ("users", "invite_token_hash", "VARCHAR(128)"),
-        ("users", "invite_token_expires_at", "TIMESTAMP WITH TIME ZONE"),
-    ]
-    # v2.4.14: PasswordResetToken is a brand-new table; create_all above
-    # already provisions it, no ALTER needed. Listed here for the
-    # changelog grep — see app/models/password_reset_token.py.
-    async with engine.begin() as conn:
-        for table, column, ddl in additive_columns:
-            try:
-                await conn.execute(
-                    text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}")
-                )
-            except Exception as exc:
-                # If the table itself doesn't exist yet on this engine
-                # (e.g. metadata mismatch), log and move on — RLS setup
-                # below logs the same way and CI catches real breakage.
-                logger.warning("ensure_schema: %s.%s skipped: %s", table, column, exc)
+        # 2. Known columns added after the initial schema. ADD COLUMN IF NOT
+        #    EXISTS is idempotent and cheap. Each entry is a (table, column,
+        #    type) tuple — keep it short and append, never rewrite history.
+        additive_columns: list[tuple[str, str, str]] = [
+            # v2.4.0: DNS rebinding TOCTOU mitigation pins the resolved IP
+            # at create-time so the scanner cannot be redirected to a private
+            # range between validation and connection.
+            ("assets", "pinned_ip", "VARCHAR(45)"),
+            # v2.4.13: password-change session invalidation watermark.
+            # NULL on existing rows = "never rotated" — the iat check
+            # treats the token's iat as fresher than NULL automatically.
+            ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
+            # MFA / TOTP (migrations 003, 006) and invite-by-token (migration 004)
+            # were added to the User model after these tables may already exist on an
+            # upgraded volume. create_all does NOT backfill columns, so without these
+            # a dev who made their Postgres volume before the feature 500s on
+            # register/login with "column users.totp_secret does not exist" (found in
+            # the 2026-06-26 live validation). Types match the model + the migrations'
+            # end state. Prod is unaffected — it runs Alembic.
+            ("users", "totp_secret", "VARCHAR(256)"),
+            ("users", "totp_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("users", "totp_recovery_codes", "VARCHAR(1024)"),
+            ("users", "invite_token_hash", "VARCHAR(128)"),
+            ("users", "invite_token_expires_at", "TIMESTAMP WITH TIME ZONE"),
+        ]
+        # v2.4.14: PasswordResetToken is a brand-new table; create_all above
+        # already provisions it, no ALTER needed. Listed here for the
+        # changelog grep — see app/models/password_reset_token.py.
+        async with eng.begin() as conn:
+            for table, column, ddl in additive_columns:
+                try:
+                    await conn.execute(
+                        text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}")
+                    )
+                except Exception as exc:
+                    # If the table itself doesn't exist yet on this engine
+                    # (e.g. metadata mismatch), log and move on — RLS setup
+                    # below logs the same way and CI catches real breakage.
+                    logger.warning("ensure_schema: %s.%s skipped: %s", table, column, exc)
 
 
-# L1: data-table tenant isolation is scoped to the ACTIVE org only. The earlier
-# predicate also OR'd in "any org the current user is a member of", which let a
-# multi-org user's queries read EVERY org they belong to — not just the one they
-# are acting in — an over-permissive defence-in-depth gap. app.current_org_id is
-# set from the JWT's active org (get_db) or the API key's org (get_api_key_org),
-# so this IS the correct tenant boundary. Membership-based access stays ONLY on
-# the `memberships` table (_RLS_MEMBERSHIPS_PREDICATE) so a user can still read
-# their own memberships to enumerate / switch orgs.
+    # L1: data-table tenant isolation is scoped to the ACTIVE org only. The earlier
+    # predicate also OR'd in "any org the current user is a member of", which let a
+    # multi-org user's queries read EVERY org they belong to — not just the one they
+    # are acting in — an over-permissive defence-in-depth gap. app.current_org_id is
+    # set from the JWT's active org (get_db) or the API key's org (get_api_key_org),
+    # so this IS the correct tenant boundary. Membership-based access stays ONLY on
+    # the `memberships` table (_RLS_MEMBERSHIPS_PREDICATE) so a user can still read
+    # their own memberships to enumerate / switch orgs.
 _RLS_PREDICATE = (
     "(organization_id::text = current_setting('app.current_org_id', true))"
 )
@@ -251,171 +297,181 @@ async def setup_row_level_security() -> None:
         logger.debug("setup_row_level_security: skipping (not Postgres)")
         return
 
-    tenant_tables = sorted(
-        t.name for t in Base.metadata.tables.values() if "organization_id" in t.columns
-    )
-
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            text(
-                "SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'"
-            )
-        )
-        has_policy = {row[0] for row in result}
-
-    missing = [t for t in tenant_tables if t not in has_policy]
-    if missing:
-        logger.warning(
-            "RLS: tenant_isolation policy missing on %d table(s): %s — applying now.",
-            len(missing),
-            ", ".join(missing),
-        )
-        async with engine.begin() as conn:
-            for t in missing:
-                await conn.execute(text(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"))
-                await conn.execute(text(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY"))
-                predicate = (
-                    _RLS_MEMBERSHIPS_PREDICATE if t == "memberships" else _RLS_PREDICATE
-                )
-                await conn.execute(
-                    text(
-                        f"CREATE POLICY tenant_isolation ON {t} "
-                        f"USING {predicate} "
-                        f"WITH CHECK {predicate}"
-                    )
-                )
-        logger.info(
-            "RLS: tenant_isolation policies applied on %d table(s).", len(missing)
-        )
-    else:
-        logger.info(
-            "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
+    async with privileged_engine_scope() as eng:
+        tenant_tables = sorted(
+            t.name for t in Base.metadata.tables.values() if "organization_id" in t.columns
         )
 
-    # L1: databases created before the active-org-only predicate still carry the
-    # old membership-OR subquery in their tenant_isolation policy. Recreate any
-    # such policy (detected by 'memberships' appearing in the qual of a
-    # NON-memberships table) with the current _RLS_PREDICATE. Runs as the
-    # superuser/migration role; no-ops (caught) once the app runs as nis2_app —
-    # by then a privileged boot has already applied it.
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            text(
-                "SELECT tablename FROM pg_policies "
-                "WHERE policyname = 'tenant_isolation' "
-                "AND tablename <> 'memberships' AND qual LIKE '%memberships%'"
-            )
-        )
-        stale = [row[0] for row in result]
-    for t in stale:
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text(f"DROP POLICY tenant_isolation ON {t}"))
-                await conn.execute(
-                    text(
-                        f"CREATE POLICY tenant_isolation ON {t} "
-                        f"USING {_RLS_PREDICATE} WITH CHECK {_RLS_PREDICATE}"
-                    )
-                )
-            logger.info("L1: recreated tenant_isolation on %s (active-org-only).", t)
-        except Exception as exc:
-            logger.warning("L1: could not recreate tenant_isolation on %s: %s", t, exc)
-
-    # api_keys is a BOOTSTRAP table: get_api_key_org looks a key up BY key_hash to
-    # DISCOVER its org, so that query runs with no app.current_org_id set — and the
-    # org-scoped tenant_isolation policy would hide every row (0 results => every
-    # API-key request 401s under a NOBYPASSRLS role). Add a SELECT-only policy that
-    # permits the global hash lookup. PostgreSQL ORs permissive policies, so SELECT
-    # becomes global while tenant_isolation still scopes INSERT/UPDATE/DELETE to the
-    # caller's org. Hashes (not raw keys) are all that's readable, and the
-    # management endpoints filter by org in the query. Idempotent.
-    async with engine.begin() as conn:
-        try:
-            present = await conn.execute(
+        async with eng.connect() as conn:
+            result = await conn.execute(
                 text(
-                    "SELECT 1 FROM pg_policies "
-                    "WHERE tablename='api_keys' AND policyname='api_keys_lookup'"
+                    "SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'"
                 )
             )
-            if present.first() is None:
-                await conn.execute(
-                    text("CREATE POLICY api_keys_lookup ON api_keys FOR SELECT USING (true)")
+            has_policy = {row[0] for row in result}
+
+        missing = [t for t in tenant_tables if t not in has_policy]
+        if missing:
+            logger.warning(
+                "RLS: tenant_isolation policy missing on %d table(s): %s — applying now.",
+                len(missing),
+                ", ".join(missing),
+            )
+            async with eng.begin() as conn:
+                for t in missing:
+                    await conn.execute(text(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"))
+                    await conn.execute(text(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY"))
+                    predicate = (
+                        _RLS_MEMBERSHIPS_PREDICATE if t == "memberships" else _RLS_PREDICATE
+                    )
+                    await conn.execute(
+                        text(
+                            f"CREATE POLICY tenant_isolation ON {t} "
+                            f"USING {predicate} "
+                            f"WITH CHECK {predicate}"
+                        )
+                    )
+            logger.info(
+                "RLS: tenant_isolation policies applied on %d table(s).", len(missing)
+            )
+        else:
+            logger.info(
+                "RLS: tenant_isolation policies verified on %d tables.", len(tenant_tables)
+            )
+
+        # L1: databases created before the active-org-only predicate still carry the
+        # old membership-OR subquery in their tenant_isolation policy. Recreate any
+        # such policy (detected by 'memberships' appearing in the qual of a
+        # NON-memberships table) with the current _RLS_PREDICATE. Runs as the
+        # superuser/migration role; no-ops (caught) once the app runs as nis2_app —
+        # by then a privileged boot has already applied it.
+        async with eng.connect() as conn:
+            result = await conn.execute(
+                text(
+                    "SELECT tablename FROM pg_policies "
+                    "WHERE policyname = 'tenant_isolation' "
+                    "AND tablename <> 'memberships' AND qual LIKE '%memberships%'"
                 )
-                logger.info("RLS: api_keys_lookup (global SELECT) policy applied.")
-        except Exception as exc:
-            logger.warning("RLS: api_keys_lookup policy skipped: %s", exc)
+            )
+            stale = [row[0] for row in result]
+        for t in stale:
+            try:
+                async with eng.begin() as conn:
+                    await conn.execute(text(f"DROP POLICY tenant_isolation ON {t}"))
+                    await conn.execute(
+                        text(
+                            f"CREATE POLICY tenant_isolation ON {t} "
+                            f"USING {_RLS_PREDICATE} WITH CHECK {_RLS_PREDICATE}"
+                        )
+                    )
+                logger.info("L1: recreated tenant_isolation on %s (active-org-only).", t)
+            except Exception as exc:
+                logger.warning("L1: could not recreate tenant_isolation on %s: %s", t, exc)
 
-    # M2: make audit_logs append-only for the application role. A plain REVOKE
-    # would also break the retention purge in cleanup_tasks, so that purge runs
-    # through purge_old_audit_logs() — a SECURITY DEFINER function owned by this
-    # (privileged) setup role: it bypasses RLS and keeps DELETE even after the app
-    # role loses it. SET search_path guards the definer fn against search-path
-    # hijacking; EXECUTE is revoked from PUBLIC (the CREATE default) then granted
-    # only to the app role. Each statement runs in its own transaction so a no-op
-    # (role absent, or insufficient rights once running AS the app role) doesn't
-    # abort the rest — these must be applied during a superuser/migration boot.
-    _audit_appendonly_stmts = (
-        (
-            "CREATE OR REPLACE FUNCTION purge_old_audit_logs(retention_days integer) "
-            "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
-            "SET search_path = public, pg_temp AS $fn$ "
-            "DECLARE deleted bigint; "
-            "BEGIN "
-            "DELETE FROM audit_logs "
-            "WHERE created_at < now() - make_interval(days => retention_days); "
-            "GET DIAGNOSTICS deleted = ROW_COUNT; "
-            "RETURN deleted; "
-            "END; $fn$",
-            "purge_old_audit_logs() function",
-        ),
-        (
-            "REVOKE EXECUTE ON FUNCTION purge_old_audit_logs(integer) FROM PUBLIC",
-            "lock down purge function (revoke EXECUTE from PUBLIC)",
-        ),
-        (
-            "GRANT EXECUTE ON FUNCTION purge_old_audit_logs(integer) TO nis2_app",
-            "grant purge EXECUTE to nis2_app",
-        ),
-        # GDPR Art. 17 erasure pseudonymises a user's audit rows (UPDATE) — also a
-        # legitimate, privileged exception to append-only, so it runs through its
-        # own SECURITY DEFINER function (auth.py calls it instead of a direct
-        # UPDATE, which the REVOKE below would otherwise block under nis2_app).
-        (
-            "CREATE OR REPLACE FUNCTION pseudonymize_user_audit_logs(p_user_id uuid) "
-            "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
-            "SET search_path = public, pg_temp AS $fn$ "
-            "DECLARE updated bigint; "
-            "BEGIN "
-            "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
-            "user_agent = '[erased]', details = NULL WHERE user_id = p_user_id; "
-            "GET DIAGNOSTICS updated = ROW_COUNT; "
-            "RETURN updated; "
-            "END; $fn$",
-            "pseudonymize_user_audit_logs() function",
-        ),
-        (
-            "REVOKE EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) FROM PUBLIC",
-            "lock down pseudonymize function (revoke EXECUTE from PUBLIC)",
-        ),
-        (
-            "GRANT EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) TO nis2_app",
-            "grant pseudonymize EXECUTE to nis2_app",
-        ),
-        (
-            "REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app",
-            "make audit_logs append-only for nis2_app",
-        ),
-    )
-    for _stmt, _desc in _audit_appendonly_stmts:
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text(_stmt))
-        except Exception as exc:
-            logger.warning("M2: %s skipped: %s", _desc, exc)
+        # api_keys is a BOOTSTRAP table: get_api_key_org looks a key up BY key_hash to
+        # DISCOVER its org, so that query runs with no app.current_org_id set — and the
+        # org-scoped tenant_isolation policy would hide every row (0 results => every
+        # API-key request 401s under a NOBYPASSRLS role). Add a SELECT-only policy that
+        # permits the global hash lookup. PostgreSQL ORs permissive policies, so SELECT
+        # becomes global while tenant_isolation still scopes INSERT/UPDATE/DELETE to the
+        # caller's org. Hashes (not raw keys) are all that's readable, and the
+        # management endpoints filter by org in the query. Idempotent.
+        async with eng.begin() as conn:
+            try:
+                present = await conn.execute(
+                    text(
+                        "SELECT 1 FROM pg_policies "
+                        "WHERE tablename='api_keys' AND policyname='api_keys_lookup'"
+                    )
+                )
+                if present.first() is None:
+                    await conn.execute(
+                        text("CREATE POLICY api_keys_lookup ON api_keys FOR SELECT USING (true)")
+                    )
+                    logger.info("RLS: api_keys_lookup (global SELECT) policy applied.")
+            except Exception as exc:
+                logger.warning("RLS: api_keys_lookup policy skipped: %s", exc)
 
-    # Defence-in-depth: refuse to run with a SUPERUSER/BYPASSRLS role in prod
-    # (shared with the Celery worker boot guard — see assert_db_role_rls_safe).
-    await assert_db_role_rls_safe()
+        # M2: make audit_logs append-only for the application role. A plain REVOKE
+        # would also break the retention purge in cleanup_tasks, so that purge runs
+        # through purge_old_audit_logs() — a SECURITY DEFINER function owned by this
+        # (privileged) setup role: it bypasses RLS and keeps DELETE even after the app
+        # role loses it. SET search_path guards the definer fn against search-path
+        # hijacking; EXECUTE is revoked from PUBLIC (the CREATE default) then granted
+        # only to the app role. Each statement runs in its own transaction so a no-op
+        # (role absent, or insufficient rights once running AS the app role) doesn't
+        # abort the rest — these must be applied during a superuser/migration boot.
+        _audit_appendonly_stmts = (
+            (
+                "CREATE OR REPLACE FUNCTION purge_old_audit_logs(retention_days integer) "
+                "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
+                "SET search_path = public, pg_temp AS $fn$ "
+                "DECLARE deleted bigint; "
+                "BEGIN "
+                "DELETE FROM audit_logs "
+                "WHERE created_at < now() - make_interval(days => retention_days); "
+                "GET DIAGNOSTICS deleted = ROW_COUNT; "
+                "RETURN deleted; "
+                "END; $fn$",
+                "purge_old_audit_logs() function",
+            ),
+            (
+                "REVOKE EXECUTE ON FUNCTION purge_old_audit_logs(integer) FROM PUBLIC",
+                "lock down purge function (revoke EXECUTE from PUBLIC)",
+            ),
+            (
+                "GRANT EXECUTE ON FUNCTION purge_old_audit_logs(integer) TO nis2_app",
+                "grant purge EXECUTE to nis2_app",
+            ),
+            # GDPR Art. 17 erasure pseudonymises a user's audit rows (UPDATE) — also a
+            # legitimate, privileged exception to append-only, so it runs through its
+            # own SECURITY DEFINER function (auth.py calls it instead of a direct
+            # UPDATE, which the REVOKE below would otherwise block under nis2_app).
+            (
+                "CREATE OR REPLACE FUNCTION pseudonymize_user_audit_logs(p_user_id uuid) "
+                "RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER "
+                "SET search_path = public, pg_temp AS $fn$ "
+                "DECLARE updated bigint; "
+                "BEGIN "
+                "UPDATE audit_logs SET user_id = NULL, ip_address = '127.0.0.1', "
+                "user_agent = '[erased]', details = NULL WHERE user_id = p_user_id; "
+                "GET DIAGNOSTICS updated = ROW_COUNT; "
+                "RETURN updated; "
+                "END; $fn$",
+                "pseudonymize_user_audit_logs() function",
+            ),
+            (
+                "REVOKE EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) FROM PUBLIC",
+                "lock down pseudonymize function (revoke EXECUTE from PUBLIC)",
+            ),
+            (
+                "GRANT EXECUTE ON FUNCTION pseudonymize_user_audit_logs(uuid) TO nis2_app",
+                "grant pseudonymize EXECUTE to nis2_app",
+            ),
+            (
+                "REVOKE UPDATE, DELETE ON audit_logs FROM nis2_app",
+                "make audit_logs append-only for nis2_app",
+            ),
+        )
+        for _stmt, _desc in _audit_appendonly_stmts:
+            try:
+                async with eng.begin() as conn:
+                    await conn.execute(text(_stmt))
+            except Exception as exc:
+                logger.warning("M2: %s skipped: %s", _desc, exc)
+
+    # NOTE: assert_db_role_rls_safe() used to be called here, at the tail of this
+    # function. That placement silently disarmed it. main.py's lifespan wraps this
+    # whole call in `try/except Exception: logger.exception(...)`, because policy
+    # setup is legitimately best-effort — so the RuntimeError raised by the guard
+    # was caught by that handler and the API carried on booting with RLS bypassed.
+    # The fail-closed check had never once failed closed on the API path, while
+    # the Celery worker's copy (tasks/celery_app.py) did sys.exit(1), leaving the
+    # two processes of the same system on different security postures.
+    #
+    # It is now called separately and uncaught from the lifespan. Best-effort
+    # setup and a fail-closed assertion are different concerns and must not share
+    # an exception handler.
 
 
 async def assert_db_role_rls_safe() -> None:

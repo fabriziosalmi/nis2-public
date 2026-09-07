@@ -13,6 +13,85 @@ schema via the app's `ensure_schema()` fallback) instead of Alembic migrations.
 > and you hit `column users.totp_secret does not exist`, jump to
 > [§2 Adopting Alembic on a pre-Alembic database](#2-adopting-alembic-on-a-pre-alembic-database).
 
+> **Upgrading from ≤ 2.6.10?** The API will now **refuse to start** on a
+> superuser database role. This is deliberate and it is a security fix — see
+> [§0.1 Breaking: the API refuses a superuser role](#01-breaking-the-api-refuses-a-superuser-role)
+> **before** you deploy.
+
+---
+
+## 0.1 Breaking: the API refuses a superuser role
+
+**Symptom.** After upgrading, the API container restart-loops with:
+
+```
+Refusing to start: production deploy with a SUPERUSER/BYPASSRLS app role.
+```
+
+**This is correct behaviour, and your previous deployment was not safe.**
+
+Postgres bypasses Row Level Security for `SUPERUSER` and `BYPASSRLS` roles —
+`FORCE ROW LEVEL SECURITY` does not bind them either. Every earlier release
+shipped `.env.example` pointing `DATABASE_URL` at the bootstrap superuser, and
+mounted the role-provisioning script nowhere. So on every deployment to date the
+`tenant_isolation` policies existed and did nothing: multi-tenant separation
+rested entirely on the application's `organization_id` filters.
+
+A guard for exactly this existed and never fired — it was called from inside a
+`try/except Exception` that swallowed its error. It now runs uncaught.
+
+### What changed
+
+The platform now uses **two database identities**:
+
+| Variable | Role | Used by |
+|---|---|---|
+| `DATABASE_URL` / `DATABASE_URL_SYNC` | `nis2_app` — `NOSUPERUSER NOBYPASSRLS`, DML only | everything the running app does |
+| `MIGRATION_DATABASE_URL` / `..._SYNC` | the bootstrap superuser | `alembic upgrade head` and the boot-time schema / RLS bootstrap |
+
+The split is necessary because the runtime role deliberately cannot run DDL,
+and something still has to create the schema.
+
+### Migrating an existing database
+
+`infra/docker/initdb/` runs **only on first initialisation of an empty volume**,
+so an existing database never receives the role automatically.
+
+```bash
+# 0. Back up (see §0).
+
+# 1. Choose a password for the runtime role and put it in .env
+echo "NIS2_APP_PASSWORD=$(openssl rand -base64 24)" >> .env
+
+# 2. Create the role on the live database (idempotent)
+make db-provision-app-role
+
+# 3. Point the two identities at the right roles in .env:
+#      DATABASE_URL           -> nis2_app       (same password as step 1)
+#      DATABASE_URL_SYNC      -> nis2_app
+#      MIGRATION_DATABASE_URL      -> the superuser URL you had before
+#      MIGRATION_DATABASE_URL_SYNC -> likewise
+#    See .env.example for the exact shape.
+
+# 4. Restart
+make prod
+```
+
+After the restart, confirm the policies actually bind:
+
+```bash
+make h5-validate
+```
+
+### If you need to defer
+
+Setting `RLS_SUPERUSER_OK=1` restores the previous behaviour and lets the API
+start on a superuser role. `make prod` will warn on every run. Understand what
+you are accepting: with that flag, a single missing `organization_id` filter in
+any query is a cross-tenant data leak, with no database-level backstop. On a
+single-tenant instance the exposure is bounded; on the multi-client deployment
+this platform is marketed for, it is not.
+
 ---
 
 ## 0. Always back up first

@@ -77,6 +77,25 @@ class Settings(BaseSettings):
     environment: str = "production"
     database_url: str = "postgresql+asyncpg://nis2:nis2secret@localhost:5432/nis2"
     database_url_sync: str = "postgresql://nis2:nis2secret@localhost:5432/nis2"
+
+    # Tenant isolation rests on Postgres RLS, and RLS is BYPASSED for SUPERUSER
+    # / BYPASSRLS roles — FORCE ROW LEVEL SECURITY does not bind them either.
+    # So the runtime identity above must be a plain NOSUPERUSER NOBYPASSRLS role
+    # (infra/docker/initdb provisions `nis2_app`).
+    #
+    # That role deliberately has DML only, which leaves nobody able to build the
+    # schema: `alembic upgrade head` in entrypoint.sh, ensure_schema()'s
+    # create_all, and setup_row_level_security()'s ALTER/CREATE POLICY/CREATE
+    # FUNCTION/GRANT/REVOKE all need DDL. The platform therefore needs TWO
+    # identities, and until now it modelled only one — which is why the
+    # least-privilege role was documented in infra/docker/initdb but never
+    # actually reachable: pointing DATABASE_URL at it broke schema creation.
+    #
+    # These carry the privileged identity used ONLY for migrations and the
+    # boot-time bootstrap. Empty means "same as database_url", which preserves
+    # the historical single-identity behaviour for existing deployments.
+    migration_database_url: str = ""
+    migration_database_url_sync: str = ""
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
@@ -177,6 +196,26 @@ class Settings(BaseSettings):
     enable_dev_email_debug: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    @property
+    def effective_migration_url(self) -> str:
+        """Async URL for DDL: migrations, create_all, RLS/policy bootstrap."""
+        return self.migration_database_url or self.database_url
+
+    @property
+    def effective_migration_url_sync(self) -> str:
+        """Sync variant of effective_migration_url (Alembic offline mode)."""
+        return self.migration_database_url_sync or self.database_url_sync
+
+    @property
+    def uses_split_db_identities(self) -> bool:
+        """True when a distinct privileged identity is configured.
+
+        False means runtime and migrations share one role — the historical
+        behaviour, and the shape in which RLS is decorative if that role happens
+        to be a superuser.
+        """
+        return bool(self.migration_database_url or self.migration_database_url_sync)
 
     @model_validator(mode="after")
     def _validate_runtime_config(self) -> "Settings":

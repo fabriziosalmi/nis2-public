@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 
-.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
+.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed db-provision-app-role test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
 
 # ─── Cross-platform Python detection ─────────────────────────────────
 # v2.4.28: pre-2.4.28 the Makefile invoked `python` literally, which on
@@ -104,6 +104,40 @@ db-history:
 
 db-seed:
 	docker compose -f infra/docker/docker-compose.dev.yml exec api python -m scripts.seed
+
+# Provision the nis2_app least-privilege runtime role on an EXISTING database.
+#
+# infra/docker/initdb/ runs only on FIRST initialisation of an empty volume, so
+# a deployment that predates the role never gets it. Symptom after upgrading:
+# the API refuses to start with "production deploy with a SUPERUSER/BYPASSRLS
+# app role" — which is correct, because until this role exists every RLS policy
+# on that database is decorative.
+#
+# Idempotent: re-running it on a database that already has nis2_app is a no-op.
+# Applies the same SQL the initdb wrapper does, as the bootstrap superuser.
+db-provision-app-role:
+	@test -f .env || (echo "ERROR: .env is missing" && exit 1)
+	@grep -qE '^NIS2_APP_PASSWORD=.+' .env || ( \
+	  echo "ERROR -- NIS2_APP_PASSWORD is not set in .env"; \
+	  echo ""; \
+	  echo "  It must match the password embedded in DATABASE_URL. Generate one:"; \
+	  echo ""; \
+	  echo "      openssl rand -base64 24"; \
+	  echo ""; \
+	  exit 1 )
+	@echo "== provisioning nis2_app on the running postgres service =="
+	@set -a; . ./.env; set +a; \
+	  docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+	    psql -v ON_ERROR_STOP=1 \
+	         --username "$${POSTGRES_USER:-nis2}" \
+	         --dbname "$${POSTGRES_DB:-nis2}" \
+	         -v app_pw="$$NIS2_APP_PASSWORD" \
+	    < infra/docker/initdb/sql/01-create-app-role.sql
+	@echo ""
+	@echo "  nis2_app provisioned (NOSUPERUSER NOBYPASSRLS, DML only)."
+	@echo "  Point DATABASE_URL / DATABASE_URL_SYNC at it and keep the"
+	@echo "  superuser in MIGRATION_DATABASE_URL, then restart the API."
+	@echo ""
 
 # Testing
 test: test-scanner test-api
@@ -216,7 +250,7 @@ prod-preflight:
 	  echo "      POSTGRES_PASSWORD=$$(openssl rand -base64 24)"; \
 	  echo ""; \
 	  exit 1 )
-	@if grep -iqE '^(POSTGRES_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env; then \
+	@if grep -iqE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env; then \
 	  echo ""; \
 	  echo "==================================================================="; \
 	  echo "  ERROR -- one or more secrets in .env are still placeholders"; \
@@ -224,7 +258,7 @@ prod-preflight:
 	  echo ""; \
 	  echo "  Offending lines (value redacted):"; \
 	  echo ""; \
-	  grep -inE '^(POSTGRES_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env \
+	  grep -inE '^(POSTGRES_PASSWORD|NIS2_APP_PASSWORD|REDIS_PASSWORD|JWT_SECRET|NEXTAUTH_SECRET|DATA_ENCRYPTION_KEY|SMTP_PASSWORD)=.*(change_me|change-me|changeme|generate_me|generate-me|generateme|placeholder|yourdomain|your_|insert_|replace_)' .env \
 	    | sed -E 's/=.*/=<PLACEHOLDER>/' | sed 's/^/      /'; \
 	  echo ""; \
 	  echo "  These are the literal values published in .env.example. A"; \

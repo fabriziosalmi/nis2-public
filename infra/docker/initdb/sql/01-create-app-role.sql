@@ -11,16 +11,19 @@
 -- superuser for migrations only.
 --
 -- HOW TO APPLY
---   Fresh deploy: drop this file in the postgres container's
---     /docker-entrypoint-initdb.d/ (runs once, on first volume init).
---   Existing deploy (volume already initialised): run it once manually as the
---     superuser, e.g.
---       psql "$SUPERUSER_DATABASE_URL" -v app_pw="$NIS2_APP_PASSWORD" \
---            -f 01-create-app-role.sql
+--   Fresh deploy: automatic. docker-compose.prod.yml mounts ../initdb into the
+--     postgres container's /docker-entrypoint-initdb.d/, and the sibling
+--     01-create-app-role.sh wrapper runs this file with `-v app_pw=...` on
+--     first volume init. This file lives in sql/ because the entrypoint runner
+--     executes every *.sql it finds directly in the mounted root with a plain
+--     `psql -f`, which cannot pass the variable -- so a top-level copy would
+--     abort initialisation on an undefined :'app_pw'.
+--   Existing deploy (volume already initialised): initdb scripts do NOT re-run
+--     on a populated volume. Use `make db-provision-app-role`, which applies
+--     this same file to the live database as the bootstrap superuser.
 --
--- Requires the psql variable `app_pw` (the new role's password). With the
--- docker-entrypoint-initdb.d path, set it via a tiny wrapper that exports it as
--- a psql var, or replace :'app_pw' with the value at deploy time.
+-- Requires the psql variable `app_pw` (the new role's password), sourced from
+-- NIS2_APP_PASSWORD. Both entry points above supply it.
 -- ============================================================================
 
 \set ON_ERROR_STOP on

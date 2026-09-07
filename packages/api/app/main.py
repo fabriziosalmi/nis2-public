@@ -11,7 +11,11 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.database import ensure_schema, setup_row_level_security
+from app.database import (
+    assert_db_role_rls_safe,
+    ensure_schema,
+    setup_row_level_security,
+)
 from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
@@ -95,10 +99,32 @@ async def lifespan(app: FastAPI):
     # database layer too, not only by per-router WHERE clauses. If a
     # router ever forgets to filter by organization_id, RLS still
     # returns zero rows.
+    #
+    # Best-effort on purpose: a policy that cannot be (re)created — because the
+    # runtime role lacks the privilege, or a concurrent boot won the race — is
+    # not a reason to take the API down, since the policies are almost always
+    # already in place from Alembic migration 002.
     try:
         await setup_row_level_security()
     except Exception:
         logger.exception("RLS setup failed — continuing with app-level isolation only")
+
+    # FAIL CLOSED — deliberately NOT inside the try above.
+    #
+    # This used to be the last statement of setup_row_level_security(), which
+    # meant the `except Exception` handler ate its RuntimeError and the API
+    # booted anyway, logging a traceback nobody reads. The guard existed, was
+    # tested, was documented, and had never once stopped a boot.
+    #
+    # Its whole purpose is to refuse to serve when the runtime Postgres role is
+    # SUPERUSER or BYPASSRLS, because then every RLS policy is decorative and
+    # multi-tenant isolation rests on application-layer org_id filters alone.
+    # On a multi-client deployment — the use case this platform is sold for —
+    # that is one forgotten WHERE clause away from cross-tenant data exposure.
+    #
+    # Escape hatch for operators who need to defer: RLS_SUPERUSER_OK=1.
+    await assert_db_role_rls_safe()
+
     yield
     logger.info("NIS2 Platform API shutting down")
 

@@ -41,7 +41,12 @@ from app.routers.incidents import IncidentReport  # noqa: F401
 config = context.config
 
 # Override sqlalchemy.url with the app setting
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Migrations are DDL, so they run as the PRIVILEGED identity, not the runtime
+# one. The runtime role (nis2_app) is NOSUPERUSER NOBYPASSRLS with DML only —
+# that is what makes RLS actually bind — and therefore cannot CREATE TABLE.
+# effective_migration_url falls back to database_url when no separate migration
+# identity is configured, preserving single-role deployments unchanged.
+config.set_main_option("sqlalchemy.url", settings.effective_migration_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
@@ -86,7 +91,7 @@ def do_run_migrations(connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.database_url
+    configuration["sqlalchemy.url"] = settings.effective_migration_url
 
     connectable = async_engine_from_config(
         configuration,

@@ -42,6 +42,7 @@ MAKEFILE = REPO_ROOT / "Makefile"
 # must never be accepted by a production boot.
 SECRET_KEYS = {
     "POSTGRES_PASSWORD",
+    "NIS2_APP_PASSWORD",
     "REDIS_PASSWORD",
     "JWT_SECRET",
     "NEXTAUTH_SECRET",

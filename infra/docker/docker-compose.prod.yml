@@ -34,9 +34,26 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nis2}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-nis2}
-    volumes: [pgdata:/var/lib/postgresql/data]
+      # Read by initdb/01-create-app-role.sh on first volume init.
+      NIS2_APP_PASSWORD: ${NIS2_APP_PASSWORD:?NIS2_APP_PASSWORD must be set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Provisions the nis2_app NOSUPERUSER NOBYPASSRLS runtime role. This
+      # mount is what the whole RLS security model depends on, and it did not
+      # exist: initdb/01-create-app-role.sql was written, documented and
+      # referenced by the README as the tenant-isolation mechanism, while being
+      # mounted by no compose file and executed on no deployment. Every install
+      # therefore ran the API as the bootstrap superuser, for which Postgres
+      # bypasses RLS unconditionally -- FORCE ROW LEVEL SECURITY included.
+      #
+      # Read-only: the container must never be able to alter its own bootstrap.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nis2"]
+      # $$POSTGRES_USER (escaped for compose) so the check follows a customised
+      # POSTGRES_USER instead of the hardcoded `nis2` it used to assume. With
+      # the literal, changing the user left the healthcheck failing forever and
+      # Caddy -- which gates on service_healthy -- never started.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       retries: 5
     restart: unless-stopped
