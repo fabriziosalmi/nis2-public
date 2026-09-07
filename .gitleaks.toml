@@ -56,6 +56,15 @@ regexes = [
     # secret-length validator without being a real production secret.
     '''integration-test-secret-must-be-at-least-32-chars-long-yes''',
     '''e2e-test-jwt-secret-must-be-at-least-32-chars-yes''',
+    # The fixed public marker that goes into the asset-verification DNS TXT
+    # record. It is not a credential — it is the same string for every
+    # deployment, published in DNS on purpose — but it was originally assigned
+    # to a constant named TOKEN_PREFIX, and generic-api-key reacts to a variable
+    # named *TOKEN*. The constant is now CHALLENGE_VALUE_PREFIX, which is what
+    # it actually is; this entry covers the commit that introduced the old name,
+    # since the scan walks history. Narrower than allowlisting the file, which
+    # deals in real verification tokens.
+    '''nis2-verification=''',
     # Throwaway password used for the E2E CI seed user. Never used outside CI.
     '''E2eC!password99''',
     # localStorage key prefixes used by the bilingual docs home and the

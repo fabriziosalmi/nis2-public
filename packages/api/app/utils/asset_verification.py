@@ -45,7 +45,14 @@ from typing import Optional
 # verification never collides with SPF, DMARC or a site-verification record the
 # customer already depends on.
 CHALLENGE_PREFIX = "_nis2-challenge"
-TOKEN_PREFIX = "nis2-verification="
+# Named for what it is — the prefix of the record VALUE — rather than "token".
+# As TOKEN_PREFIX it tripped gitleaks' generic-api-key rule, which reacts to a
+# variable named *TOKEN* assigned a string, and turned the secret-scanning job
+# red. The rule was right to be suspicious and the name was simply wrong: this
+# is a fixed public marker, not a credential. Renaming removes the false
+# positive at the root instead of adding an allowlist entry that would weaken
+# the scan for everything else in this file.
+CHALLENGE_VALUE_PREFIX = "nis2-verification="
 
 # Statuses stored on the asset.
 UNVERIFIED = "unverified"
@@ -61,7 +68,7 @@ def new_token() -> str:
 
 def challenge_record(domain: str, token: str) -> tuple[str, str]:
     """The DNS record the customer must publish: (name, value)."""
-    return f"{CHALLENGE_PREFIX}.{domain}", f"{TOKEN_PREFIX}{token}"
+    return f"{CHALLENGE_PREFIX}.{domain}", f"{CHALLENGE_VALUE_PREFIX}{token}"
 
 
 @dataclass
