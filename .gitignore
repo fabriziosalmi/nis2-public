@@ -108,3 +108,7 @@ music.mp3
 packages/scanner/reports/
 DRACONIAN-REVIEW-*.md
 WORK-LOG-*.md
+
+# TypeScript incremental build cache — regenerated on every compile.
+# It was tracked (240 KB) and changed in every commit that touched the web app.
+*.tsbuildinfo
