@@ -49,6 +49,39 @@ class ProcessCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class ProcessUpdate(BaseModel):
+    """Partial update of a business process.
+
+    The router shipped create, read and delete but no update, so a BIA entry
+    could only be corrected by deleting and re-entering it — losing its id and
+    any dependency mapping pointing at it. RTO/RPO/MTPD in particular are values
+    an organisation revises as it learns, which is the point of maintaining a
+    BIA at all.
+    """
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    process_owner: Optional[str] = None
+    department: Optional[str] = None
+    criticality_level: Optional[int] = Field(None, ge=1, le=4)
+    rto_hours: Optional[int] = None
+    rpo_hours: Optional[int] = None
+    mtpd_hours: Optional[int] = None
+    impact_financial: Optional[int] = Field(None, ge=1, le=4)
+    impact_operational: Optional[int] = Field(None, ge=1, le=4)
+    impact_reputational: Optional[int] = Field(None, ge=1, le=4)
+    impact_regulatory: Optional[int] = Field(None, ge=1, le=4)
+    impact_safety: Optional[int] = Field(None, ge=1, le=4)
+    dependent_asset_ids: Optional[list] = None
+    dependent_vendor_ids: Optional[list] = None
+    acn_servizio_essenziale: Optional[bool] = None
+    acn_codice_servizio: Optional[str] = None
+    acn_settore: Optional[str] = None
+    has_bcp: Optional[bool] = None
+    has_drp: Optional[bool] = None
+    notes: Optional[str] = None
+
+
 class ProcessOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -193,6 +226,35 @@ async def get_process(
     process = result.scalar_one_or_none()
     if not process:
         raise HTTPException(status_code=404, detail="Business process not found")
+    return ProcessOut.model_validate(process)
+
+
+@router.patch(
+    "/{process_id}",
+    response_model=ProcessOut,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def update_process(
+    process_id: uuid.UUID,
+    payload: ProcessUpdate,
+    db: AsyncSession = Depends(get_db),
+    auth: tuple = Depends(get_current_user_org),
+):
+    """Revise a business process in place."""
+    user, org_id = auth
+    result = await db.execute(
+        select(BusinessProcess).where(
+            BusinessProcess.id == process_id, BusinessProcess.organization_id == org_id
+        )
+    )
+    process = result.scalar_one_or_none()
+    if not process:
+        raise HTTPException(status_code=404, detail="Process not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(process, field, value)
+    await db.flush()
+    await db.refresh(process)
     return ProcessOut.model_validate(process)
 
 

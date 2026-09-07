@@ -201,6 +201,11 @@ async def update_organization(
         if field in allowed_fields:
             setattr(org, field, value)
     await db.flush()
+    # `updated_at` carries onupdate=func.now(), so the UPDATE flush above expires
+    # it. Pydantic then reads it while validating, which triggers a lazy refresh
+    # in a synchronous context and raises MissingGreenlet — a 500 on every call.
+    # Refreshing explicitly loads it inside the async session instead.
+    await db.refresh(org)
 
     return OrgResponse.model_validate(org)
 

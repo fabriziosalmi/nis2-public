@@ -3,12 +3,16 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
+import { useState } from "react"
+import { toast } from "sonner"
 import { useTranslations } from "next-intl"
-import { Network, ShieldCheck, AlertTriangle, Loader2, Boxes } from "lucide-react"
+import { Network, ShieldCheck, AlertTriangle, Loader2, Boxes, Plus, Pencil, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useVendors, useVendorStats } from "@/hooks/use-vendors"
+import { Button } from "@/components/ui/button"
+import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
+import { useVendors, useVendorStats, useCreateVendor, useUpdateVendor, useDeleteVendor } from "@/hooks/use-vendors"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const critVariant: Record<number, "critical" | "high" | "medium" | "low"> = {
@@ -31,11 +35,86 @@ function StatCard({ icon, value, label, danger }: { icon: React.ReactNode; value
 
 export default function VendorsPage() {
   const t = useTranslations("vendors")
+  const tc = useTranslations("common")
   useDocumentTitle(t("title"))
 
   const { data, isLoading } = useVendors()
   const { data: stats } = useVendorStats()
+  const createVendor = useCreateVendor()
+  const updateVendor = useUpdateVendor()
+  const deleteVendor = useDeleteVendor()
   const items: any[] = data?.items ?? []
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
+
+  // Field set mirrors VendorCreate in app/routers/vendors.py. The criticality
+  // and data-access scales are the ones the Art. 18 scoring formula reads, so
+  // they are offered as fixed choices rather than free text.
+  const fields: FieldSpec[] = [
+    { name: "name", label: t("colName"), type: "text", required: true, full: true },
+    { name: "vendor_type", label: t("colType"), type: "select", options: [
+      { value: "ict_service", label: t("typeIctService") },
+      { value: "cloud", label: t("typeCloud") },
+      { value: "software", label: t("typeSoftware") },
+      { value: "hardware", label: t("typeHardware") },
+      { value: "consulting", label: t("typeConsulting") },
+      { value: "other", label: t("typeOther") },
+    ] },
+    { name: "criticality", label: t("colCriticality"), type: "select", options: [
+      { value: "1", label: t("crit1") }, { value: "2", label: t("crit2") },
+      { value: "3", label: t("crit3") }, { value: "4", label: t("crit4") },
+    ] },
+    { name: "data_access_level", label: t("colAccess"), type: "select", options: [
+      { value: "none", label: t("none") },
+      { value: "metadata", label: t("accessMetadata") },
+      { value: "personal", label: t("accessPersonal") },
+      { value: "sensitive", label: t("accessSensitive") },
+    ] },
+    { name: "geographic_location", label: t("colLocation"), type: "text", placeholder: "IT / EU / US" },
+    { name: "contact_name", label: t("contactName"), type: "text" },
+    { name: "contact_email", label: t("contactEmail"), type: "email" },
+    { name: "contract_ref", label: t("contractRef"), type: "text" },
+    { name: "contract_expiry", label: t("contractExpiry"), type: "date" },
+    { name: "has_security_certification", label: t("colCert"), type: "text", placeholder: "ISO 27001, SOC 2…" },
+    { name: "last_audit_date", label: t("lastAudit"), type: "date" },
+    { name: "next_audit_date", label: t("nextAudit"), type: "date" },
+    { name: "security_score", label: t("colScore"), type: "number", min: 0, max: 100,
+      hint: t("scoreHint") },
+    { name: "services_provided", label: t("servicesProvided"), type: "textarea" },
+    { name: "risk_notes", label: t("riskNotes"), type: "textarea" },
+    { name: "acn_rilevanza_art18", label: t("acnRelevant"), type: "checkbox" },
+  ]
+
+  const openCreate = () => { setEditing(null); setDialogOpen(true) }
+  const openEdit = (vendor: any) => { setEditing(vendor); setDialogOpen(true) }
+
+  const submit = async (values: EntityValues) => {
+    // The select yields strings; criticality is an int in the API.
+    if (values.criticality !== undefined) values.criticality = Number(values.criticality)
+    try {
+      if (editing) {
+        await updateVendor.mutateAsync({ id: editing.id, data: values })
+        toast.success(t("vendorUpdated"))
+      } else {
+        await createVendor.mutateAsync(values)
+        toast.success(t("vendorCreated"))
+      }
+      setDialogOpen(false)
+    } catch (err: any) {
+      toast.error(editing ? t("vendorUpdateFailed") : t("vendorCreateFailed"), { description: err.message })
+    }
+  }
+
+  const remove = async (vendor: any) => {
+    if (!window.confirm(tc("confirmDelete"))) return
+    try {
+      await deleteVendor.mutateAsync(vendor.id)
+      toast.success(t("vendorDeleted"))
+    } catch (err: any) {
+      toast.error(t("vendorDeleteFailed"), { description: err.message })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -45,6 +124,13 @@ export default function VendorsPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         </div>
         <p className="text-muted-foreground">{t("subtitle")}</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={openCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          {t("addVendor")}
+        </Button>
       </div>
 
       {stats && (
@@ -81,6 +167,7 @@ export default function VendorsPage() {
                   <TableHead className="w-24">{t("colLocation")}</TableHead>
                   <TableHead className="w-24">{t("colScore")}</TableHead>
                   <TableHead className="w-32">{t("colCert")}</TableHead>
+                  <TableHead className="w-24 text-right">{tc("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -103,6 +190,14 @@ export default function VendorsPage() {
                       <TableCell className="text-sm text-muted-foreground">{v.geographic_location || "—"}</TableCell>
                       <TableCell className={`font-semibold tabular-nums ${scoreTone}`}>{score ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{v.has_security_certification || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(v)} aria-label={tc("edit")} title={tc("edit")}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => remove(v)} aria-label={tc("delete")} title={tc("delete")}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   )
                 })}
@@ -111,6 +206,17 @@ export default function VendorsPage() {
           )}
         </CardContent>
       </Card>
+
+      <EntityFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editing ? t("editVendor") : t("addVendor")}
+        description={t("formDescription")}
+        fields={fields}
+        initialValues={editing ?? undefined}
+        submitting={createVendor.isPending || updateVendor.isPending}
+        onSubmit={submit}
+      />
     </div>
   )
 }

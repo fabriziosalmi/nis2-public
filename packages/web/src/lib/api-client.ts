@@ -189,6 +189,73 @@ class ApiClient {
     })
   }
 
+  // ------------------------------------------------------------- Vendors
+  // Art. 18 supply chain. The dashboard rendered the inventory and the scores
+  // while offering no way to enter a vendor, so the module read data the
+  // product gave you no means to create.
+  async createVendor(data: Record<string, unknown>) {
+    return this.request<any>('/api/v1/vendors', { method: 'POST', body: JSON.stringify(data) })
+  }
+
+  async updateVendor(id: string, data: Record<string, unknown>) {
+    return this.request<any>(`/api/v1/vendors/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  }
+
+  async deleteVendor(id: string) {
+    return this.request<void>(`/api/v1/vendors/${id}`, { method: 'DELETE' })
+  }
+
+  // ----------------------------------------------------------------- BIA
+  async createBiaProcess(data: Record<string, unknown>) {
+    return this.request<any>('/api/v1/bia', { method: 'POST', body: JSON.stringify(data) })
+  }
+
+  async updateBiaProcess(id: string, data: Record<string, unknown>) {
+    return this.request<any>(`/api/v1/bia/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  }
+
+  async deleteBiaProcess(id: string) {
+    return this.request<void>(`/api/v1/bia/${id}`, { method: 'DELETE' })
+  }
+
+  // ----------------------------------------------------------- Incidents
+  //
+  // These target /incident-monitor, NOT /incidents. The two are different
+  // tables: `incidents` carries the Art. 23 deadlines and is what the countdown,
+  // the Celery alerting task and the report dossier all read, while
+  // `incident_reports` behind /api/v1/incidents is the CSIRT submission
+  // artefact. Nothing ever created an `incidents` row, so an incident declared
+  // through the documented endpoint was invisible to the 24 h clock. Declaring
+  // from the UI must produce the record the clock actually watches.
+  async createIncident(data: Record<string, unknown>) {
+    return this.request<any>('/api/v1/incident-monitor', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateIncident(id: string, data: Record<string, unknown>) {
+    return this.request<any>(`/api/v1/incident-monitor/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteIncident(id: string) {
+    return this.request<void>(`/api/v1/incident-monitor/${id}`, { method: 'DELETE' })
+  }
+
+  /** The CSIRT submission artefact (table `incident_reports`) — a different
+   *  record from the lifecycle incident above. */
+  async listIncidentReports(params?: Record<string, string>) {
+    const qs = params ? `?${new URLSearchParams(params)}` : ''
+    return this.request<any>(`/api/v1/incidents${qs}`)
+  }
+
+  async getIncidentTaxonomy() {
+    return this.request<any>('/api/v1/incidents/taxonomy')
+  }
+
   // ---------------------------------------------- Notification channels
   //
   // These back the Art. 23 deadline alerts. The settings screen used to hold

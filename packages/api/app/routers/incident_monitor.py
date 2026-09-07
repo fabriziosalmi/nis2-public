@@ -14,19 +14,36 @@ live deadline clocks.
 
 Distinct from `app.routers.incidents` (the `IncidentReport` CSIRT submission
 form, table `incident_reports`) — different model, different purpose.
+
+That split had a hole in it. `Incident` (table `incidents`) is what carries the
+Art. 23 deadlines, and it is what this router, the Celery alerting task
+(`tasks/incident_tasks.py`) and the report dossier all read. Nothing in the
+application ever CREATED one: the only `Incident(...)` in the codebase was in a
+demo seed script wired to no target. So three well-built components read from a
+store with no producer, and the countdown, the 24 h / 72 h / 1-month alerting
+and the dossier section could only ever show demo data.
+
+Meanwhile `POST /api/v1/incidents` — the creation endpoint the README documents
+— writes `IncidentReport`, a different table the clock does not look at. An
+incident declared through the documented API was invisible to the deadline
+monitor. Nobody noticed because the dashboard was read-only: an empty monitor
+looked normal.
+
+The write endpoints below close that: declaring an incident now produces the
+record the Art. 23 clock actually watches.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_org
+from app.dependencies import get_current_org, require_role
 from app.models.incident import Incident
 from app.models.membership import Membership
 from app.models.user import User
@@ -185,3 +202,143 @@ async def get_incident_monitor(
     if inc is None or inc.organization_id != membership.organization_id:
         raise HTTPException(status_code=404, detail="Incident not found")
     return _to_response(inc, now)
+
+
+# ---------------------------------------------------------------------------
+# Write path
+# ---------------------------------------------------------------------------
+
+# Art. 23 windows, measured from detection. These are stored on the row rather
+# than derived on read so that a later correction to `detected_at` cannot
+# silently move a deadline an operator has already acted on.
+_EARLY_WARNING_WINDOW = timedelta(hours=24)
+_NOTIFICATION_WINDOW = timedelta(hours=72)
+_FINAL_REPORT_WINDOW = timedelta(days=30)
+
+
+class IncidentCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    incident_type: str
+    severity: str
+    description: str = Field(..., min_length=1)
+    # Optional so the UI can default it, but it is the value every deadline is
+    # computed from: an incident is usually entered some hours after it was
+    # noticed, and starting the 24-hour clock at data-entry time would report a
+    # deadline later than the law allows.
+    detected_at: Optional[datetime] = None
+    status: str = "detected"
+    impact_category: str = "availability"
+    estimated_impact_level: int = Field(3, ge=1, le=5)
+    affected_systems: Optional[str] = None
+    users_affected_count: Optional[int] = Field(None, ge=0)
+    cross_border: bool = False
+    supply_chain_impact: bool = False
+
+
+class IncidentPatchRequest(BaseModel):
+    title: Optional[str] = None
+    incident_type: Optional[str] = None
+    severity: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    impact_category: Optional[str] = None
+    estimated_impact_level: Optional[int] = Field(None, ge=1, le=5)
+    affected_systems: Optional[str] = None
+    users_affected_count: Optional[int] = Field(None, ge=0)
+    cross_border: Optional[bool] = None
+    supply_chain_impact: Optional[bool] = None
+    containment_actions: Optional[str] = None
+    lessons_learned: Optional[str] = None
+    csirt_reference_id: Optional[str] = None
+
+
+@router.post(
+    "",
+    response_model=IncidentMonitorResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def declare_incident(
+    payload: IncidentCreateRequest,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentMonitorResponse:
+    """Open an incident and start its Art. 23 clocks."""
+    user, membership = current_org
+    now = datetime.now(timezone.utc)
+    detected_at = payload.detected_at or now
+    if detected_at.tzinfo is None:
+        detected_at = detected_at.replace(tzinfo=timezone.utc)
+
+    incident = Incident(
+        organization_id=membership.organization_id,
+        reported_by=user.id,
+        title=payload.title,
+        incident_type=payload.incident_type,
+        severity=payload.severity,
+        status=payload.status,
+        detected_at=detected_at,
+        early_warning_deadline=detected_at + _EARLY_WARNING_WINDOW,
+        notification_deadline=detected_at + _NOTIFICATION_WINDOW,
+        final_report_deadline=detected_at + _FINAL_REPORT_WINDOW,
+        description=payload.description,
+        impact_category=payload.impact_category,
+        estimated_impact_level=payload.estimated_impact_level,
+        affected_systems=payload.affected_systems,
+        users_affected_count=payload.users_affected_count,
+        cross_border=payload.cross_border,
+        supply_chain_impact=payload.supply_chain_impact,
+    )
+    db.add(incident)
+    await db.flush()
+    await db.refresh(incident)
+    return _to_response(incident, now)
+
+
+@router.patch(
+    "/{incident_id}",
+    response_model=IncidentMonitorResponse,
+    dependencies=[Depends(require_role("admin", "auditor"))],
+)
+async def update_incident_lifecycle(
+    incident_id: uuid.UUID,
+    payload: IncidentPatchRequest,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentMonitorResponse:
+    """Revise an incident. Deadlines are not recomputed.
+
+    `detected_at` is deliberately absent from the patch schema: the three
+    deadlines are stored at declaration time, and letting a later edit move them
+    would change an obligation an operator may already have acted on. A genuinely
+    wrong detection time is a delete-and-redeclare, which leaves an audit trail.
+    """
+    user, membership = current_org
+    incident = await db.get(Incident, incident_id)
+    if not incident or incident.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(incident, field, value)
+    await db.flush()
+    # updated_at carries onupdate=func.now(); without the refresh, pydantic
+    # reads the expired attribute and raises MissingGreenlet.
+    await db.refresh(incident)
+    return _to_response(incident, datetime.now(timezone.utc))
+
+
+@router.delete(
+    "/{incident_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
+async def delete_incident(
+    incident_id: uuid.UUID,
+    current_org: tuple[User, Membership] = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    user, membership = current_org
+    incident = await db.get(Incident, incident_id)
+    if not incident or incident.organization_id != membership.organization_id:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    await db.delete(incident)

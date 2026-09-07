@@ -66,23 +66,31 @@ Read this before the feature tables below. Several modules exist as a working RE
 | Assets, Scans, Findings, Reports | full read + write | full |
 | Governance checklist (Art. 21) | full read + write | full |
 | Organizations, members, API keys, audit log | full read + write | full |
-| **Vendors / supply chain (Art. 18)** | **read-only** — inventory and scores display; vendors cannot be added or edited | full CRUD |
-| **Business Impact Analysis** | **read-only** — matrix and gaps display; processes cannot be added or edited | full CRUD |
-| **Incidents (Art. 23)** | **read-only** — the 24h/72h/1-month countdown is live, but incidents cannot be opened, updated or closed | full CRUD |
-| **Notification channels** | **not implemented** — the settings screen is a non-functional placeholder that keeps channels in browser state and discards them | **no endpoint exists** |
+| Vendors / supply chain (Art. 18) | full read + write | full CRUD |
+| Business Impact Analysis | full read + write | full CRUD |
+| Incidents (Art. 23) | full read + write — declare, revise, close; the 24h/72h/1-month countdown runs from the recorded detection time | full CRUD (`/incident-monitor`) |
+| Notification channels | full read + write, with a test-send | `/notification-channels` |
 | **CSIRT "Red Button"** | **no UI** | `POST /csirt/emergency` |
 | **ACN export (Italy)** | **no UI** | `GET /acn-export/art18`, `/bia` |
 | **Compliance deadline countdown** | **no UI** | `GET /deadlines` |
 | **Deep certificate analysis** | **no UI** | `/certificates` (3 endpoints) |
 | **AI remediation copilot** | **no UI** — findings show only the scanner's static remediation string | `POST /remediation/explain` |
-| **TOTP MFA** | **no UI** — and enrolling via the API locks you out of the dashboard (see the warning under Art. 21) | `/auth/totp/setup\|verify\|disable` |
+| TOTP MFA | enrolment, recovery codes and removal from the profile screen | `/auth/totp/setup\|verify\|disable` |
 
-Two consequences worth being explicit about:
+**On Art. 23 alerting.** Deadline alerts are dispatched to the notification
+channels you configure under Settings → Notifications (email, HMAC-SHA256 signed
+webhook, or Slack), and each channel has a test-send so you can confirm delivery
+before an incident rather than during one. With no channel configured the
+platform falls back to emailing organisation admins, which needs `SMTP_*` set;
+with neither, the alert is written to the application log only.
 
-- **Art. 23 incident alerting does not work out of the box.** The Celery beat task that dispatches 24h/72h/1-month deadline alerts reads `NotificationChannel` rows, and there is no endpoint or screen that creates one — only a direct SQL `INSERT`. Without a row, the task falls back to emailing organisation admins, which requires `SMTP_*` to be configured. On a deployment with neither, the alert for a legally binding 24-hour deadline is written to the application log. The webhook (HMAC-SHA256) and Slack channels described below are implemented in the dispatcher but currently unreachable.
-- **A consultant cannot run an Art. 18 or BIA engagement from the UI alone.** Both modules read data they give you no way to enter.
+**Two incident tables, on purpose.** `incidents` is the lifecycle record that
+carries the Art. 23 deadlines — it is what the countdown, the alerting task and
+the report dossier read, and what "Declare incident" creates. `incident_reports`
+behind `POST /api/v1/incidents` is the separate CSIRT submission artefact.
 
-Contributions closing any of these gaps are welcome; they are the highest-value work in the project.
+Contributions closing the remaining gaps above are welcome; they are the
+highest-value work in the project.
 
 ---
 
@@ -95,33 +103,15 @@ The compliance matrix references all ten sub-paragraphs (a) through (j). Several
 | Sub-paragraph | Scope | Implementation status | How the platform supports it |
 |---------------|-------|-----------------------|------------------------------|
 | (a) Risk analysis policies | Methodology, periodic updates | **Partial** — automated bridge from scanner findings | Governance checklist + `POST /governance/sync-risk` automatically escalates checklist items when HIGH/CRITICAL scanner findings are open; risk summary via `GET /governance/risk-summary` |
-| (b) Incident handling | Detection, response, CSIRT notification | **Partial** — API complete, dashboard read-only, alerting needs manual setup | Incident module + Art. 23 lifecycle; Celery beat checks every 15 min and dispatches alerts at 24 h / 72 h / 1-month with Redis-backed dedup — but incidents can only be created through the API, and the notification channels the dispatcher reads have no endpoint that creates them (see [What is usable from the dashboard today](#what-is-usable-from-the-dashboard-today)) |
-| (c) Business continuity | BCP, DRP, backup, periodic testing | **Partial** — API complete, dashboard read-only | BIA module (RTO/RPO/MTPD), impact scoring, gap detection. Processes must be created through the API; the dashboard only displays them |
-| (d) Supply chain security | Vendor assessment, contracts, monitoring | **Partial** — API complete, dashboard read-only | Vendor Risk module (Art. 18) with documented 100-point scoring formula (certification, data access, audit recency, geography, security clauses); auditor-facing `GET /vendors/score-formula`. Vendors must be created through the API |
+| (b) Incident handling | Detection, response, CSIRT notification | **Implemented** — end to end, dashboard included | Declare an incident and its 24 h / 72 h / 1-month clocks start from the recorded detection time; Celery beat checks every 15 min and dispatches to the notification channels you configure (email / signed webhook / Slack), with Redis-backed dedup and a test-send per channel. Submission to CSIRT Italia remains a manual step |
+| (c) Business continuity | BCP, DRP, backup, periodic testing | **Implemented** — manual verification | BIA module (RTO/RPO/MTPD), 5-dimension impact scoring, BCP/DRP gap detection, editable from the dashboard |
+| (d) Supply chain security | Vendor assessment, contracts, monitoring | **Implemented** — transparent scoring formula | Vendor Risk module (Art. 18), editable from the dashboard, with a documented 100-point scoring formula (certification, data access, audit recency, geography, security clauses) and an auditor-facing `GET /vendors/score-formula` |
 | (e) Secure acquisition and development | SDLC, code review, vulnerability management | **Partial** — scanner automates surface checks | Technical validation engine (TLS, headers, secrets, ports) + governance checklist for organisational controls |
 | (f) Effectiveness assessment | Internal audits, KPIs, penetration testing | **Partial** — scan-driven | Technical validation engine + checklist |
 | (g) Cyber hygiene and training | Awareness, phishing simulation | **Manual** | Governance checklist (human verification required by design) |
 | (h) Cryptography | Crypto policy, key management | **Partial** — automated for public-facing TLS | Technical validation (TLS version, cipher suites, cert expiry, HSTS) + checklist for key-management policy |
 | (i) Human resources security | Onboarding/offboarding, screening, PAM | **Manual** | Governance checklist (human verification required by design) |
-| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Partial** — RBAC and access logging complete; **MFA is API-only and currently unusable** | Role-based access (owner/admin/auditor/viewer), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` — all reachable from the dashboard. TOTP MFA exists as three endpoints (`POST /auth/totp/setup\|verify\|disable`) with **no dashboard screen at all** — see the warning below before enabling it |
-
-> ### ⚠ Do not enable TOTP MFA on this release
->
-> There is no MFA screen anywhere in the web application — no component and no
-> translation key references TOTP, MFA or 2FA. Enrolment is possible only by
-> calling `POST /api/v1/auth/totp/setup` and `/verify` directly.
->
-> **Enrolling locks you out of the dashboard.** With MFA active, `POST /auth/login`
-> returns `{"mfa_required": true, "partial": true}` and sets no session cookie.
-> The login page does not inspect the response: it stores the (absent) user and
-> redirects to `/dashboard`, which has no session, 401s, and bounces back to
-> login — a loop with no way out. `POST /auth/totp/disable` requires an
-> authenticated session, so recovery is only possible by completing the MFA login
-> against the API and calling `/disable` from there.
->
-> Art. 21(2)(j) explicitly concerns multi-factor authentication, so this gap is
-> named rather than glossed. Until an MFA screen exists, treat MFA on this
-> platform as not shipped.
+| (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Implemented** — TOTP MFA, RBAC, audit log, API key scopes | TOTP MFA enrolled and removed from the profile screen, with single-use recovery codes and an MFA-gated login; role-based access (owner/admin/auditor/viewer), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` |
 
 **Legend**: *Implemented* = available end-to-end, dashboard included, with no manual step required. *Partial* = either the automated checks cover only the technically observable surface and organisational controls need human verification, or the capability exists in the API but not yet in the dashboard — the "How the platform supports it" column says which. *Manual* = the directive explicitly requires human judgement; automation cannot substitute.
 
@@ -131,42 +121,43 @@ Incident lifecycle aligned with the legal deadlines:
 
 | Phase | Deadline | Platform support | Reachable from |
 |-------|----------|------------------|----------------|
-| Early Warning | 24 hours | "Red Button" generates a CSIRT-ready Early Warning JSON; alert 2 h before / on breach | API only (`POST /csirt/emergency`) |
-| Incident Notification | 72 hours | Structured taxonomy, IOCs, timeline; alert 2 h before / on breach | API only (`POST /incidents`) |
-| Final Report | 1 month | Aggregated data, impact assessment, lessons learned; alert 2 h before / on breach | API only |
-| Live countdown across open incidents | — | 24h / 72h / 1-month clocks, per incident | **Dashboard** (read-only) |
+| Early Warning | 24 hours | Clock starts at the recorded detection time; alert 2 h before / on breach | **Dashboard** — declare, revise, close |
+| Incident Notification | 72 hours | Structured taxonomy, impact category, affected systems; alert 2 h before / on breach | **Dashboard** |
+| Final Report | 1 month | Aggregated data, impact assessment, lessons learned; alert 2 h before / on breach | **Dashboard** |
+| Live countdown across open incidents | — | 24h / 72h / 1-month clocks, per incident | **Dashboard** |
 
-> **Read this before relying on the alerting.** The deadline monitor runs every 15 minutes and dispatches through `NotificationChannel` rows — and **no endpoint or screen creates those rows**; only a direct SQL `INSERT` does. With none configured the task falls back to emailing organisation admins, which needs `SMTP_*` set. With neither, the alert for a legally binding 24-hour deadline goes to the application log. The webhook (HMAC-SHA256 signed) and Slack transports are implemented in the dispatcher but currently unreachable.
+> **Before relying on the alerting**, configure at least one notification channel
+> under Settings → Notifications and use its test-send. With none configured the
+> deadline monitor falls back to emailing organisation admins, which needs
+> `SMTP_*` set; with neither, the alert is written to the application log only.
 >
-> Incidents themselves are created, updated and closed **through the API**; the dashboard displays them and their countdowns but cannot open one.
+> Deadlines are computed from the **detection time you record**, not from when
+> you entered the incident, and they are fixed at declaration — a later edit
+> cannot move an obligation you may already have acted on.
 >
 > **Submission to CSIRT Italia is a manual step** through `csirt.gov.it`. There is no automated push to the CSIRT portal.
 
 ### Art. 18 — Supply chain (Vendor Risk Management)
 
-> **Dashboard is read-only.** Every field below is a working API capability; vendors must be created and edited through `POST`/`PATCH /vendors`. The dashboard renders the inventory, the scores and the ACN flags but offers no form.
-
-| Feature | API | Dashboard |
-|---------|-----|-----------|
-| Vendor inventory with criticality classification (1-4) | Implemented | read-only |
-| Security assessment scoring (0-100) | Implemented | read-only |
-| Contract tracking (SLA, audit rights, security clauses) | Implemented | read-only |
-| Geographic location and data access level | Implemented | read-only |
-| Certification tracking (ISO 27001, SOC2, CSA STAR) | Implemented | read-only |
-| ACN Art. 18 relevance flagging (Italy) | Implemented | read-only |
+| Feature | Status |
+|---------|--------|
+| Vendor inventory with criticality classification (1-4) | Implemented |
+| Security assessment scoring (0-100) | Implemented |
+| Contract tracking (SLA, audit rights, security clauses) | Implemented |
+| Geographic location and data access level | Implemented |
+| Certification tracking (ISO 27001, SOC2, CSA STAR) | Implemented |
+| ACN Art. 18 relevance flagging (Italy) | Implemented |
 
 ### Business Impact Analysis (BIA)
 
-> **Dashboard is read-only**, same as Art. 18 above: processes are created through `POST /bia`, and the dashboard renders the matrix and the detected gaps.
-
-| Feature | API | Dashboard |
-|---------|-----|-----------|
-| Business process inventory with criticality levels | Implemented | read-only |
-| RTO/RPO/MTPD definition per process | Implemented | read-only |
-| 5-dimension impact scoring (financial, operational, reputational, regulatory, safety) | Implemented | read-only |
-| Asset and vendor dependency mapping | Implemented | read-only |
-| BCP/DRP gap detection | Implemented | read-only |
-| Impact matrix with automatic gap identification | Implemented | read-only |
+| Feature | Status |
+|---------|--------|
+| Business process inventory with criticality levels | Implemented |
+| RTO/RPO/MTPD definition per process | Implemented |
+| 5-dimension impact scoring (financial, operational, reputational, regulatory, safety) | Implemented |
+| Asset and vendor dependency mapping | Implemented |
+| BCP/DRP gap detection | Implemented |
+| Impact matrix with automatic gap identification | Implemented |
 
 ---
 
@@ -300,10 +291,10 @@ These checks run as part of a scan unless the table says otherwise. Read the rig
 | `/api/v1/api-keys` | 3 | Long-lived `nis2_*` Bearer tokens for CI/CD pipelines (raw value shown once) |
 | `/api/v1/audit-logs` | 1 | Read-only org-scoped audit trail (90-day retention) |
 | `/api/v1/organizations` | 8 | Org settings, members, role management, **self-serve org creation** |
-| `/api/v1/vendors` | 5 | Vendor risk management (Art. 18). Dashboard read-only |
-| `/api/v1/bia` | 5 | Business Impact Analysis. Dashboard read-only |
-| `/api/v1/incidents` | 6 | Incident lifecycle (Art. 23 CSIRT). Dashboard read-only |
-| `/api/v1/incident-monitor` | 2 | Art. 23 deadline monitor — live 24h/72h/1-month countdowns (drives the Incidents page) |
+| `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
+| `/api/v1/bia` | 6 | Business Impact Analysis |
+| `/api/v1/incidents` | 6 | CSIRT submission artefact (table `incident_reports`) |
+| `/api/v1/incident-monitor` | 5 | Art. 23 incident lifecycle — declare/revise/close, live 24h/72h/1-month countdowns |
 | `/api/v1/governance` | 8 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
 | `/api/v1/certificates` | 3 | Deep certificate analysis. No dashboard screen |
 | `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation. No dashboard screen |

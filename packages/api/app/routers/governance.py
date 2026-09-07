@@ -513,6 +513,11 @@ async def update_governance_item(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     await db.flush()
+    # `updated_at` carries onupdate=func.now(), so the UPDATE flush above expires
+    # it. Pydantic then reads it while validating, which triggers a lazy refresh
+    # in a synchronous context and raises MissingGreenlet — a 500 on every call.
+    # Refreshing explicitly loads it inside the async session instead.
+    await db.refresh(item)
     return GovernanceItemResponse.model_validate(item)
 
 

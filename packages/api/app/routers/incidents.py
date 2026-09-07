@@ -248,6 +248,11 @@ async def update_incident(
         incident.submitted_at = datetime.now(timezone.utc)
     incident.report_data = _build_payload_from_model(incident)
     await db.flush()
+    # `updated_at` carries onupdate=func.now(), so the UPDATE flush above expires
+    # it. Pydantic then reads it while validating, which triggers a lazy refresh
+    # in a synchronous context and raises MissingGreenlet — a 500 on every call.
+    # Refreshing explicitly loads it inside the async session instead.
+    await db.refresh(incident)
     return IncidentResponse.model_validate(incident)
 
 

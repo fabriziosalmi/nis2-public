@@ -3,12 +3,16 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
+import { useState } from "react"
+import { toast } from "sonner"
 import { useTranslations } from "next-intl"
-import { Activity, ShieldCheck, LifeBuoy, Loader2 } from "lucide-react"
+import { Activity, ShieldCheck, LifeBuoy, Loader2, Plus, Pencil, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useBia } from "@/hooks/use-bia"
+import { Button } from "@/components/ui/button"
+import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
+import { useBia, useCreateBiaProcess, useUpdateBiaProcess, useDeleteBiaProcess } from "@/hooks/use-bia"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
@@ -34,8 +38,78 @@ export default function BiaPage() {
   const t = useTranslations("bia")
   useDocumentTitle(t("title"))
 
+  const tc = useTranslations("common")
   const { data, isLoading } = useBia()
+  const createProcess = useCreateBiaProcess()
+  const updateProcess = useUpdateBiaProcess()
+  const deleteProcess = useDeleteBiaProcess()
   const items: any[] = data?.items ?? []
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
+
+  const scale4 = (prefix: string) => [1, 2, 3, 4].map((n) => ({
+    value: String(n), label: t(`${prefix}${n}`),
+  }))
+
+  // Mirrors ProcessCreate in app/routers/bia.py. RTO/RPO/MTPD are the values a
+  // BIA exists to record, and the five impact dimensions are what the matrix
+  // and the gap detection read.
+  const fields: FieldSpec[] = [
+    { name: "name", label: t("colProcess"), type: "text", required: true, full: true },
+    { name: "process_owner", label: t("colOwner"), type: "text" },
+    { name: "department", label: t("department"), type: "text" },
+    { name: "criticality_level", label: t("colCriticality"), type: "select", options: scale4("crit") },
+    { name: "rto_hours", label: t("colRto"), type: "number", min: 0, hint: t("rtoHint") },
+    { name: "rpo_hours", label: t("colRpo"), type: "number", min: 0, hint: t("rpoHint") },
+    { name: "mtpd_hours", label: t("colMtpd"), type: "number", min: 0, hint: t("mtpdHint") },
+    { name: "impact_financial", label: t("impactFinancial"), type: "select", options: scale4("impact") },
+    { name: "impact_operational", label: t("impactOperational"), type: "select", options: scale4("impact") },
+    { name: "impact_reputational", label: t("impactReputational"), type: "select", options: scale4("impact") },
+    { name: "impact_regulatory", label: t("impactRegulatory"), type: "select", options: scale4("impact") },
+    { name: "impact_safety", label: t("impactSafety"), type: "select", options: scale4("impact") },
+    { name: "has_bcp", label: t("hasBcp"), type: "checkbox" },
+    { name: "has_drp", label: t("hasDrp"), type: "checkbox" },
+    { name: "acn_servizio_essenziale", label: t("acnEssential"), type: "checkbox" },
+    { name: "description", label: t("description"), type: "textarea" },
+    { name: "notes", label: t("notes"), type: "textarea" },
+  ]
+
+  const NUMERIC_SELECTS = [
+    "criticality_level", "impact_financial", "impact_operational",
+    "impact_reputational", "impact_regulatory", "impact_safety",
+  ]
+
+  const openCreate = () => { setEditing(null); setDialogOpen(true) }
+  const openEdit = (proc: any) => { setEditing(proc); setDialogOpen(true) }
+
+  const submit = async (values: EntityValues) => {
+    for (const key of NUMERIC_SELECTS) {
+      if (values[key] !== undefined) values[key] = Number(values[key])
+    }
+    try {
+      if (editing) {
+        await updateProcess.mutateAsync({ id: editing.id, data: values })
+        toast.success(t("processUpdated"))
+      } else {
+        await createProcess.mutateAsync(values)
+        toast.success(t("processCreated"))
+      }
+      setDialogOpen(false)
+    } catch (err: any) {
+      toast.error(editing ? t("processUpdateFailed") : t("processCreateFailed"), { description: err.message })
+    }
+  }
+
+  const remove = async (proc: any) => {
+    if (!window.confirm(tc("confirmDelete"))) return
+    try {
+      await deleteProcess.mutateAsync(proc.id)
+      toast.success(t("processDeleted"))
+    } catch (err: any) {
+      toast.error(t("processDeleteFailed"), { description: err.message })
+    }
+  }
   const essential = items.filter((p) => p.acn_servizio_essenziale).length
   const withPlans = items.filter((p) => p.has_bcp && p.has_drp).length
   const h = (v: number | null | undefined) => (v == null ? "—" : `${v}${t("hours")}`)
@@ -48,6 +122,13 @@ export default function BiaPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         </div>
         <p className="text-muted-foreground">{t("subtitle")}</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={openCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          {t("addProcess")}
+        </Button>
       </div>
 
       {items.length > 0 && (
@@ -83,6 +164,7 @@ export default function BiaPage() {
                   <TableHead className="w-20 text-right">{t("colRpo")}</TableHead>
                   <TableHead className="w-20 text-right">{t("colMtpd")}</TableHead>
                   <TableHead className="w-32">{t("colContinuity")}</TableHead>
+                  <TableHead className="w-24 text-right">{tc("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -108,6 +190,14 @@ export default function BiaPage() {
                         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", p.has_drp ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground line-through")}>{t("drp")}</span>
                       </div>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label={tc("edit")} title={tc("edit")}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(p)} aria-label={tc("delete")} title={tc("delete")}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -115,6 +205,17 @@ export default function BiaPage() {
           )}
         </CardContent>
       </Card>
+
+      <EntityFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editing ? t("editProcess") : t("addProcess")}
+        description={t("formDescription")}
+        fields={fields}
+        initialValues={editing ?? undefined}
+        submitting={createProcess.isPending || updateProcess.isPending}
+        onSubmit={submit}
+      />
     </div>
   )
 }

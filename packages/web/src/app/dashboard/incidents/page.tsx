@@ -5,10 +5,13 @@
 
 import { useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
-import { Siren, Clock, CheckCircle2, AlertOctagon, Loader2, ShieldAlert } from "lucide-react"
+import { Siren, Clock, CheckCircle2, AlertOctagon, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useIncidentMonitor } from "@/hooks/use-incidents"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
+import { useIncidentMonitor, useCreateIncident, useUpdateIncident, useDeleteIncident } from "@/hooks/use-incidents"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
@@ -109,6 +112,86 @@ export default function IncidentsPage() {
   const openCount = data?.open_count ?? 0
   const breachedCount = data?.breached_count ?? 0
 
+  const tc = useTranslations("common")
+  const createIncident = useCreateIncident()
+  const updateIncident = useUpdateIncident()
+  const deleteIncident = useDeleteIncident()
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
+
+  // Mirrors IncidentCreate in app/routers/incidents.py. The Art. 23 clocks run
+  // from `detected_at`, so it is offered explicitly rather than defaulted to
+  // now: an incident is very often entered some hours after it was noticed, and
+  // starting the 24-hour early-warning countdown from data-entry time would
+  // quietly report the wrong deadline.
+  const fields: FieldSpec[] = [
+    { name: "title", label: t("fieldTitle"), type: "text", required: true, full: true },
+    { name: "incident_type", label: t("incidentType"), type: "select", required: true, options: [
+      { value: "ransomware", label: t("type_ransomware") },
+      { value: "data_breach", label: t("type_data_breach") },
+      { value: "ddos", label: t("type_ddos") },
+      { value: "supply_chain", label: t("type_supply_chain") },
+      { value: "unauthorized_access", label: t("type_unauthorized_access") },
+      { value: "malware", label: t("type_malware") },
+      { value: "other", label: t("type_other") },
+    ] },
+    { name: "severity", label: t("severity"), type: "select", required: true, options: [
+      { value: "low", label: t("sev_low") },
+      { value: "medium", label: t("sev_medium") },
+      { value: "high", label: t("sev_high") },
+      { value: "critical", label: t("sev_critical") },
+    ] },
+    { name: "status", label: t("statusLabel"), type: "select", options: [
+      { value: "detected", label: t("st_detected") },
+      { value: "contained", label: t("st_contained") },
+      { value: "recovered", label: t("st_recovered") },
+      { value: "closed", label: t("st_closed") },
+    ] },
+    { name: "impact_category", label: t("impactCategory"), type: "select", options: [
+      { value: "availability", label: t("impact_availability") },
+      { value: "confidentiality", label: t("impact_confidentiality") },
+      { value: "integrity", label: t("impact_integrity") },
+      { value: "authenticity", label: t("impact_authenticity") },
+    ] },
+    { name: "estimated_impact_level", label: t("impactLevel"), type: "number", min: 1, max: 5 },
+    { name: "affected_systems", label: t("affectedSystems"), type: "text" },
+    { name: "users_affected_count", label: t("affectedUsers"), type: "number", min: 0 },
+    { name: "cross_border", label: t("crossBorder"), type: "checkbox" },
+    { name: "supply_chain_impact", label: t("supplyChain"), type: "checkbox" },
+    { name: "description", label: t("descriptionLabel"), type: "textarea", required: true },
+  ]
+
+  const openCreate = () => { setEditing(null); setDialogOpen(true) }
+  const openEdit = (inc: any) => { setEditing(inc); setDialogOpen(true) }
+
+  const submit = async (values: EntityValues) => {
+    try {
+      if (editing) {
+        // detected_at is deliberately not patchable: the three Art. 23 deadlines
+        // are stored at declaration time, and moving them later would change an
+        // obligation the operator may already have acted on.
+        await updateIncident.mutateAsync({ id: editing.id, data: values })
+        toast.success(t("incidentUpdated"))
+      } else {
+        await createIncident.mutateAsync(values)
+        toast.success(t("incidentCreated"))
+      }
+      setDialogOpen(false)
+    } catch (err: any) {
+      toast.error(editing ? t("incidentUpdateFailed") : t("incidentCreateFailed"), { description: err.message })
+    }
+  }
+
+  const remove = async (inc: any) => {
+    if (!window.confirm(tc("confirmDelete"))) return
+    try {
+      await deleteIncident.mutateAsync(inc.id)
+      toast.success(t("incidentDeleted"))
+    } catch (err: any) {
+      toast.error(t("incidentDeleteFailed"), { description: err.message })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -118,6 +201,13 @@ export default function IncidentsPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
         </div>
         <p className="text-muted-foreground">{t("subtitle")}</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={openCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          {t("declareIncident")}
+        </Button>
       </div>
 
       {/* Summary */}
@@ -182,6 +272,14 @@ export default function IncidentsPage() {
                     {inc.supply_chain_impact && (
                       <Badge variant="secondary">Art. 18</Badge>
                     )}
+                    <div className="ml-auto flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(inc)} aria-label={tc("edit")} title={tc("edit")}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(inc)} aria-label={tc("delete")} title={tc("delete")}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {t("detected")}: {detected.toLocaleString()}
@@ -200,6 +298,17 @@ export default function IncidentsPage() {
           })}
         </div>
       )}
+
+      <EntityFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editing ? t("editIncident") : t("declareIncident")}
+        description={t("formDescription")}
+        fields={fields}
+        initialValues={editing ?? undefined}
+        submitting={createIncident.isPending || updateIncident.isPending}
+        onSubmit={submit}
+      />
     </div>
   )
 }
