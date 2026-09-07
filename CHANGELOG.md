@@ -1,5 +1,96 @@
 # Changelog
 
+## [2.6.14] - 2026-09-07
+
+### 🚨 Art. 23 — the CSIRT Red Button now starts the clock
+
+`POST /csirt/emergency` composed an Early Warning document and persisted
+nothing. No `incidents` row, so no countdown, no 24-hour alert, nothing in the
+dossier and nothing for an auditor. The operator pressed the emergency button in
+the worst hour of their year, was handed a file, and the deadline monitor never
+learned the incident existed. Declaring is now part of pressing it.
+
+- **The final report was due on the wrong date.** Art. 23(4)(d) requires it
+  "not later than one month after the submission of the incident notification
+  referred to in point (b)" — the 72-hour notification, not the detection. The
+  write path computed `detected_at + 30 days` and the alert email said "1 month
+  from detection", so every incident was reported as due three days early and
+  the breach alert fired while the operator was still inside the legal window.
+  Migration `009` moves stored deadlines that carry exactly the old formula.
+- **An obligation can now be marked as discharged.** `early_warning_sent_at`,
+  `notification_sent_at` and `final_report_sent_at` were read by the Celery
+  task, the API and the dashboard — and written by nothing. The alerting could
+  not be switched off by doing the thing it was alerting about: filing the Early
+  Warning on time did not stop the daily breach alerts for it. `POST
+  /incident-monitor/{id}/submissions` records the filing with its CSIRT
+  reference, and recording the notification re-anchors the final report on the
+  actual submission.
+
+### ✨ Five capabilities that existed only in the API now have a screen
+
+Their translation keys were already present in all five locales, unused.
+
+- **CSIRT Red Button** — three questions, because it is used at 3 AM. It says
+  before the press that a legal clock starts, and after it that submission to
+  csirt.gov.it is still manual rather than implying the filing is done.
+- **"Mark as submitted"** on each Art. 23 deadline.
+- **Regulatory deadlines** on the compliance page: D.Lgs 138/2024 and the ACN
+  determine, with days remaining and an urgency band. For an Italian in-scope
+  entity these are the dates that decide exposure, and they were reachable only
+  by reading the OpenAPI schema.
+- **ACN Art. 18 and BIA exports** on the vendors and BIA pages — the single
+  feature distinguishing this platform from a generic scanner in the market it
+  targets, and no screen linked to either. The button carries the API's own
+  "preliminary schema" caveat.
+- **Certificate analysis** — a new page for chain, key strength, CT presence,
+  TLS version, SANs and expiry risk.
+
+### 🔒 The copilot treated attacker-written text as instructions
+
+A Finding is neither user input nor our own text: `message` and
+`technical_detail` are assembled from what a scanned third party sent back, and
+the technology-stack finding embeds the `Server:` header verbatim. That string
+was concatenated into the model prompt beside our instructions, indistinguishable
+from them — so the operator of any scanned host could write instructions that
+reached the model with the analyst's authority. Live today for any deployment
+with an LLM configured. Instructions now live in a system message; the finding
+is fenced with a per-request random nonce and declared as data; fence-like
+sequences are stripped from it. The injected text is kept rather than deleted —
+it is evidence about the scanned host — and the model is told to report it.
+
+### 🐛 The certificate analyser measured the wrong things
+
+Both found by pointing a browser at the new page.
+
+- **The "key strength" was not the certificate's key.** The type was inferred
+  from the negotiated cipher suite's name, and TLS 1.3 suite names carry no
+  authentication algorithm, so every modern handshake silently returned
+  "Unknown" — github.com's ECDSA certificate included. The size came from
+  `cipher()[2]`, the SYMMETRIC key length, compared against RSA thresholds: a
+  TLS 1.2 RSA session with AES-256 raised "Weak RSA key: 256 bits" as a HIGH
+  finding about a sound 2048-bit certificate. The key is now read from the
+  certificate.
+- **A failed Certificate Transparency lookup read as an absence.** `ct_logged`
+  defaulted to False, so a crt.sh timeout became "not present in any CT log" —
+  about certificates anyone can check in a browser. Now tri-state, with the
+  reason reported.
+
+### 📐 Every CVSS score is computed from its vector
+
+Of the 28 findings that declared one, 7 agreed with the vector printed beside
+them in the archival dossier. An expired certificate was labelled 7.5 where its
+vector computes 8.2, an open zone transfer 9.0 where it computes 8.6, and one
+9.8 was annotated in the source as "assuming critical CVEs exist for EOL
+software" — a `Server:` banner match presented to an auditor as a critical
+vulnerability.
+
+`nis2scan/cvss.py` implements the CVSS v3.1 base arithmetic (FIRST.org §8.1)
+and the score is derived from the vector, ignoring any value passed in. Ten
+findings now publish no CVSS at all: a missing P.IVA is a consumer-law matter
+and a missing cookie banner a GDPR one, and attaching a score to them was the
+clearest evidence the numbers were decorative. An empty cell an auditor can ask
+about beats a number nobody can defend.
+
 ## [2.6.13] - 2026-09-07
 
 ### 🛡️ Security — nothing may be scanned without established authority
