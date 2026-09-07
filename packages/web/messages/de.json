@@ -303,7 +303,8 @@
       "scan_failed": "Scan fehlgeschlagen",
       "critical_finding": "Kritisches Ergebnis erkannt",
       "score_dropped": "Konformitätsbewertung gesunken",
-      "domain_expiring": "Domain läuft bald ab"
+      "domain_expiring": "Domain läuft bald ab",
+      "incident_deadline": "Vorfallsfrist (Art. 23)"
     },
     "emptyTitle": "Keine Benachrichtigungskanäle",
     "emptyDescription": "Fügen Sie eine E-Mail oder einen Webhook hinzu, um über Scan-Ergebnisse und kritische Ergebnisse benachrichtigt zu werden.",
@@ -311,7 +312,33 @@
     "nameAndTargetRequired": "Name und Ziel sind erforderlich",
     "channelAdded": "Benachrichtigungskanal hinzugefügt",
     "channelRemoved": "Kanal entfernt",
-    "testSent": "Test gesendet!"
+    "testSent": "Test gesendet!",
+    "newChannelDescription": "Wohin diese Organisation Benachrichtigungen erhält.",
+    "channelType": {
+      "email": "E-Mail",
+      "webhook": "Webhook",
+      "slack": "Slack"
+    },
+    "targetLabel": {
+      "email": "E-Mail-Adresse",
+      "webhook": "Webhook-URL",
+      "slack": "Slack-Webhook-URL"
+    },
+    "targetPlaceholder": {
+      "email": "soc@beispiel.de",
+      "webhook": "https://beispiel.de/hooks/nis2",
+      "slack": "https://hooks.slack.com/services/…"
+    },
+    "ssrfHint": "Muss eine öffentliche Adresse sein. Private Bereiche und Cloud-Metadaten-Endpunkte werden abgelehnt.",
+    "webhookSecret": "Signaturgeheimnis (optional)",
+    "webhookSecretHint": "Signiert jede Zustellung mit HMAC-SHA256, damit Ihr Endpunkt die Herkunft überprüfen kann.",
+    "configuredChannels": "Konfigurierte Kanäle",
+    "art23Hint": "Fristbenachrichtigungen nach Art. 23 (24 h / 72 h / 1 Monat) werden an diese Kanäle zugestellt. Ohne konfigurierte Kanäle weicht die Plattform auf E-Mails an die Organisationsadministratoren aus, wofür SMTP eingerichtet sein muss.",
+    "inactive": "Inaktiv",
+    "sendTest": "Testbenachrichtigung senden",
+    "channelAddFailed": "Kanal konnte nicht hinzugefügt werden",
+    "channelRemoveFailed": "Kanal konnte nicht entfernt werden",
+    "testFailed": "Die Testbenachrichtigung wurde nicht zugestellt"
   },
   "findings": {
     "title": "Ergebnisse",

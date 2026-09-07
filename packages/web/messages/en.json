@@ -303,7 +303,8 @@
       "scan_failed": "Scan Failed",
       "critical_finding": "Critical Finding Detected",
       "score_dropped": "Compliance Score Dropped",
-      "domain_expiring": "Domain Expiring Soon"
+      "domain_expiring": "Domain Expiring Soon",
+      "incident_deadline": "Incident deadline (Art. 23)"
     },
     "emptyTitle": "No notification channels",
     "emptyDescription": "Add an email or webhook to get notified about scan results and critical findings.",
@@ -311,7 +312,33 @@
     "nameAndTargetRequired": "Name and target are required",
     "channelAdded": "Notification channel added",
     "channelRemoved": "Channel removed",
-    "testSent": "Test sent!"
+    "testSent": "Test sent!",
+    "newChannelDescription": "Where this organisation receives alerts.",
+    "channelType": {
+      "email": "Email",
+      "webhook": "Webhook",
+      "slack": "Slack"
+    },
+    "targetLabel": {
+      "email": "Email address",
+      "webhook": "Webhook URL",
+      "slack": "Slack webhook URL"
+    },
+    "targetPlaceholder": {
+      "email": "soc@example.com",
+      "webhook": "https://example.com/hooks/nis2",
+      "slack": "https://hooks.slack.com/services/…"
+    },
+    "ssrfHint": "Must be a public address. Private ranges and cloud metadata endpoints are rejected.",
+    "webhookSecret": "Signing secret (optional)",
+    "webhookSecretHint": "Used to sign each delivery with HMAC-SHA256 so your endpoint can verify it came from this platform.",
+    "configuredChannels": "Configured channels",
+    "art23Hint": "Art. 23 deadline alerts (24 h / 72 h / 1 month) are delivered to these channels. With none configured, the platform falls back to emailing organisation admins, which requires SMTP to be set up.",
+    "inactive": "Inactive",
+    "sendTest": "Send a test alert",
+    "channelAddFailed": "Could not add the channel",
+    "channelRemoveFailed": "Could not remove the channel",
+    "testFailed": "The test alert was not delivered"
   },
   "findings": {
     "title": "Findings",

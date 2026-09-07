@@ -1,11 +1,24 @@
 // Copyright (c) 2026 Fabrizio Salmi <fabrizio.salmi@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-only
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
+//
+// Notification channels — the delivery targets for Art. 23 deadline alerts.
+//
+// This screen used to be a placeholder: channels lived in `useState`, were lost
+// on navigation, and `addChannel` raised a success toast for an operation that
+// never left the browser. There was no endpoint behind it either. Meanwhile the
+// Celery beat task that dispatches the 24h / 72h / 1-month alerts reads
+// NotificationChannel rows, so it always found none and fell back to emailing
+// organisation admins — which needs SMTP configured. On a deployment with
+// neither, the alert for a legally binding deadline went to the application log.
+//
+// Everything here now goes through /api/v1/notification-channels.
+
 "use client"
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Bell, Mail, Webhook, Plus, Trash2, TestTube } from "lucide-react"
+import { Bell, Mail, Webhook, Plus, Trash2, TestTube, Loader2, MessageSquare } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,19 +27,19 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import {
+  useNotificationChannels,
+  useCreateNotificationChannel,
+  useDeleteNotificationChannel,
+  useTestNotificationChannel,
+} from "@/hooks/use-notification-channels"
 
-interface Channel {
-  id: string
-  type: "email" | "webhook" | "slack"
-  name: string
-  config: Record<string, string>
-  events: string[]
-  active: boolean
-}
+type ChannelType = "email" | "webhook" | "slack"
 
 // Event option values are stable enum strings; labels are looked up
 // at render time under `notificationsPage.events.<value>`.
 const eventValues = [
+  "incident_deadline",
   "scan_completed",
   "scan_failed",
   "critical_finding",
@@ -34,41 +47,81 @@ const eventValues = [
   "domain_expiring",
 ] as const
 
+const TYPE_ICON: Record<ChannelType, typeof Mail> = {
+  email: Mail,
+  webhook: Webhook,
+  // lucide-react 1.x dropped the brand icons; MessageSquare is the neutral
+  // stand-in for a chat destination.
+  slack: MessageSquare,
+}
+
+/** The API stores each type's destination under a different config key, and the
+ *  dispatcher reads exactly these names. Keeping the mapping in one place stops
+ *  the form and the backend drifting. */
+const TARGET_KEY: Record<ChannelType, string> = {
+  email: "email",
+  webhook: "url",
+  slack: "webhook_url",
+}
+
 export default function NotificationsPage() {
   const t = useTranslations("notificationsPage")
   const tc = useTranslations("common")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("title"))
-  const [channels, setChannels] = useState<Channel[]>([])
+
+  const { data: channels, isLoading } = useNotificationChannels()
+  const createChannel = useCreateNotificationChannel()
+  const deleteChannel = useDeleteNotificationChannel()
+  const testChannel = useTestNotificationChannel()
+
   const [showAdd, setShowAdd] = useState(false)
-  const [newType, setNewType] = useState<"email" | "webhook">("email")
+  const [newType, setNewType] = useState<ChannelType>("email")
   const [newName, setNewName] = useState("")
   const [newTarget, setNewTarget] = useState("")
-  const [newEvents, setNewEvents] = useState<string[]>(["scan_completed", "critical_finding"])
+  const [newSecret, setNewSecret] = useState("")
+  const [newEvents, setNewEvents] = useState<string[]>(["incident_deadline", "critical_finding"])
 
-  const addChannel = () => {
+  const addChannel = async () => {
     if (!newName || !newTarget) {
       toast.error(t("nameAndTargetRequired"))
       return
     }
-    const channel: Channel = {
-      id: Date.now().toString(),
-      type: newType,
-      name: newName,
-      config: newType === "email" ? { email: newTarget } : { url: newTarget },
-      events: newEvents,
-      active: true,
+    const config: Record<string, string> = { [TARGET_KEY[newType]]: newTarget }
+    if (newType === "webhook" && newSecret) config.secret = newSecret
+    try {
+      await createChannel.mutateAsync({
+        channel_type: newType,
+        name: newName,
+        config,
+        events: newEvents,
+      })
+      setNewName("")
+      setNewTarget("")
+      setNewSecret("")
+      setShowAdd(false)
+      toast.success(t("channelAdded"))
+    } catch (err: any) {
+      toast.error(t("channelAddFailed"), { description: err.message })
     }
-    setChannels([...channels, channel])
-    setNewName("")
-    setNewTarget("")
-    setShowAdd(false)
-    toast.success(t("channelAdded"))
   }
 
-  const removeChannel = (id: string) => {
-    setChannels(channels.filter((c) => c.id !== id))
-    toast.success(t("channelRemoved"))
+  const removeChannel = async (id: string) => {
+    try {
+      await deleteChannel.mutateAsync(id)
+      toast.success(t("channelRemoved"))
+    } catch (err: any) {
+      toast.error(t("channelRemoveFailed"), { description: err.message })
+    }
+  }
+
+  const sendTest = async (id: string) => {
+    try {
+      await testChannel.mutateAsync(id)
+      toast.success(t("testSent"))
+    } catch (err: any) {
+      toast.error(t("testFailed"), { description: err.message })
+    }
   }
 
   const toggleEvent = (event: string) => {
@@ -94,120 +147,152 @@ export default function NotificationsPage() {
         <Card>
           <CardHeader>
             <CardTitle>{t("newChannelTitle")}</CardTitle>
+            <CardDescription>{t("newChannelDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2">
-              <Button
-                variant={newType === "email" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setNewType("email")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                {t("email")}
-              </Button>
-              <Button
-                variant={newType === "webhook" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setNewType("webhook")}
-              >
-                <Webhook className="mr-2 h-4 w-4" />
-                {t("webhook")}
-              </Button>
+              {(["email", "webhook", "slack"] as const).map((type) => {
+                const Icon = TYPE_ICON[type]
+                return (
+                  <Button
+                    key={type}
+                    type="button"
+                    variant={newType === type ? "default" : "outline"}
+                    onClick={() => { setNewType(type); setNewTarget("") }}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    {t(`channelType.${type}`)}
+                  </Button>
+                )
+              })}
             </div>
 
             <div className="space-y-2">
-              <Label>{t("channelName")}</Label>
+              <Label htmlFor="ch-name">{t("channelName")}</Label>
               <Input
-                placeholder={t("channelNamePlaceholder")}
+                id="ch-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
+                placeholder={t("channelNamePlaceholder")}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>{newType === "email" ? t("emailAddress") : t("webhookUrl")}</Label>
+              <Label htmlFor="ch-target">{t(`targetLabel.${newType}`)}</Label>
               <Input
-                placeholder={newType === "email" ? t("emailPlaceholder") : t("webhookPlaceholder")}
+                id="ch-target"
+                type={newType === "email" ? "email" : "url"}
                 value={newTarget}
                 onChange={(e) => setNewTarget(e.target.value)}
+                placeholder={t(`targetPlaceholder.${newType}`)}
               />
+              {newType !== "email" && (
+                <p className="text-xs text-muted-foreground">{t("ssrfHint")}</p>
+              )}
             </div>
+
+            {newType === "webhook" && (
+              <div className="space-y-2">
+                <Label htmlFor="ch-secret">{t("webhookSecret")}</Label>
+                <Input
+                  id="ch-secret"
+                  type="password"
+                  value={newSecret}
+                  onChange={(e) => setNewSecret(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t("webhookSecretHint")}</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>{t("triggerEvents")}</Label>
               <div className="flex flex-wrap gap-2">
-                {eventValues.map((ev) => (
-                  <Badge
-                    key={ev}
-                    variant={newEvents.includes(ev) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleEvent(ev)}
+                {eventValues.map((event) => (
+                  <Button
+                    key={event}
+                    type="button"
+                    size="sm"
+                    variant={newEvents.includes(event) ? "default" : "outline"}
+                    onClick={() => toggleEvent(event)}
                   >
-                    {t(`events.${ev}` as any)}
-                  </Badge>
+                    {t(`events.${event}`)}
+                  </Button>
                 ))}
               </div>
             </div>
 
             <Separator />
 
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowAdd(false)}>{tc("cancel")}</Button>
-              <Button onClick={addChannel}>{t("addChannel")}</Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowAdd(false)}>{tc("cancel")}</Button>
+              <Button onClick={addChannel} disabled={createChannel.isPending}>
+                {createChannel.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {tc("save")}
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {channels.length === 0 && !showAdd ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">{t("emptyTitle")}</h3>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">{t("emptyDescription")}</p>
-            <Button onClick={() => setShowAdd(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t("addFirstChannel")}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {channels.map((ch) => (
-            <Card key={ch.id}>
-              <CardContent className="flex items-center gap-4 pt-6">
-                <div className="rounded-lg bg-muted p-3">
-                  {ch.type === "email" ? <Mail className="h-5 w-5" /> : <Webhook className="h-5 w-5" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{ch.name}</p>
-                    <Badge variant="outline" className="capitalize">{ch.type}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {ch.config.email || ch.config.url}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {ch.events.map((ev) => (
-                      <Badge key={ev} variant="secondary" className="text-xs">
-                        {(eventValues as readonly string[]).includes(ev) ? t(`events.${ev}` as any) : ev}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info(t("testSent"))} aria-label="Send test notification">
-                    <TestTube className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeChannel(ch.id)} aria-label="Delete channel">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            {t("configuredChannels")}
+          </CardTitle>
+          <CardDescription>{t("art23Hint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !channels?.length ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("emptyDescription")}</p>
+          ) : (
+            <ul className="divide-y">
+              {channels.map((ch: any) => {
+                const Icon = TYPE_ICON[ch.channel_type as ChannelType] ?? Bell
+                const target = ch.config?.[TARGET_KEY[ch.channel_type as ChannelType]] ?? ""
+                return (
+                  <li key={ch.id} className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{ch.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{target}</p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!ch.is_active && <Badge variant="outline">{t("inactive")}</Badge>}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => sendTest(ch.id)}
+                        disabled={testChannel.isPending}
+                        aria-label={t("sendTest")}
+                        title={t("sendTest")}
+                      >
+                        <TestTube className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeChannel(ch.id)}
+                        disabled={deleteChannel.isPending}
+                        aria-label={tc("delete")}
+                        title={tc("delete")}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

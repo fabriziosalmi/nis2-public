@@ -303,7 +303,8 @@
       "scan_failed": "Scansione Fallita",
       "critical_finding": "Risultato Critico Rilevato",
       "score_dropped": "Punteggio Conformità Calato",
-      "domain_expiring": "Dominio in Scadenza"
+      "domain_expiring": "Dominio in Scadenza",
+      "incident_deadline": "Scadenza incidente (art. 23)"
     },
     "emptyTitle": "Nessun canale di notifica",
     "emptyDescription": "Aggiungi un'email o un webhook per ricevere notifiche sui risultati delle scansioni e sui risultati critici.",
@@ -311,7 +312,33 @@
     "nameAndTargetRequired": "Nome e destinazione sono obbligatori",
     "channelAdded": "Canale di notifica aggiunto",
     "channelRemoved": "Canale rimosso",
-    "testSent": "Test inviato!"
+    "testSent": "Test inviato!",
+    "newChannelDescription": "Dove questa organizzazione riceve gli avvisi.",
+    "channelType": {
+      "email": "Email",
+      "webhook": "Webhook",
+      "slack": "Slack"
+    },
+    "targetLabel": {
+      "email": "Indirizzo email",
+      "webhook": "URL del webhook",
+      "slack": "URL del webhook Slack"
+    },
+    "targetPlaceholder": {
+      "email": "soc@esempio.it",
+      "webhook": "https://esempio.it/hooks/nis2",
+      "slack": "https://hooks.slack.com/services/…"
+    },
+    "ssrfHint": "Deve essere un indirizzo pubblico. Gli intervalli privati e gli endpoint di metadati cloud vengono rifiutati.",
+    "webhookSecret": "Segreto di firma (facoltativo)",
+    "webhookSecretHint": "Usato per firmare ogni invio con HMAC-SHA256, così il tuo endpoint può verificare che arrivi da questa piattaforma.",
+    "configuredChannels": "Canali configurati",
+    "art23Hint": "Gli avvisi di scadenza dell'art. 23 (24 h / 72 h / 1 mese) vengono recapitati a questi canali. Se non ne configuri nessuno, la piattaforma ripiega sull'invio di email agli amministratori dell'organizzazione, che richiede la configurazione SMTP.",
+    "inactive": "Non attivo",
+    "sendTest": "Invia un avviso di prova",
+    "channelAddFailed": "Impossibile aggiungere il canale",
+    "channelRemoveFailed": "Impossibile rimuovere il canale",
+    "testFailed": "L'avviso di prova non è stato recapitato"
   },
   "findings": {
     "title": "Risultati",

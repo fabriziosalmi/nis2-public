@@ -189,6 +189,48 @@ class ApiClient {
     })
   }
 
+  // ---------------------------------------------- Notification channels
+  //
+  // These back the Art. 23 deadline alerts. The settings screen used to hold
+  // channels in React state and discard them on navigation, and no endpoint
+  // existed behind it — so the deadline monitor always found zero channels.
+  async listNotificationChannels() {
+    return this.request<any[]>('/api/v1/notification-channels')
+  }
+
+  async createNotificationChannel(data: {
+    channel_type: 'email' | 'webhook' | 'slack'
+    name: string
+    config: Record<string, string>
+    events: string[]
+    is_active?: boolean
+  }) {
+    return this.request<any>('/api/v1/notification-channels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateNotificationChannel(id: string, data: Record<string, unknown>) {
+    return this.request<any>(`/api/v1/notification-channels/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteNotificationChannel(id: string) {
+    return this.request<void>(`/api/v1/notification-channels/${id}`, { method: 'DELETE' })
+  }
+
+  /** Send a sample alert. The real dispatch only runs on a 15-minute beat, so
+   *  without this an operator cannot tell a working channel from a silent one
+   *  until an actual incident deadline. */
+  async testNotificationChannel(id: string) {
+    return this.request<{ sent: number }>(`/api/v1/notification-channels/${id}/test`, {
+      method: 'POST',
+    })
+  }
+
   async logout() {
     return this.request<void>('/api/v1/auth/logout', { method: 'POST' })
   }

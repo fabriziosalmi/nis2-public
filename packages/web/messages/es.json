@@ -303,7 +303,8 @@
       "scan_failed": "Escaneo Fallido",
       "critical_finding": "Hallazgo Crítico Detectado",
       "score_dropped": "Puntuación de Cumplimiento Bajó",
-      "domain_expiring": "Dominio Expirando Pronto"
+      "domain_expiring": "Dominio Expirando Pronto",
+      "incident_deadline": "Plazo de incidente (art. 23)"
     },
     "emptyTitle": "Sin canales de notificación",
     "emptyDescription": "Añada un correo o webhook para recibir notificaciones sobre resultados de escaneos y hallazgos críticos.",
@@ -311,7 +312,33 @@
     "nameAndTargetRequired": "Nombre y destino son obligatorios",
     "channelAdded": "Canal de notificación añadido",
     "channelRemoved": "Canal eliminado",
-    "testSent": "¡Prueba enviada!"
+    "testSent": "¡Prueba enviada!",
+    "newChannelDescription": "Dónde recibe las alertas esta organización.",
+    "channelType": {
+      "email": "Correo electrónico",
+      "webhook": "Webhook",
+      "slack": "Slack"
+    },
+    "targetLabel": {
+      "email": "Dirección de correo",
+      "webhook": "URL del webhook",
+      "slack": "URL del webhook de Slack"
+    },
+    "targetPlaceholder": {
+      "email": "soc@ejemplo.es",
+      "webhook": "https://ejemplo.es/hooks/nis2",
+      "slack": "https://hooks.slack.com/services/…"
+    },
+    "ssrfHint": "Debe ser una dirección pública. Se rechazan los rangos privados y los endpoints de metadatos de la nube.",
+    "webhookSecret": "Secreto de firma (opcional)",
+    "webhookSecretHint": "Firma cada envío con HMAC-SHA256 para que tu endpoint pueda verificar su origen.",
+    "configuredChannels": "Canales configurados",
+    "art23Hint": "Las alertas de plazo del art. 23 (24 h / 72 h / 1 mes) se entregan a estos canales. Sin ningún canal configurado, la plataforma recurre a enviar correos a los administradores de la organización, lo que requiere SMTP configurado.",
+    "inactive": "Inactivo",
+    "sendTest": "Enviar una alerta de prueba",
+    "channelAddFailed": "No se pudo añadir el canal",
+    "channelRemoveFailed": "No se pudo eliminar el canal",
+    "testFailed": "La alerta de prueba no se entregó"
   },
   "findings": {
     "title": "Hallazgos",
