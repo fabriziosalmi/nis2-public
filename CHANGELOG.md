@@ -1,5 +1,97 @@
 # Changelog
 
+## [2.6.11] - 2026-09-07
+
+Security hardening of the deployment defaults, plus the missing write paths that
+made three NIS2 modules read-only in the product.
+
+### 🛡️ Security — the documented install path was insecure
+
+- **`.env.example` shipped `ENVIRONMENT=development`** and `prod-preflight` never
+  checked it, so following the README produced a production deployment in
+  development mode. That disabled five controls at once: the JWT_SECRET /
+  CORS_ORIGINS boot validation, the `Secure` flag on the session cookies, the
+  SUPERUSER/BYPASSRLS refusal, and outbound mail (diverted to an in-memory
+  outbox) — and mounted an unauthenticated debug endpoint. `ENVIRONMENT` is now
+  pinned per service in both compose files, where a stale `.env` cannot
+  downgrade it.
+- **Every secret in `.env.example` passed preflight unedited.** v2.5.5 renamed
+  the placeholders from `GENERATE_ME_*` to `CHANGE_ME_*`, which disarmed both
+  detectors at once, and the new value was 36 characters so it also cleared the
+  32-character floor. Measured: `CORS_ORIGINS` was the only field that blocked.
+  A deployment could run production signing JWTs with a key published in this
+  repository. Detection is now marker-based and cannot be disarmed by a rename.
+- **Unauthenticated account takeover.** `GET /auth/debug/last-email` returns the
+  last outbound email — reset link included — to any caller, and was mounted on
+  `environment != "production"` alone. Chained with the public forgot-password
+  endpoint that is full takeover of any account. It now requires a second,
+  independent opt-in that defaults off, and production refuses to boot with it set.
+- **The RLS superuser guard never fired.** `assert_db_role_rls_safe()` was called
+  from inside a `try/except Exception` that swallowed its error, so the API booted
+  with RLS bypassed while the Celery worker hard-stopped — two processes of one
+  system on different security postures. It is now asserted uncaught.
+- **The least-privilege database role was never created.** `initdb/` was mounted
+  by no compose file and could not have run as written (it needed a psql variable
+  the entrypoint cannot pass). Every deployment ran the API as the bootstrap
+  superuser, for which Postgres bypasses RLS unconditionally. The role is now
+  provisioned on first init; existing deployments use
+  `make db-provision-app-role` (see UPGRADING.md §0.1).
+- **The frontend container received every backend secret** via `env_file`. It
+  reads three variables and used none of the rest.
+- **MCP tools ran behind membership alone**, so a read-only `viewer` could invoke
+  `scan_target` — a full port scan of an arbitrary host — bypassing the RBAC on
+  the equivalent REST endpoints. Authorisation is now per-tool and defaults to deny.
+
+### 🐛 Fixed — the stack could not start, and five endpoints always 500'd
+
+- **`make prod` could not bring the stack up at all.** Compose resolves `${VAR}`
+  interpolation from the project directory's `.env` — `infra/docker/`, which has
+  none — while `env_file:` found the repo-root file. Services ran on two
+  credential sources, and in production the `:?` guards made compose reject the
+  file outright.
+- **The container healthcheck gated on a probe that cannot fail.** `/health` is
+  liveness by design ("never returns a non-200"), so `--wait` reported success
+  and Caddy began routing while the API could not reach its database. Now
+  `/health/ready`, with a timeout above the Celery ping window.
+- **Four endpoints returned 500 on every call** — `update_governance_item`,
+  `update_incident`, `update_organization`, `cancel_scan`. `updated_at` carries
+  `onupdate`, so the UPDATE flush expired it and pydantic re-read it in a
+  synchronous context. Ticking off an Art. 21 checklist item had never worked
+  from the dashboard.
+- **`make db-seed` wrote tenant rows with no RLS context** — invisible under the
+  superuser, rejected the moment the policies started binding.
+
+### ✨ Added — three modules stopped being read-only
+
+- **Art. 23 incidents are declarable from the dashboard.** Nothing in the
+  application had ever created an `incidents` row: the countdown, the deadline
+  alerting and the report dossier all read a store with no producer, while the
+  documented `POST /api/v1/incidents` wrote a different table the clock does not
+  watch. Declaring now starts the 24 h / 72 h / 1-month clocks from the recorded
+  detection time.
+- **Notification channels** (`/api/v1/notification-channels`) with a test-send.
+  The dispatcher existed; nothing could create a channel, so Art. 23 alerts fell
+  back to admin email or, without SMTP, to a log line. Destinations are
+  SSRF-validated on write and credentials are never returned in cleartext.
+- **TOTP MFA has a UI.** The endpoints shipped in v2.5.11 with no screen and no
+  translation key, and enrolling through the API locked the user out of the
+  dashboard — the login page ignored the `mfa_required` response. Art. 21(2)(j)
+  names MFA explicitly.
+- **Vendors (Art. 18) and BIA are editable**, and BIA gained the `PATCH` it never
+  had.
+
+### 📝 Changed
+
+- `VERSION` is now the single source of truth, propagated by
+  `make version-set` and enforced by `make version-check` in CI.
+- README aligned with what the product does, including an explicit list of what
+  is still API-only, and a scanner table that says what each check establishes
+  rather than what it is called.
+- CHANGELOG restored for eight tagged releases that had no entry; `v2.6.9`
+  tagged and released, having shipped with neither.
+- `SECURITY.md` supported-versions table corrected — it had named 2.5.x as
+  current for the entire 2.6 series.
+
 ## [2.6.10] - 2026-08-08
 
 ### 🛡️ Security — nanoid HIGH CVE
