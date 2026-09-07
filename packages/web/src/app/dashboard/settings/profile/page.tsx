@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api-client"
 import { useAuthStore } from "@/stores/auth-store"
+import { MfaCard } from "@/components/settings/mfa-card"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const profileSchema = z.object({
@@ -220,6 +221,11 @@ export default function ProfileSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* NIS2 Art. 21(2)(j) names multi-factor authentication explicitly. The
+          endpoints existed since v2.5.11; this is the first screen that reaches
+          them. */}
+      <MfaCard />
     </div>
   )
 }

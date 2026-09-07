@@ -515,7 +515,31 @@
     "currentPasswordIncorrect": "La contraseña actual es incorrecta",
     "passwordsDontMatch": "Las nuevas contraseñas no coinciden",
     "newSameAsCurrent": "La nueva contraseña debe ser distinta de la actual",
-    "updateFailed": "Fallo en la actualización"
+    "updateFailed": "Fallo en la actualización",
+    "mfa": {
+      "title": "Autenticación de dos factores",
+      "description": "Añade un segundo paso al inicio de sesión mediante una aplicación de autenticación. Exigida por el art. 21(2)(j) NIS2.",
+      "enabledDescription": "La autenticación de dos factores está activa en esta cuenta.",
+      "enable": "Activar la autenticación de dos factores",
+      "disable": "Desactivar la autenticación de dos factores",
+      "disabled": "Autenticación de dos factores desactivada",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar y activar",
+      "confirmLabel": "Código de tu aplicación de autenticación",
+      "confirmPlaceholder": "Código de 6 dígitos",
+      "secretLabel": "Clave de configuración",
+      "secretHint": "Añade esta clave a tu aplicación de autenticación y luego introduce el código que genere.",
+      "recoveryTitle": "Códigos de recuperación",
+      "recoveryWarning": "Guárdalos ahora: se muestran una sola vez. Cada código funciona una única vez y te permite iniciar sesión si pierdes tu aplicación de autenticación.",
+      "recoveryStored": "Los he guardado",
+      "copyCodes": "Copiar códigos",
+      "copyFailed": "No se pudo copiar al portapapeles",
+      "setupFailed": "No se pudo iniciar la configuración",
+      "verifyFailed": "No se pudo verificar el código",
+      "disableFailed": "No se pudo desactivar la autenticación de dos factores",
+      "disablePasswordLabel": "Confirma con tu contraseña",
+      "disableHint": "Se requiere la contraseña de tu cuenta para desactivar la autenticación de dos factores."
+    }
   },
   "organizationPage": {
     "title": "Organización",
@@ -718,7 +742,11 @@
     "passwordRequired": "La contraseña es obligatoria",
     "passwordMin8": "Mínimo 8 caracteres",
     "fullNameRequired": "El nombre es obligatorio",
-    "orgNameRequired": "El nombre de la organización es obligatorio"
+    "orgNameRequired": "El nombre de la organización es obligatorio",
+    "mfaCode": "Código de autenticación",
+    "mfaCodePlaceholder": "Código de 6 dígitos",
+    "mfaCodeHint": "Abre tu aplicación de autenticación, o introduce uno de tus códigos de recuperación.",
+    "mfaCodeInvalid": "Código de autenticación incorrecto"
   },
   "forgotPasswordPage": {
     "title": "¿Olvidó su contraseña?",

@@ -515,7 +515,31 @@
     "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
     "passwordsDontMatch": "Les nouveaux mots de passe ne correspondent pas",
     "newSameAsCurrent": "Le nouveau mot de passe doit différer de l'actuel",
-    "updateFailed": "Échec de la mise à jour"
+    "updateFailed": "Échec de la mise à jour",
+    "mfa": {
+      "title": "Authentification à deux facteurs",
+      "description": "Ajoute une seconde étape à la connexion via une application d'authentification. Exigée par l'art. 21(2)(j) NIS2.",
+      "enabledDescription": "L'authentification à deux facteurs est active sur ce compte.",
+      "enable": "Activer l'authentification à deux facteurs",
+      "disable": "Désactiver l'authentification à deux facteurs",
+      "disabled": "Authentification à deux facteurs désactivée",
+      "cancel": "Annuler",
+      "confirm": "Confirmer et activer",
+      "confirmLabel": "Code de votre application d'authentification",
+      "confirmPlaceholder": "Code à 6 chiffres",
+      "secretLabel": "Clé de configuration",
+      "secretHint": "Ajoutez cette clé à votre application d'authentification, puis saisissez le code qu'elle génère.",
+      "recoveryTitle": "Codes de récupération",
+      "recoveryWarning": "Enregistrez-les maintenant : ils ne sont affichés qu'une seule fois. Chaque code fonctionne une fois et vous permet de vous connecter si vous perdez votre application d'authentification.",
+      "recoveryStored": "Je les ai enregistrés",
+      "copyCodes": "Copier les codes",
+      "copyFailed": "Impossible de copier dans le presse-papiers",
+      "setupFailed": "Impossible de démarrer la configuration",
+      "verifyFailed": "Impossible de vérifier le code",
+      "disableFailed": "Impossible de désactiver l'authentification à deux facteurs",
+      "disablePasswordLabel": "Confirmez avec votre mot de passe",
+      "disableHint": "Le mot de passe de votre compte est requis pour désactiver l'authentification à deux facteurs."
+    }
   },
   "organizationPage": {
     "title": "Organisation",
@@ -718,7 +742,11 @@
     "passwordRequired": "Le mot de passe est obligatoire",
     "passwordMin8": "Minimum 8 caractères",
     "fullNameRequired": "Le nom complet est obligatoire",
-    "orgNameRequired": "Le nom de l'organisation est obligatoire"
+    "orgNameRequired": "Le nom de l'organisation est obligatoire",
+    "mfaCode": "Code d'authentification",
+    "mfaCodePlaceholder": "Code à 6 chiffres",
+    "mfaCodeHint": "Ouvrez votre application d'authentification, ou saisissez l'un de vos codes de récupération.",
+    "mfaCodeInvalid": "Code d'authentification incorrect"
   },
   "forgotPasswordPage": {
     "title": "Mot de passe oublié ?",

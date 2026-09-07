@@ -515,7 +515,31 @@
     "currentPasswordIncorrect": "La password attuale non è corretta",
     "passwordsDontMatch": "Le nuove password non coincidono",
     "newSameAsCurrent": "La nuova password deve essere diversa da quella attuale",
-    "updateFailed": "Aggiornamento fallito"
+    "updateFailed": "Aggiornamento fallito",
+    "mfa": {
+      "title": "Autenticazione a due fattori",
+      "description": "Aggiunge un secondo passaggio all'accesso tramite un'app di autenticazione. Richiesta dall'art. 21(2)(j) NIS2.",
+      "enabledDescription": "L'autenticazione a due fattori è attiva su questo account.",
+      "enable": "Attiva l'autenticazione a due fattori",
+      "disable": "Disattiva l'autenticazione a due fattori",
+      "disabled": "Autenticazione a due fattori disattivata",
+      "cancel": "Annulla",
+      "confirm": "Conferma e attiva",
+      "confirmLabel": "Codice dalla tua app di autenticazione",
+      "confirmPlaceholder": "Codice a 6 cifre",
+      "secretLabel": "Chiave di configurazione",
+      "secretHint": "Aggiungi questa chiave alla tua app di autenticazione, poi inserisci il codice che genera.",
+      "recoveryTitle": "Codici di recupero",
+      "recoveryWarning": "Salvali adesso: vengono mostrati una sola volta. Ogni codice funziona una volta sola e ti permette di accedere se perdi l'app di autenticazione.",
+      "recoveryStored": "Li ho salvati",
+      "copyCodes": "Copia i codici",
+      "copyFailed": "Impossibile copiare negli appunti",
+      "setupFailed": "Impossibile avviare la configurazione",
+      "verifyFailed": "Impossibile verificare il codice",
+      "disableFailed": "Impossibile disattivare l'autenticazione a due fattori",
+      "disablePasswordLabel": "Conferma con la tua password",
+      "disableHint": "Per disattivare l'autenticazione a due fattori serve la password del tuo account."
+    }
   },
   "organizationPage": {
     "title": "Organizzazione",
@@ -718,7 +742,11 @@
     "passwordRequired": "La password è obbligatoria",
     "passwordMin8": "Minimo 8 caratteri",
     "fullNameRequired": "Il nome è obbligatorio",
-    "orgNameRequired": "Il nome organizzazione è obbligatorio"
+    "orgNameRequired": "Il nome organizzazione è obbligatorio",
+    "mfaCode": "Codice di autenticazione",
+    "mfaCodePlaceholder": "Codice a 6 cifre",
+    "mfaCodeHint": "Apri l'app di autenticazione, oppure inserisci uno dei codici di recupero.",
+    "mfaCodeInvalid": "Codice di autenticazione errato"
   },
   "forgotPasswordPage": {
     "title": "Hai dimenticato la password?",

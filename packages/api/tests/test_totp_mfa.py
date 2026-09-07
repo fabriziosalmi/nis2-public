@@ -150,3 +150,74 @@ def test_user_model_encryption_integration():
     legacy_user.totp_secret_encrypted = secret  # set raw DB column directly
     assert legacy_user.totp_secret == secret  # should decrypt as legacy cleartext
 
+
+
+# ---------------------------------------------------------------------------
+# Contract the login UI depends on
+# ---------------------------------------------------------------------------
+#
+# The tests above cover the MFA decision logic. What was never pinned is the
+# SHAPE of the response the frontend has to branch on — and that gap is exactly
+# where the bug lived: `POST /auth/login` answers 200 with
+# {"mfa_required": true, "partial": true} and sets no session cookie, while the
+# login page treated any 200 as a successful sign-in. It stored the absent user
+# and redirected to /dashboard, which 401'd back to /login in a loop. Because
+# /auth/totp/disable itself needs a session, enrolling MFA — only possible via
+# the API, since no MFA screen existed — locked the account out of the web app
+# permanently.
+#
+# Art. 21(2)(j) is specifically about multi-factor authentication, so these
+# assertions guard the one control the directive names by hand.
+
+
+def test_mfa_required_response_carries_no_session_fields():
+    """The frontend distinguishes the two 200s by `mfa_required`.
+
+    If a future change starts returning a user or org_id alongside
+    mfa_required, the UI could plausibly treat it as a completed login again.
+    """
+    from app.schemas.auth import MFARequiredResponse
+
+    payload = MFARequiredResponse(mfa_required=True, partial=True).model_dump()
+    assert payload["mfa_required"] is True
+    for leaked in ("user", "org_id", "access_token", "role"):
+        assert leaked not in payload, (
+            f"MFARequiredResponse exposes {leaked!r}; the login page keys off the "
+            f"absence of session fields to know this 200 is not a sign-in"
+        )
+
+
+def test_login_request_carries_totp_code_for_the_second_attempt():
+    """There is no separate 'complete MFA' endpoint: /login is repeated.
+
+    The api-client sends `totp_code` only on the retry, so the field must stay
+    optional and must be accepted on LoginRequest.
+    """
+    from app.schemas.auth import LoginRequest
+
+    first = LoginRequest(email="user@example.com", password="pw")
+    assert first.totp_code is None
+
+    retry = LoginRequest(email="user@example.com", password="pw", totp_code="123456")
+    assert retry.totp_code == "123456"
+
+
+def test_totp_disable_does_not_require_a_new_password():
+    """/auth/totp/disable reused ChangePasswordRequest, whose `new_password`
+    carries min_length=8 — a field the endpoint never reads. Omitting it, the
+    obvious thing for a client to do, produced a 422; disabling MFA therefore
+    required inventing a password to satisfy an unrelated validator."""
+    from app.schemas.auth import TOTPDisableRequest
+
+    req = TOTPDisableRequest(current_password="my-real-password")
+    assert req.current_password == "my-real-password"
+    assert not hasattr(req, "new_password")
+
+
+def test_user_response_exposes_mfa_state():
+    """The profile screen decides between offering enrolment and offering
+    removal from this field. Without it the frontend could not know the
+    account's MFA state — part of why the feature had no UI at all."""
+    from app.schemas.auth import UserResponse
+
+    assert "totp_enabled" in UserResponse.model_fields

@@ -41,6 +41,7 @@ from app.schemas.auth import (
     RegisterRequest,
     ResetPasswordRequest,
     SwitchOrgRequest,
+    TOTPDisableRequest,
     TOTPSetupResponse,
     TOTPVerifyRequest,
     TOTPVerifyResponse,
@@ -1533,7 +1534,7 @@ async def totp_verify(
 
 @router.post("/totp/disable", response_model=TOTPVerifyResponse)
 async def totp_disable(
-    payload: ChangePasswordRequest,
+    payload: TOTPDisableRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TOTPVerifyResponse:

@@ -142,10 +142,50 @@ class ApiClient {
     })
   }
 
-  async login(email: string, password: string) {
+  /**
+   * `totpCode` is optional and only sent on the second attempt.
+   *
+   * When the account has MFA enabled and no code is supplied, the API returns
+   * `{mfa_required: true, partial: true}` with NO session cookie — a 200 that
+   * is not a login. The caller must inspect the response shape; the previous
+   * version did not, stored the (absent) user and redirected to /dashboard,
+   * which 401'd straight back to /login. Anyone who enrolled MFA through the
+   * API was locked out of the web UI with no way back, because
+   * /auth/totp/disable itself requires a session.
+   *
+   * There is no separate "complete MFA" endpoint by design: the same /login
+   * call is repeated with the code (or a recovery code) attached.
+   */
+  async login(email: string, password: string, totpCode?: string) {
     return this.request<any>('/api/v1/auth/login?slim=true', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(
+        totpCode ? { email, password, totp_code: totpCode } : { email, password }
+      ),
+    })
+  }
+
+  /** Begin TOTP enrolment: returns the shared secret + otpauth:// URI. */
+  async totpSetup() {
+    return this.request<{ secret: string; provisioning_uri: string }>(
+      '/api/v1/auth/totp/setup',
+      { method: 'POST' }
+    )
+  }
+
+  /** Confirm enrolment with a code from the authenticator. Returns recovery codes ONCE. */
+  async totpVerify(code: string) {
+    return this.request<{ mfa_enabled: boolean; recovery_codes?: string[] }>(
+      '/api/v1/auth/totp/verify',
+      { method: 'POST', body: JSON.stringify({ code }) }
+    )
+  }
+
+  /** Turn MFA off. Re-authenticates with the account password, not a TOTP code. */
+  async totpDisable(currentPassword: string) {
+    return this.request<{ mfa_enabled: boolean }>('/api/v1/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword }),
     })
   }
 

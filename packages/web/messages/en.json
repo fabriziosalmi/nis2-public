@@ -515,7 +515,31 @@
     "currentPasswordIncorrect": "Current password is incorrect",
     "passwordsDontMatch": "New passwords don't match",
     "newSameAsCurrent": "The new password must differ from the current one",
-    "updateFailed": "Update failed"
+    "updateFailed": "Update failed",
+    "mfa": {
+      "title": "Two-factor authentication",
+      "description": "Add a second step to sign-in using an authenticator app. Required by NIS2 Art. 21(2)(j).",
+      "enabledDescription": "Two-factor authentication is active on this account.",
+      "enable": "Enable two-factor authentication",
+      "disable": "Turn off two-factor authentication",
+      "disabled": "Two-factor authentication turned off",
+      "cancel": "Cancel",
+      "confirm": "Confirm and enable",
+      "confirmLabel": "Code from your authenticator",
+      "confirmPlaceholder": "6-digit code",
+      "secretLabel": "Setup key",
+      "secretHint": "Add this key to your authenticator app, then enter the code it generates.",
+      "recoveryTitle": "Recovery codes",
+      "recoveryWarning": "Save these now — they are shown only once. Each code works a single time and lets you sign in if you lose your authenticator.",
+      "recoveryStored": "I have saved them",
+      "copyCodes": "Copy codes",
+      "copyFailed": "Could not copy to clipboard",
+      "setupFailed": "Could not start setup",
+      "verifyFailed": "Could not verify the code",
+      "disableFailed": "Could not turn off two-factor authentication",
+      "disablePasswordLabel": "Confirm with your password",
+      "disableHint": "Your account password is required to turn two-factor authentication off."
+    }
   },
   "organizationPage": {
     "title": "Organization",
@@ -718,7 +742,11 @@
     "passwordRequired": "Password is required",
     "passwordMin8": "Minimum 8 characters",
     "fullNameRequired": "Full name is required",
-    "orgNameRequired": "Organization name is required"
+    "orgNameRequired": "Organization name is required",
+    "mfaCode": "Authentication code",
+    "mfaCodePlaceholder": "6-digit code",
+    "mfaCodeHint": "Open your authenticator app, or enter one of your recovery codes.",
+    "mfaCodeInvalid": "Incorrect authentication code"
   },
   "forgotPasswordPage": {
     "title": "Forgot your password?",

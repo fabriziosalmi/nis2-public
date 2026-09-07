@@ -58,6 +58,19 @@ class TOTPVerifyResponse(BaseModel):
     recovery_codes: Optional[list[str]] = None
 
 
+class TOTPDisableRequest(BaseModel):
+    """Password re-authentication for turning MFA off.
+
+    /auth/totp/disable reused ChangePasswordRequest, whose `new_password` field
+    carries `min_length=8` — a field the endpoint never reads. A client doing
+    the obvious thing and omitting it got a 422, so disabling MFA required
+    sending a meaningless password that happened to pass an unrelated
+    validator. Since there is no MFA UI, nobody had hit it.
+    """
+
+    current_password: str = Field(..., min_length=1, max_length=128)
+
+
 class MFARequiredResponse(BaseModel):
     mfa_required: bool
     partial: bool
@@ -71,6 +84,11 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     email_verified: bool = False
     is_active: bool = True
+    # Whether TOTP MFA is enrolled. The profile screen needs it to decide
+    # between offering enrolment and offering removal; without it the frontend
+    # had no way to know the account's MFA state, which is part of why the
+    # feature had no UI at all.
+    totp_enabled: bool = False
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

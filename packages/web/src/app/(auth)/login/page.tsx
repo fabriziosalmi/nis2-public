@@ -44,6 +44,12 @@ export default function LoginPage() {
   const sessionExpired = searchParams?.get("session") === "expired"
   const setAuth = useAuthStore((s) => s.setAuth)
   const [loading, setLoading] = useState(false)
+  // Two-step login state. `mfaRequired` flips after the API answers
+  // {mfa_required: true}; the form then shows the code field and resubmits the
+  // same credentials with the code attached — there is no separate
+  // "complete MFA" endpoint, by design.
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [totpCode, setTotpCode] = useState("")
   // v2.4.24 audit a11y-11: per-page <title>.
   useDocumentTitle(t("auth.signIn"))
 
@@ -60,11 +66,36 @@ export default function LoginPage() {
     try {
       // The API sets the auth cookies on this response; the body carries
       // the user profile and org id for immediate UI hydration.
-      const res = await api.login(data.email, data.password)
+      const res = await api.login(data.email, data.password, mfaRequired ? totpCode : undefined)
+
+      // MFA branch. When the account has TOTP enabled and no code was sent,
+      // the API answers 200 with {mfa_required: true, partial: true} and sets
+      // NO cookie — a success status that is not a session.
+      //
+      // This branch did not exist. The handler stored res.user (undefined) and
+      // pushed to /dashboard, which had no session, 401'd, and bounced back
+      // here — an unbreakable loop. Since /auth/totp/disable itself requires a
+      // session, anyone who enrolled MFA through the API (the only way, as
+      // there was no MFA UI either) was permanently locked out of the web app.
+      // Art. 21(2)(j) is specifically about multi-factor authentication, so
+      // enabling it must not be the thing that breaks access.
+      if (res?.mfa_required) {
+        setMfaRequired(true)
+        setTotpCode("")
+        return
+      }
+
       setAuth(res.user, res.org_id || null)
       router.push("/dashboard")
     } catch (err: any) {
-      toast.error(t("auth.loginFailed"), { description: err.message || t("auth.invalidCredentials") })
+      // A wrong TOTP code comes back as a 401 like a wrong password. Keep the
+      // code field on screen so the user can retry without re-typing
+      // credentials, and point the message at the code they just entered.
+      toast.error(
+        mfaRequired ? t("auth.mfaCodeInvalid") : t("auth.loginFailed"),
+        { description: mfaRequired ? undefined : err.message || t("auth.invalidCredentials") }
+      )
+      setTotpCode("")
     } finally {
       setLoading(false)
     }
@@ -140,6 +171,25 @@ export default function LoginPage() {
               </p>
             )}
           </div>
+          {mfaRequired && (
+            <div className="space-y-2">
+              <Label htmlFor="totp">{t("auth.mfaCode")}</Label>
+              <Input
+                id="totp"
+                // One-time codes are 6 digits; recovery codes are longer and
+                // alphanumeric, and the same field accepts both because the API
+                // checks the TOTP first and falls back to the recovery list.
+                inputMode="text"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={32}
+                placeholder={t("auth.mfaCodePlaceholder")}
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.trim())}
+              />
+              <p className="text-xs text-muted-foreground">{t("auth.mfaCodeHint")}</p>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
