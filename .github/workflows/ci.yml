@@ -201,8 +201,11 @@ jobs:
       - name: Start API server (background)
         run: |
           cd packages/api
+          # Capture the server log. It was discarded, so when the suite caught
+          # the server misbehaving there was nothing to read: a failure had to
+          # be re-derived from the client side alone. Dumped on failure below.
           uvicorn app.main:app --host 0.0.0.0 --port 8000 \
-            --log-level warning &
+            --log-level info > "$RUNNER_TEMP/api-server.log" 2>&1 &
           echo "API PID: $!"
 
       - name: Wait for API to be healthy
@@ -235,6 +238,13 @@ jobs:
         run: |
           cd packages/api
           python -m pytest tests/test_e2e_live.py -v --tb=short
+
+      - name: API server log (on failure)
+        if: failure()
+        run: |
+          echo "::group::uvicorn log"
+          tail -n 400 "$RUNNER_TEMP/api-server.log" || echo "(no server log)"
+          echo "::endgroup::"
 
   # -----------------------------------------------------------------------
   # Web Build Check

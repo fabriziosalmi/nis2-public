@@ -1,5 +1,70 @@
 # Changelog
 
+## [2.6.19] - 2026-09-08
+
+Documentation corrections, plus one security fix the CI flake they were chasing
+turned out to be hiding.
+
+### Security
+
+- **A password-reset token could be spent twice.** Verifying that the token was
+  unused and marking it used were two statements with an await between them,
+  and the session commits in the dependency's teardown — which FastAPI runs
+  after the response has already been sent. Two requests carrying the same
+  reset link therefore both saw an unused token and both reset the password,
+  the later one deciding what it became. Fired concurrently against a real
+  server this succeeded on every attempt; sequential replay, which is what the
+  suite tested, was rejected correctly throughout. It is the shape by which a
+  leaked or forwarded reset link takes over an account whose owner believes
+  they have just used it. The token is now consumed by a conditional `UPDATE
+  ... WHERE used_at IS NULL` executed before the password is touched: the
+  second request blocks on the row lock, re-checks once the first commits,
+  matches nothing, and is rejected with the same generic 400 as unknown and
+  expired. Covered by an E2E test that fires both requests at once and was
+  confirmed to fail against the unfixed server.
+- The E2E job discarded the API server log, so a server-side misbehaviour had
+  to be re-derived from the client side alone. It is now captured and dumped on
+  failure.
+
+### Fixed
+
+- **Secrets guidance contradicted itself, in both languages.** The guides said
+  `NEXTAUTH_SECRET` was removed in 2.6.x and then, further down the same file,
+  told the operator to set it and rotate it every 90 days. `SECURITY.md` listed
+  it among the secrets to rotate while omitting `DATA_ENCRYPTION_KEY`, whose
+  loss makes every encrypted column unreadable with no restore path, and
+  `getting-started` sent a new user to generate a value nothing reads. The
+  rotation checklists now carry the item that matters: keep a copy of the
+  encryption key somewhere the database backup is not.
+- **The REST reference omitted 29 endpoints** — the whole notification-channels
+  router, TOTP enrolment, GDPR Art. 15 export and Art. 17 erasure, the asset
+  ownership-verification flow (the authorization control for scanning anything
+  at all), and the Art. 23 submission-recording endpoint the final-report
+  deadline is anchored on.
+- **The published wiki gave instructions that produce an unstartable stack.**
+  Its deployment pages handed the operator `DATABASE_URL` on the bootstrap
+  superuser role; since 2.6.x the API asserts its runtime role is neither
+  SUPERUSER nor BYPASSRLS and refuses to serve, because every RLS policy would
+  otherwise be decorative. Its API pages documented six schedule endpoints
+  under `/api/v1/scan-schedules`, a prefix the API has never served, one of
+  which does not exist at all. Both wiki languages corrected.
+- `.env.example`, described by the deployment guide as the authoritative
+  reference, was missing `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`,
+  `DATA_ENCRYPTION_KEY_PREVIOUS` and `LOG_LEVEL`.
+- README no longer marks the Red Button, the ACN export, the deadline countdown
+  and certificate analysis as having no UI: all four shipped one in 2.6.14. The
+  AI remediation copilot is now the only genuine "no UI" entry.
+
+### Changed
+
+- `scripts/api_surface.py` checks **paths**, not just per-router counts. Counts
+  cannot notice that a documented path is wrong or absent, which is how all of
+  the above stayed green. It also no longer skips routers that declare no
+  `prefix=`, which had made it blind to `acn.py`, `jwks.py` and `metrics.py` —
+  six endpoints, the entire ACN export surface among them. Both regression
+  shapes were verified to fail the check before being fixed. Already gated in
+  CI as `python -m scripts.api_surface --check`.
+
 ## [2.6.18] - 2026-09-08
 
 Tier C of the repository audit — the remaining findings, closed in four batches.

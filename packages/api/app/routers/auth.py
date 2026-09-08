@@ -1457,12 +1457,42 @@ async def reset_password(
             detail="Reset token is invalid or has expired",
         )
 
+    # Consume the token atomically, BEFORE touching the password.
+    #
+    # Reading `used_at is None` above and writing it here are two statements
+    # with an await between them, and the session commits in the dependency's
+    # teardown — which FastAPI runs after the response has already been sent.
+    # So two requests carrying the same link both saw an unused token and both
+    # reset the password, the later one deciding what it became. That is not a
+    # hypothetical: fired concurrently against a real server it succeeded on
+    # every attempt, and it is exactly how a leaked or forwarded reset link
+    # takes over an account whose owner believes they have just used it.
+    #
+    # The conditional UPDATE makes the check and the write one statement. The
+    # second request blocks on the row lock, re-evaluates `used_at IS NULL`
+    # once the first commits, matches nothing, and is rejected — with the same
+    # generic 400 as unknown and expired, so the concurrency of the loser is
+    # not itself an oracle.
+    consumed = await db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.id == token_row.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if consumed.rowcount != 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token is invalid or has expired",
+        )
+
     # Persist new password and bump the watermark — same dance as
     # change-password (see that route for the floor(now)+1 rationale).
     next_second = now.replace(microsecond=0) + timedelta(seconds=1)
     user.password_hash = pwd_context.hash(payload.new_password)
     user.password_changed_at = next_second
-    token_row.used_at = now
     await db.flush()
 
     # Audit log so an admin can see "password reset by token at T from IP".

@@ -1431,3 +1431,80 @@ class TestResetPassword:
                         f"{restore.status_code} {restore.text}"
                     )
             a.close()
+
+    def test_single_use_holds_under_concurrency(self):
+        """Two requests carrying the SAME reset link, fired together.
+
+        Sequential replay is covered above and passed throughout, because the
+        check and the write were two statements with an await between them and
+        the session commits in the dependency's teardown — which FastAPI runs
+        after the response has already been sent. Fired concurrently, both
+        requests read an unused token and both reset the password, the later
+        one deciding what it became: the way a leaked or forwarded reset link
+        takes over an account whose owner believes they have just used it.
+        Against the unfixed server this succeeded on every attempt.
+
+        Both requests ask for the SAME new password, so whichever one wins the
+        account ends in a known state and the cleanup below is deterministic.
+        """
+        import concurrent.futures
+        import time as _t
+
+        new_pw = "RaceSafe!2026"
+        password_was_rotated = False
+        a = httpx.Client(base_url=BASE_URL, timeout=10.0)
+        try:
+            forgot = a.post("/api/v1/auth/forgot-password", json={"email": EMAIL})
+            assert forgot.status_code == 204, f"{forgot.status_code}: {forgot.text}"
+
+            last = a.get("/api/v1/auth/debug/last-email")
+            assert last.status_code == 200
+            marker = "/reset-password?token="
+            text = last.json()["text"]
+            assert marker in text, f"reset link missing from email: {text!r}"
+            token = text.split(marker, 1)[1].split()[0].strip()
+
+            def attempt():
+                # A separate client each: sharing one connection pool would let
+                # httpx serialise the two requests and hide the race.
+                with httpx.Client(base_url=BASE_URL, timeout=10.0) as c:
+                    return c.post(
+                        "/api/v1/auth/reset-password",
+                        json={"token": token, "new_password": new_pw},
+                    ).status_code
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(attempt), pool.submit(attempt)]
+                codes = sorted(f.result() for f in futures)
+
+            assert codes.count(204) == 1, (
+                f"single-use violated under concurrency: {codes} — exactly one "
+                f"request may consume the token"
+            )
+            assert codes.count(400) == 1, f"unexpected status pair: {codes}"
+            password_was_rotated = True
+
+            # The winner really did rotate the password: if the successful
+            # request had been rolled back, this login would 401.
+            _t.sleep(1.1)  # cross the second boundary: iat > password_changed_at
+            login_new = a.post(
+                "/api/v1/auth/login", json={"email": EMAIL, "password": new_pw}
+            )
+            assert login_new.status_code == 200, (
+                f"the winning reset did not persist: "
+                f"{login_new.status_code}: {login_new.text}"
+            )
+        finally:
+            if password_was_rotated:
+                csrf_a = a.cookies.get("csrf_token")
+                if csrf_a:
+                    restore = a.post(
+                        "/api/v1/auth/change-password",
+                        json={"current_password": new_pw, "new_password": PASSWORD},
+                        headers={"X-CSRF-Token": csrf_a},
+                    )
+                    assert restore.status_code == 204, (
+                        f"failed to restore canonical password: "
+                        f"{restore.status_code} {restore.text}"
+                    )
+            a.close()
