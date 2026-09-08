@@ -1,5 +1,66 @@
 # Changelog
 
+## [2.6.20] - 2026-09-08
+
+### Fixed
+
+- **The API reported success before the write was visible.** The request's
+  session is committed in the teardown of a FastAPI dependency with `yield`,
+  which runs *after* the response has been sent. A client that acts on the
+  response immediately — which is what a client does — could beat that commit
+  and observe the state from before it. The E2E server log, captured for the
+  first time in 2.6.19, showed two shapes of it: registering and then creating
+  an organisation with the token just issued returned `401 "User not found"`,
+  and following a reset link straight after asking for one returned "invalid or
+  expired" for a token that had just been minted. Same cause as the single-use
+  race fixed in 2.6.19, which was the third shape: that fix made the token
+  consumption atomic, this one makes the response honest. `register`,
+  `forgot-password` (before the mail leaves, since from that moment someone may
+  hold a working link) and `reset-password` now commit before returning.
+
+  The pattern exists on every write handler. Closing it in general means moving
+  the session's lifecycle inside the request, which is deliberately left as a
+  separate change.
+
+### Documentation
+
+- **The Italian REST reference had been stale since 2026-05-05**, missing 37
+  endpoints — the whole notification-channels router, TOTP enrolment, the GDPR
+  export and erasure, the asset ownership-verification flow and the Art. 23
+  submission-recording endpoint — and documenting two governance paths the API
+  has never served. The path checker added in 2.6.19 read only the English file
+  and reported the surface as documented throughout. It now checks every
+  reference, in both directions (served but undescribed, described but not
+  served), and no longer skips `mcp_server.py`.
+- **The documented first run could not work.** Both the guides and the wiki told
+  a new user to add an asset and then scan it; a new asset is `unverified` and
+  `POST /scans` refuses it with a 403. Usage went further and claimed an asset
+  "is immediately available for scanning". Both now cover proving authority over
+  a target, and why that gate exists.
+- The wiki's own errors were corrected rather than carried over: it had the
+  compliance engine deducting 40 for a critical finding (the code deducts 50)
+  and averaging per article (it averages per host), and gave the same definition
+  for new and resolved findings in a scan comparison.
+
+### Changed
+
+- **The GitHub wiki is rendered from `docs/`, not maintained by hand.**
+  `scripts/sync_wiki.py` generates all 24 pages plus Home, rewrites in-docs
+  links to wiki pages and stamps each page with its source. `make wiki-sync`
+  republishes; `make wiki-check` and a push-only CI step fail when the published
+  wiki no longer matches. Push-only because a contributor cannot publish the
+  wiki, and failing their PR for it would blame them for something they cannot
+  fix.
+- Nothing was dropped in the collapse: where the wiki was the richer writing,
+  its content moved into `docs/` — the Art. 23 deadline-alert flow, how RLS
+  actually binds, the authentication model and security-control summary, RS256
+  key generation and rotation, `ENVIRONMENT`, troubleshooting, database
+  operations, per-check NIS2 mappings, request-body examples, pagination and SDK
+  examples. The compliance matrix, which existed only in the wiki, is now
+  `docs/reference/compliance-matrix.md` in both languages and on the docs site.
+- A test pins the Art. 21 statuses in the README against both compliance
+  matrices, so those three copies of the same claim cannot drift apart.
+
 ## [2.6.19] - 2026-09-08
 
 Documentation corrections, plus one security fix the CI flake they were chasing
