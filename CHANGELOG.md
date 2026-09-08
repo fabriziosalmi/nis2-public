@@ -1,5 +1,97 @@
 # Changelog
 
+## [2.6.15] - 2026-09-08
+
+Eleven defects found by a 20-category audit of this repository, all of them
+cases where two things that had to agree did not, and nothing made the
+disagreement visible.
+
+### 🐛 A compliance score now requires evidence
+
+The engine returned **100 when no host was alive**. The API rebuilds the scanner
+configuration from a JSONB column with a silent default for every key, so an
+empty or damaged `config_snapshot` yielded no targets, no targets yielded no live
+host, and the result was committed as a *completed* scan with a perfect score —
+shown on the dashboard, folded into the Art. 21 matrix and printed in the
+archival PDF/A. Losing a scan's own configuration was indistinguishable from
+perfect compliance.
+
+`total_score` is now `None` when nothing was assessed, with a reason that
+separates "no targets were resolved" from "targets were probed and none
+responded" because the operator's next action differs. The scan task records that
+as **failed** with the reason, rather than completed.
+
+### 🐛 A check that could not run is no longer a violation
+
+- **A missing headless browser accused every Italian business of three
+  breaches.** The legal checker returned `{}` when Playwright could not launch;
+  the scanner assigned it to `result['legal']`; the compliance engine's guard was
+  satisfied by the empty dict and read the absent keys as a missing VAT number, a
+  missing privacy policy and a missing cookie banner. On any host where
+  `playwright install` had not been run, every scanned Italian site was accused
+  of three violations never tested for. The failure now returns an explicit
+  marker and the engine raises one INFO finding saying the checks did not run.
+- **The obsolete-protocol probe in `certificate.py` could never fire.** It built
+  a plain SSLContext with no cipher override and annotated its bare except
+  `pass  # Protocol not supported — good`. On Debian bookworm OpenSSL refuses
+  TLS 1.0/1.1 client-side, so the handshake died locally and every host came back
+  clean — a server genuinely serving TLS 1.0 scored 100. This is the identical
+  defect fixed in `scanner.py`; the second copy was missed. Both now probe with
+  `ALL:@SECLEVEL=0`, and a test pins that they agree.
+
+### 🐛 Art. 23: one definition of a closed incident
+
+`_CLOSED_STATUSES` existed twice with different contents. An incident set to
+`eradicated` was filtered out by the alerting task as closed while the API
+computed `is_open=True` for the same row, counted it in `open_count` and marked
+its deadlines breached — the dashboard showed an open, breached statutory
+obligation and no alert was ever sent for it. The set now lives with the model
+and both consumers import it.
+
+### 🔒 The MCP certificate tool discarded its own validation
+
+It called `validate_domain_pinned`, threw the result away, and handed the
+analyzer the hostname — which resolved again, reopening the DNS-rebinding window
+the validation exists to close. A domain answering a public address to the
+checking lookup and `169.254.169.254` to the connecting one got a TLS handshake
+against the internal address and its certificate back in the response. It now
+passes `pinned_ip`, as the REST handler already did.
+
+### 🚀 Deployment
+
+- **A failed migration no longer starts the API.** `entrypoint.sh` logged a
+  warning and carried on, letting `create_all` patch what it could — so a
+  deployment whose migration failed served traffic on a schema matching neither
+  release, and reported itself healthy. It now exits 1.
+- **The rate limiter is shared.** In-process counters meant four gunicorn workers
+  turned `10/minute` into forty, and a restart cleared them — making the response
+  to suspected abuse the same action that removed the protection. Now backed by
+  the Redis every deployment already runs, with in-memory fallback so a Redis
+  outage degrades the control instead of denying every login.
+- **The connection pool fits inside the database.** The pool is per worker, so
+  20 + 10 with four workers demanded 120 connections against a stock
+  `max_connections` of 100, at which point Postgres refuses outright and Caddy
+  stops routing. Now 10 + 5, configurable, with the arithmetic written next to
+  the worker count.
+
+### 🧪 Gates and tests
+
+- **ruff** runs over `packages/api/`, `packages/scanner/` and `scripts/` instead
+  of two source directories. 113 findings were hiding in tests and tooling under
+  the project's own rule set. All fixed.
+- **npm audit** covers the repository root as well as `packages/web`. That gap is
+  why release 2.6.10, cut specifically to pin `nanoid`, left the same advisory
+  open in the docs-build lockfile; `nanoid` is now pinned through `overrides` and
+  the root audits clean.
+- **A test that could not fail** — `test_enable_rls_for_all_tenant_tables`
+  asserted a loop-invariant string, so removing RLS for any single table left it
+  green, on the control that stops one customer reading another's findings. It
+  now parses the migration's own `TENANT_TABLES` and compares sets.
+- **A flaky test** — the TLS probe test failed about one run in twelve because
+  its server accepted connections serially with no socket timeout while
+  `check_tls` opens four. One thread per connection plus a timeout; 25
+  consecutive runs green.
+
 ## [2.6.14] - 2026-09-07
 
 ### 🚨 Art. 23 — the CSIRT Red Button now starts the clock
