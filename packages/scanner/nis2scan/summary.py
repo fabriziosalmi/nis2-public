@@ -132,7 +132,16 @@ class SummaryGenerator:
             "critical_count": critical_count,
             "high_count": high_count,
             "score": report.total_score,
-            "status": "CRITICAL" if report.total_score < 50 else ("IMPROVEMENT NEEDED" if report.total_score < 80 else "GOOD")
+            # None means nothing was assessed, which is not a status on the
+            # CRITICAL/GOOD scale — it is the absence of a measurement, and
+            # comparing it against 50 used to raise TypeError once the engine
+            # stopped inventing a 100.
+            "status": (
+                "NOT ASSESSED" if report.total_score is None
+                else "CRITICAL" if report.total_score < 50
+                else "IMPROVEMENT NEEDED" if report.total_score < 80
+                else "GOOD"
+            )
         }
 
     def _generate_action_plan(self, findings: List[Any]) -> List[Dict[str, str]]:

@@ -521,18 +521,48 @@ class CertificateAnalyzer:
         except Exception:
             pass
 
+    # Cipher string for the obsolete-protocol probe. Debian bookworm, the base
+    # image this ships on, sets OpenSSL's default security level to 2, which
+    # refuses TLS 1.0/1.1 CLIENT-side regardless of minimum_version — the
+    # handshake dies locally with NO_CIPHERS_AVAILABLE before a byte reaches the
+    # target. Without this the probe below could never succeed against any host
+    # on earth, and its bare `except` annotated "Protocol not supported — good"
+    # turned that permanent local failure into a clean bill of health. The same
+    # defect was found and fixed in nis2scan/scanner.py; this copy was missed.
+    #
+    # Scoped to the throwaway probe context only; it never touches the
+    # connection used to read the certificate.
+    _WEAK_PROBE_CIPHERS = "ALL:@SECLEVEL=0"
+
     async def _check_weak_protocols(self, info: CertificateInfo) -> None:
-        """Test for TLS 1.0 and 1.1 support."""
+        """Test for TLS 1.0 and 1.1 support.
+
+        Distinguishes three outcomes, where there used to be two: the protocol
+        is offered, the protocol is refused by the target, or the probe could
+        not run here. Only the first is a finding, and only the first two are
+        evidence about the target.
+        """
         for version_name, version_enum in [
             ("TLSv1.0", ssl.TLSVersion.TLSv1),
             ("TLSv1.1", ssl.TLSVersion.TLSv1_1),
         ]:
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            ctx.minimum_version = version_enum
+            ctx.maximum_version = version_enum
             try:
-                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                ctx.minimum_version = version_enum
-                ctx.maximum_version = version_enum
+                ctx.set_ciphers(self._WEAK_PROBE_CIPHERS)
+            except ssl.SSLError:
+                # This OpenSSL build cannot offer the protocol at all, so the
+                # question is undetermined rather than answered.
+                info.errors.append(
+                    f"{version_name} support undetermined: the local OpenSSL build "
+                    f"refuses to offer it, so the target was never asked."
+                )
+                continue
+
+            try:
                 conn = asyncio.open_connection(
                     info.connect_ip or info.domain,
                     info.port,
@@ -542,14 +572,18 @@ class CertificateAnalyzer:
                 reader, writer = await asyncio.wait_for(conn, timeout=3)
                 writer.close()
                 await writer.wait_closed()
-                info.weak_protocols.append(version_name)
-                info.findings.append({
-                    "severity": "HIGH",
-                    "message": f"Obsolete protocol {version_name} still supported",
-                    "remediation": f"Disable {version_name} in your web server configuration",
-                })
             except Exception:
-                pass  # Protocol not supported — good
+                # The handshake was attempted and did not complete. With a
+                # permissive cipher string in place this is genuine evidence
+                # that the target does not offer the protocol.
+                continue
+
+            info.weak_protocols.append(version_name)
+            info.findings.append({
+                "severity": "HIGH",
+                "message": f"Obsolete protocol {version_name} still supported",
+                "remediation": f"Disable {version_name} in your web server configuration",
+            })
 
     def _calculate_score(self, info: CertificateInfo) -> None:
         """Calculate overall certificate health score (0-100)."""

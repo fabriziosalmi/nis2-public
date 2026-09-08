@@ -110,7 +110,32 @@ async def _run_scan(scan_id: str, org_id: str | None = None) -> dict:
                 )
                 db.add(db_finding)
 
-            # Update scan summary
+            # Update scan summary.
+            #
+            # A report with no score assessed nothing: either the stored
+            # config_snapshot yielded no targets, or every target was probed and
+            # none answered. Recording that as `completed` with a score is what
+            # turned a lost configuration into a perfect compliance result — the
+            # engine used to return 100 for it, and the dashboard, the Art. 21
+            # matrix and the PDF/A dossier all read that number. It is a failed
+            # scan, and it says why.
+            if report.total_score is None:
+                scan.status = "failed"
+                scan.error_message = (
+                    report.not_assessed_reason
+                    or "Nothing was assessed by this scan."
+                )[:4096]
+                scan.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+                logger.warning(
+                    "Scan %s assessed nothing: %s", scan_id, scan.error_message
+                )
+                return {
+                    "status": "failed",
+                    "scan_id": scan_id,
+                    "error": scan.error_message,
+                }
+
             scan.status = "completed"
             scan.total_score = report.total_score
             scan.hosts_scanned = report.stats.get("analyzed_hosts", 0)

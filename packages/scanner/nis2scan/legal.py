@@ -191,7 +191,23 @@ class LegalChecker:
                     )
                 except Exception as e:
                     logger.error(f"Failed to launch Playwright browser: {e}. Did you run 'playwright install'?")
-                    return {}
+                    # Not an empty result — an explicit "did not run".
+                    #
+                    # Returning {} let the caller store `result['legal'] = {}`,
+                    # and the compliance engine's guard (`if 'legal' in
+                    # http_data`) was satisfied by the empty dict. It then read
+                    # the absence of `piva_found` as a missing VAT number, and
+                    # the same for the privacy policy and the cookie banner. A
+                    # scanner host without the browser installed therefore
+                    # accused every Italian business it scanned of three
+                    # consumer-law and GDPR breaches it had never tested for.
+                    return {
+                        "unavailable": True,
+                        "unavailable_reason": (
+                            "Legal checks did not run: the headless browser could not "
+                            "be launched. Run `playwright install` on the scanner host."
+                        ),
+                    }
 
                 # New page; ignore HTTPS errors (the pinned host may serve an
                 # IP-mismatched cert). Downloads are off by default.

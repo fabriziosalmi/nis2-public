@@ -69,7 +69,13 @@ class ComplianceFinding:
 
 @dataclass
 class ComplianceReport:
-    total_score: int
+    # None when nothing was assessed. A score is a claim about a posture, and a
+    # scan that reached no live host has observed no posture to make a claim
+    # about — it used to return 100, which is the most reassuring number
+    # available and the one least supported by evidence. An empty or damaged
+    # config_snapshot yielded no targets, no host was probed, and the scan was
+    # recorded as fully compliant.
+    total_score: Optional[int]
     findings: List[ComplianceFinding] = field(default_factory=list)
     stats: Dict[str, int] = field(default_factory=dict)
     checked_items: List[str] = field(default_factory=list)
@@ -78,6 +84,10 @@ class ComplianceReport:
     compliance_matrix: Dict[str, str] = field(default_factory=dict)  # Art 21 items -> Status
     assets: List[Dict[str, Any]] = field(default_factory=list)  # Inventory
     scan_id: str = "N/A" # Unique Scan ID
+    # Why no score, when there is none. Read by the API to decide whether the
+    # scan completed or failed, and by the report so the empty cell has a
+    # caption instead of being mistaken for a rendering fault.
+    not_assessed_reason: str = ""
 
 class ComplianceEngine:
     def __init__(self, config):
@@ -723,6 +733,28 @@ class ComplianceEngine:
             for port, http_data in host.http_info.items():
                 if 'legal' in http_data:
                     legal = http_data['legal']
+                    # A check that could not run is not a check that failed.
+                    # The browser launch returns an explicit marker now; without
+                    # this guard an empty result read as three confirmed
+                    # violations against the scanned business.
+                    if legal.get('unavailable'):
+                        f = ComplianceFinding(
+                            severity="INFO",
+                            category="LEGAL COMPLIANCE",
+                            message="Italian legal checks not assessed",
+                            rationale=(
+                                legal.get('unavailable_reason')
+                                or "The legal checks could not be performed on this host."
+                            ),
+                            target=f"{host.ip}:{port}",
+                            reference="NIS2 Art. 21.2.f (Effectiveness assessment)",
+                            technical_detail="P.IVA, privacy policy and cookie banner were not evaluated.",
+                            remediation="Install the headless browser on the scanner host and re-run the scan.",
+                            remediation_cost="Low",
+                            remediation_effort="Low",
+                        )
+                        host_findings.append(f)
+                        continue
                     italian = legal.get('italian_compliance', {})
 
                     # P.IVA check (for Italian sites)
@@ -928,10 +960,27 @@ class ComplianceEngine:
             all_findings.extend(host_findings)
 
         # Average Score Calculation
+        # A score requires at least one host to have been assessed. The two
+        # ways that fails are different and both used to score 100:
+        #   analyzed_hosts == 0  the scan had no targets at all, which means
+        #                        the stored configuration was empty or damaged
+        #   active_hosts   == 0  targets existed and none answered
+        # Neither is evidence of compliance.
+        not_assessed_reason = ""
         if stats['active_hosts'] > 0:
             final_score = int(total_host_scores / stats['active_hosts'])
+        elif stats['analyzed_hosts'] == 0:
+            final_score = None
+            not_assessed_reason = (
+                "No targets were resolved for this scan, so nothing was assessed. "
+                "Check the assets attached to it."
+            )
         else:
-            final_score = 100
+            final_score = None
+            not_assessed_reason = (
+                f"{stats['analyzed_hosts']} target(s) were probed and none responded, "
+                f"so nothing was assessed."
+            )
 
         # Add 'DNS Security' to checked items
         if "DNS Security (DNSSEC, AXFR)" not in checked_items:
@@ -986,6 +1035,7 @@ class ComplianceEngine:
         exec_summary = summary_gen.generate(
             ComplianceReport(
                 total_score=final_score,
+                not_assessed_reason=not_assessed_reason,
                 findings=all_findings,
                 stats=stats,
                 checked_items=checked_items,
@@ -997,6 +1047,7 @@ class ComplianceEngine:
 
         return ComplianceReport(
             total_score=final_score,
+            not_assessed_reason=not_assessed_reason,
             findings=all_findings,
             stats=stats,
             checked_items=checked_items,

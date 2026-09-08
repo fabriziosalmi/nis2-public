@@ -154,3 +154,45 @@ class TestCertificateTransparencyIsTriState:
         source = inspect.getsource(CertificateAnalyzer._query_ct_logs)
         assert "info.errors.append" in source
         assert "undetermined" in source.lower()
+
+
+class TestTheObsoleteProtocolProbeCanActuallyFire:
+    """The probe annotated its own bare except with the conclusion.
+
+    `pass  # Protocol not supported — good` asserted that a failed handshake
+    proved the target refuses TLS 1.0/1.1. On Debian bookworm, the base image
+    this ships on, OpenSSL's default security level refuses those versions
+    client-side, so the handshake died locally before a byte reached the target
+    and the probe returned "clean" for every host on earth. The identical defect
+    was diagnosed and fixed in nis2scan/scanner.py; this copy was missed, and a
+    server genuinely serving TLS 1.0 scored 100.
+    """
+
+    def test_the_probe_offers_a_permissive_cipher_string(self):
+        """Without this the local OpenSSL never offers the protocol."""
+        assert CertificateAnalyzer._WEAK_PROBE_CIPHERS == "ALL:@SECLEVEL=0"
+
+    def test_an_unavailable_probe_is_recorded_rather_than_read_as_absence(self):
+        """The three outcomes must be distinguishable: offered, refused by the
+        target, and not asked. The third used to be indistinguishable from the
+        second."""
+        import inspect
+
+        source = inspect.getsource(CertificateAnalyzer._check_weak_protocols)
+        assert "info.errors.append" in source
+        assert "undetermined" in source
+
+    def test_the_conclusion_is_no_longer_asserted_in_a_comment(self):
+        import inspect
+
+        source = inspect.getsource(CertificateAnalyzer._check_weak_protocols)
+        assert "Protocol not supported" not in source
+
+    def test_it_matches_the_sibling_implementation(self):
+        """Two copies of a probe is how one of them stayed broken. Until they
+        are merged, pin that they agree on the cipher string."""
+        from nis2scan.scanner import Scanner
+
+        assert (
+            CertificateAnalyzer._WEAK_PROBE_CIPHERS == Scanner._WEAK_PROBE_CIPHERS
+        )

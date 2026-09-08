@@ -38,13 +38,23 @@ class Reporter:
     def print_to_console(self, report: ComplianceReport):
         self.console.print("\n")
 
-        score_color = "red"
-        if report.total_score > 80:
-            score_color = "green"
-        elif report.total_score > 50:
-            score_color = "yellow"
+        # A score of None means nothing was assessed. Print that as its own
+        # state rather than colouring an absent number red, and carry on into
+        # the statistics below — the host counts are exactly what the operator
+        # needs to see in order to understand why there is no score.
+        if report.total_score is None:
+            headline = "[bold yellow]not assessed[/bold yellow]"
+            if report.not_assessed_reason:
+                headline += f"\n{report.not_assessed_reason}"
+        else:
+            score_color = "red"
+            if report.total_score > 80:
+                score_color = "green"
+            elif report.total_score > 50:
+                score_color = "yellow"
+            headline = f"[bold {score_color}]{report.total_score}/100[/bold {score_color}]"
 
-        self.console.print(Panel(f"[bold blue]NIS2 Compliance Report[/bold blue]\nScore: [bold {score_color}]{report.total_score}/100[/bold {score_color}]", expand=False))
+        self.console.print(Panel(f"[bold blue]NIS2 Compliance Report[/bold blue]\nScore: {headline}", expand=False))
 
         # Stats Table
         table = Table(title="Scan Statistics")
@@ -146,7 +156,10 @@ class Reporter:
         path = os.path.join(self.output_dir, filename)
         with open(path, "w") as f:
             f.write("# NIS2 Compliance Report\n")
-            f.write(f"**Compliance Score**: {report.total_score}/100\n\n")
+            if report.total_score is None:
+                f.write(f"**Compliance Score**: not assessed — {report.not_assessed_reason}\n\n")
+            else:
+                f.write(f"**Compliance Score**: {report.total_score}/100\n\n")
 
             f.write("## Executive Summary\n")
             f.write(f"{report.executive_summary}\n\n")

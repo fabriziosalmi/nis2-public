@@ -51,7 +51,12 @@ class PrometheusExporter:
         """Updates internal metrics based on the report data."""
 
         # Update Score
-        self.compliance_score.labels(profile=self.profile).set(report.total_score)
+        # Leave the gauge untouched when nothing was assessed. Setting it to 0
+        # would read as "totally non-compliant" and setting it to 100 as
+        # "perfect"; a stale value with no fresh sample is the honest signal,
+        # and it is what an alert on staleness is built to notice.
+        if report.total_score is not None:
+            self.compliance_score.labels(profile=self.profile).set(report.total_score)
 
         # Update Host Count
         self.analyzed_hosts.labels(profile=self.profile).set(report.stats.get('analyzed_hosts', 0))
