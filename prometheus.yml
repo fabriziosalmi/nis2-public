@@ -27,20 +27,25 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # FastAPI doesn't expose a /metrics endpoint by default; this scrape
-  # job is here so that the moment we wire prometheus-fastapi-instrumentator
-  # (or equivalent) the dashboards already see the series. Without it the
-  # job would be missing rather than empty, which is harder to diagnose.
+  # The API exposes /metrics as of 2.6.18. Until then this job pointed at an
+  # endpoint that did not exist, so a deployment came up with two of its three
+  # targets permanently red — no application telemetry at all, and a monitoring
+  # system that trains whoever looks at it to ignore red targets.
+  #
+  # Series worth alerting on:
+  #   nis2_db_pool_connections_in_use / nis2_db_pool_capacity
+  #       Per worker. Four gunicorn workers each hold their own pool, so
+  #       saturation used to arrive with no warning: Postgres refuses the
+  #       connection, readiness fails, and Caddy stops routing.
+  #   rate(nis2_http_requests_total{status=~"5.."}[5m])
+  #   histogram_quantile(0.95, rate(nis2_http_request_duration_seconds_bucket[5m]))
   - job_name: nis2-api
     metrics_path: /metrics
     static_configs:
       - targets: ["api:8000"]
 
-  # Node.js exposes nothing useful at /metrics in standalone mode either,
-  # but the same future-proofing argument applies. Removing this entry is
-  # cheaper than adding it later when we decide we want browser-side
-  # web-vitals reporting.
-  - job_name: nis2-web
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["web:3000"]
+  # Deliberately NOT scraping the web service. Next.js in standalone mode
+  # exposes nothing at /metrics, and a job that can only ever fail is worse than
+  # no job: it is a permanently red target that teaches an operator to stop
+  # reading the target list. Re-add it alongside an endpoint that answers, not
+  # in anticipation of one.

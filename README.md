@@ -326,22 +326,26 @@ as a satisfied measure is worse than one that omits it.
 
 ## API surface
 
+<!-- Checked against the routers by `scripts/api_surface.py --check` in CI: these
+     counts had drifted, understating the surface by fourteen endpoints, and the
+     table gave no hint that it was capable of being wrong. -->
+
 | Router | Endpoints | Purpose |
 |--------|-----------|---------|
-| `/api/v1/auth` | 13 | JWT authentication, registration, change-password, forgot/reset password, **switch active organization**, TOTP setup/verify/disable |
+| `/api/v1/auth` | 16 | JWT authentication, registration, change-password, forgot/reset password, **switch active organization**, TOTP setup/verify/disable |
 | `/api/v1/scans` | 8 | Scan management, results, comparison. Read endpoints accept API-key Bearer auth |
 | `/api/v1/findings` | 5 | Finding lifecycle (open/acknowledged/resolved). Read endpoints accept API-key Bearer auth |
-| `/api/v1/assets` | 6 | Asset inventory management. Read endpoints accept API-key Bearer auth |
+| `/api/v1/assets` | 9 | Asset inventory management. Read endpoints accept API-key Bearer auth |
 | `/api/v1/api-keys` | 3 | Long-lived `nis2_*` Bearer tokens for CI/CD pipelines (raw value shown once) |
 | `/api/v1/audit-logs` | 1 | Read-only org-scoped audit trail (90-day retention) |
 | `/api/v1/organizations` | 8 | Org settings, members, role management, **self-serve org creation** |
-| `/api/v1/vendors` | 5 | Vendor risk management (Art. 18) |
+| `/api/v1/vendors` | 9 | Vendor risk management (Art. 18) |
 | `/api/v1/bia` | 6 | Business Impact Analysis |
-| `/api/v1/incidents` | 6 | CSIRT submission artefact (table `incident_reports`) |
-| `/api/v1/incident-monitor` | 5 | Art. 23 incident lifecycle — declare/revise/close, live 24h/72h/1-month countdowns |
-| `/api/v1/governance` | 8 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
+| `/api/v1/incidents` | 7 | CSIRT submission artefact (table `incident_reports`) |
+| `/api/v1/incident-monitor` | 6 | Art. 23 incident lifecycle — declare/revise/close, live 24h/72h/1-month countdowns |
+| `/api/v1/governance` | 9 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
 | `/api/v1/certificates` | 3 | Deep certificate analysis. No dashboard screen |
-| `/api/v1/remediation` | 4 | Playbooks, AI copilot, cost estimation. No dashboard screen |
+| `/api/v1/remediation` | 5 | Playbooks, AI copilot, cost estimation. No dashboard screen |
 | `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema). No dashboard screen |
 | `/api/v1/deadlines` | 1 | Compliance deadline countdown. No dashboard screen |
 | `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload. No dashboard button |

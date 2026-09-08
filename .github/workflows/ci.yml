@@ -322,6 +322,16 @@ jobs:
             exit 1
           fi
           echo "OK: No bare except: found"
+      # The README's API-surface table is what a reader uses to enumerate the
+      # reachable surface before an integration or a security review. It had
+      # drifted, understating it by fourteen endpoints — including the asset
+      # ownership-verification flow and the Art. 23 submission-recording
+      # endpoint, both of which change what a caller can do to a tenant's data.
+      - name: README API-surface table matches the routers
+        # stdlib only, so the runner's default interpreter is enough — this job
+        # deliberately does not set up Python.
+        run: python3 -m scripts.api_surface --check
+
       - name: No CORS wildcard
         run: |
           if grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py; then

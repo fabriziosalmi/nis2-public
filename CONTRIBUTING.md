@@ -18,9 +18,15 @@ make dev
 # Run tests
 make test
 
-# Lint Python code
-cd packages/api && ruff check .
-cd packages/scanner && ruff check .
+# Lint Python code — exactly what CI runs.
+#
+# Not a bare `ruff check .`: that uses ruff's DEFAULT rule set and returns over a
+# thousand findings here, overwhelmingly pyupgrade suggestions, import ordering,
+# and B008, which is a known false positive for FastAPI's Depends() in parameter
+# defaults. None of it is what the gate enforces, and a first contribution that
+# opens with a wall of output the maintainer does not want teaches you to ignore
+# lint entirely.
+make lint
 
 # Build the frontend
 cd packages/web && npm run build

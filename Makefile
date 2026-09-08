@@ -235,8 +235,9 @@ lint:
 ifeq ($(strip $(PYTHON)),)
 	$(error $(PYTHON_NOT_FOUND_MSG))
 endif
-	$(PYTHON) -m ruff check packages/scanner/nis2scan/ --select=E,W,F --ignore=E501
-	$(PYTHON) -m ruff check packages/api/app/ --select=E,W,F --ignore=E501
+	$(PYTHON) -m ruff check packages/scanner/ --select=E,W,F --ignore=E501
+	$(PYTHON) -m ruff check packages/api/ --select=E,W,F --ignore=E501
+	$(PYTHON) -m ruff check scripts/ --select=E,W,F --ignore=E501
 
 # `check` = the CI gates that need no database: lint, the policy greps, and the
 # dependency audits. pip-audit is best-effort (skipped if not installed).

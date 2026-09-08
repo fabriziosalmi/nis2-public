@@ -11,6 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.logging_config import configure_logging
 from app.database import (
     assert_db_role_rls_safe,
     ensure_schema,
@@ -19,6 +20,7 @@ from app.database import (
 from app.middleware.audit import AuditMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.identity import IdentityMiddleware
+from app.routers.metrics import MetricsMiddleware
 from app.routers import (
     acn,
     api_keys,
@@ -32,6 +34,7 @@ from app.routers import (
     health,
     incident_monitor,
     incidents,
+    metrics,
     notifications,
     organizations,
     remediation,
@@ -143,6 +146,9 @@ def _resolve_cors_origins() -> list[str]:
 
 
 def create_app() -> FastAPI:
+    # Before anything else: every log line from here on carries the request id.
+    configure_logging()
+
     application = FastAPI(
         title="NIS2 Compliance Platform API",
         description="API for the NIS2 compliance scanning and reporting platform",
@@ -161,6 +167,10 @@ def create_app() -> FastAPI:
     # populates. CSRF stays between Identity and Audit so 403s on missing
     # CSRF still produce an audit-log entry on retry success.
     application.add_middleware(SecurityHeadersMiddleware)
+    # Outside SecurityHeaders and inside CORS: a request rejected by CSRF or by
+    # a 401 is still a request, and an error rate that omits rejections is the
+    # one an operator would most want during an incident.
+    application.add_middleware(MetricsMiddleware)
     application.add_middleware(AuditMiddleware)
     application.add_middleware(CSRFMiddleware)
     application.add_middleware(IdentityMiddleware)
@@ -183,6 +193,10 @@ def create_app() -> FastAPI:
     application.include_router(assets.router, prefix="/api/v1")
     application.include_router(organizations.router, prefix="/api/v1")
     application.include_router(health.router, prefix="/api/v1")
+    # No /api/v1 prefix: Prometheus has been configured to scrape /metrics on
+    # this service since the monitoring stack shipped, and that scrape job has
+    # been failing ever since because nothing answered there.
+    application.include_router(metrics.router, prefix="")
     application.include_router(reports.router, prefix="/api/v1")
     application.include_router(schedules.router, prefix="/api/v1")
     application.include_router(incidents.router, prefix="/api/v1")

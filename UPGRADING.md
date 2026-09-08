@@ -208,3 +208,75 @@ docker compose exec api alembic current       # -> 006_add_totp_recovery_codes (
 
 Then register / log in once and confirm the worker logs are clean. If you adopted
 the `nis2_app` role, also run the isolation proof from §3's runbook.
+
+Note that `alembic current` should report the head revision, not `006` — that
+example predates several revisions. `docker compose exec api alembic heads` tells
+you what head is for the version you are running.
+
+---
+
+## 5. Going back
+
+The forward path was documented and the reverse was one sentence saying the dump
+was your rollback. That is not a procedure, and its first execution should not be
+during an incident. This is.
+
+**Before you start, know what a rollback costs.** Restoring the §0 dump discards
+everything written since you took it — and for an incident-tracking product that
+may include the records created during the incident that prompted the rollback.
+Prefer rolling the application back without touching the data where you can.
+
+### 5a. Application only (no schema change between the two versions)
+
+The safe case, and the common one for a patch release.
+
+```bash
+git checkout v<previous>              # the tag you came from
+make prod                             # rebuilds and recreates the containers
+```
+
+Migrations are additive in this project — new columns arrive nullable or with a
+server default — so an older application generally reads a newer schema without
+error. It will not *see* the newer columns, which is the point.
+
+### 5b. Application and schema
+
+```bash
+# 1. What is on the database now, and what the old code expects.
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic current
+
+# 2. Downgrade to the revision that shipped with the version you are returning
+#    to. Read the migration first: `downgrade()` is written for every revision in
+#    this project, but a downgrade that drops a column drops its data.
+docker compose -f infra/docker/docker-compose.prod.yml exec api \
+  alembic downgrade <revision>
+
+# 3. Then the application.
+git checkout v<previous> && make prod
+```
+
+### 5c. Restore from the dump
+
+The last resort, when the schema cannot be walked back cleanly.
+
+```bash
+docker compose -f infra/docker/docker-compose.prod.yml stop api celery-worker celery-beat
+docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+  psql -U "${POSTGRES_USER:-nis2}" -d postgres -c \
+  "drop database ${POSTGRES_DB:-nis2}; create database ${POSTGRES_DB:-nis2}"
+docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-nis2}" -d "${POSTGRES_DB:-nis2}" < backup-YYYY-MM-DD.sql
+git checkout v<previous> && make prod
+```
+
+The dump carries the `alembic_version` stamp, so the restored database comes back
+at the revision it was taken at and the application starts against it without a
+migration. CI exercises exactly this — dump, restore, verify the row count, check
+the stamp, migrate — on every commit, so the procedure is known to work rather
+than merely written down.
+
+### What is not covered
+
+The reports volume is not in the dump. Generated dossiers are derived artefacts
+of scan rows and can be regenerated; if you treat archived PDFs as records, back
+that volume up separately.

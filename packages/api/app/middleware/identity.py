@@ -37,6 +37,23 @@ current_org_id: ContextVar[Optional[uuid.UUID]] = ContextVar(
     "current_org_id", default=None
 )
 
+# One identifier per request, carried through the same mechanism as the identity
+# above and injected into every log record by app.logging_config.
+#
+# There was none. Production runs four gunicorn workers writing to one stream and
+# a Celery worker writing asynchronously to another, so relating the records of a
+# single operation was possible only by timestamp and guesswork — and the
+# machinery to fix it was already here, being used to carry identity into the
+# audit table. A user reporting "it failed at 14:02" had nothing an operator
+# could search for.
+#
+# Accepted from the caller when it looks like one, so a request traced through a
+# reverse proxy or a client SDK keeps its identifier; generated otherwise.
+request_id: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+
+REQUEST_ID_HEADER = "X-Request-Id"
+_MAX_INBOUND_REQUEST_ID = 128
+
 
 def _maybe_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
     if not value:
@@ -45,6 +62,18 @@ def _maybe_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
         return uuid.UUID(value)
     except (ValueError, TypeError):
         return None
+
+
+def _resolve_request_id(request: Request) -> str:
+    """Reuse the caller's identifier when it is safe to, otherwise mint one.
+
+    Bounded and stripped of anything that is not printable ASCII: this value
+    reaches log lines and a response header, so an unbounded or newline-bearing
+    header would be a log-injection primitive rather than a diagnostic aid.
+    """
+    inbound = request.headers.get(REQUEST_ID_HEADER, "")[:_MAX_INBOUND_REQUEST_ID]
+    cleaned = "".join(c for c in inbound if c.isalnum() or c in "-_.")
+    return cleaned or uuid.uuid4().hex
 
 
 def _extract_token(request: Request) -> Optional[str]:
@@ -68,6 +97,7 @@ class IdentityMiddleware(BaseHTTPMiddleware):
         # allows us to reliably restore the previous value.
         uid_token = current_user_id.set(None)
         oid_token = current_org_id.set(None)
+        rid_token = request_id.set(_resolve_request_id(request))
         try:
             token = _extract_token(request)
             if token:
@@ -80,8 +110,13 @@ class IdentityMiddleware(BaseHTTPMiddleware):
                     # Invalid token: leave contextvars at None. Auth dependencies
                     # downstream will produce a proper 401.
                     pass
-            return await call_next(request)
+            response = await call_next(request)
+            # Returned so a user reporting a problem can quote something an
+            # operator can grep for.
+            response.headers[REQUEST_ID_HEADER] = request_id.get() or ""
+            return response
         finally:
             # Always restore to prevent cross-request identity leakage.
             current_user_id.reset(uid_token)
             current_org_id.reset(oid_token)
+            request_id.reset(rid_token)
