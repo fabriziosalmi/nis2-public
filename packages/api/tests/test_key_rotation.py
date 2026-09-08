@@ -162,3 +162,50 @@ class TestTheToolingAndTheGuideExist:
             / "docs" / "guide" / "secrets-rotation.md"
         ).read_text()
         assert "### NEXTAUTH_SECRET Rotation" not in guide
+
+
+class TestOnlyOneResetTokenIsOutstanding:
+    """Requesting a reset used to leave the previous tokens valid.
+
+    A user could hold several live reset links at once, and consuming one did
+    not consume the others: ask five times and five links work, each for the
+    full TTL. So a link that leaks — a shared mailbox, a forwarded message, a
+    browser history — still worked after the user had completed a reset with a
+    different one, which is precisely the moment they would believe the matter
+    closed.
+
+    It also made the end-to-end suite intermittently fail on the single-use
+    assertion: an earlier test minted a token and never used it, and a race on
+    the dev outbox could hand that stale-but-valid token to the test that
+    follows.
+    """
+
+    def test_a_new_request_retires_the_previous_tokens(self):
+        import inspect
+
+        from app.routers import auth
+
+        source = inspect.getsource(auth.forgot_password)
+        assert "update(PasswordResetToken)" in source
+        assert "PasswordResetToken.used_at.is_(None)" in source
+
+    def test_it_retires_only_this_user_s_tokens(self):
+        """Scoped by user_id: a reset request must not invalidate anybody
+        else's outstanding link."""
+        import inspect
+
+        from app.routers import auth
+
+        source = inspect.getsource(auth.forgot_password)
+        assert "PasswordResetToken.user_id == user.id" in source
+
+    def test_it_happens_before_the_new_token_is_minted(self):
+        """The other order would retire the token it had just created."""
+        import inspect
+
+        from app.routers import auth
+
+        source = inspect.getsource(auth.forgot_password)
+        assert source.index("update(PasswordResetToken)") < source.index(
+            "raw_token = secrets.token_urlsafe(32)"
+        )

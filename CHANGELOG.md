@@ -63,6 +63,21 @@ downgrade, and restore-from-dump.
   an engineering one. OCI labels plus `GET /api/v1/health`, which now reports
   version and commit for an operator holding only an HTTP endpoint.
 
+### 🔒 Only one password-reset token is outstanding at a time
+
+Requesting a reset minted a new token and left the previous ones valid, so a user
+could hold several live reset links at once and consuming one did not consume the
+others. Ask five times and five links work, each for the full TTL — so a link
+that leaks (a shared mailbox, a forwarded message, a browser history) still
+worked *after* the user had completed a reset with a different one, which is
+precisely the moment they would believe the matter closed.
+
+This is also the cause of the intermittent end-to-end failure on the single-use
+assertion that had been recurring since 2.6.15: an earlier test in the same file
+mints a token and never uses it, and a race on the dev outbox could hand that
+stale-but-still-valid token to the test that follows. Reproduced locally — the
+suite failed on every run before the fix and passed eight consecutive runs after.
+
 ### 🧹 Structure and correctness
 
 - **The rate limiter left `auth.py`.** Eight modules, including the composition

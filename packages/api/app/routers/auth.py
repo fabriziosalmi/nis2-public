@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1343,7 +1343,29 @@ async def forgot_password(
         await asyncio.sleep(random.uniform(0.05, 0.25))
         return None
 
-    # 2. Mint and persist.
+    # 2. Retire any token still outstanding for this user, then mint.
+    #
+    # A new request used to leave the previous tokens valid, so a user could
+    # hold several live reset links at once and consuming one did not consume
+    # the others. Ask for a reset five times and five links work, each for the
+    # full TTL — so a link that leaks (a shared mailbox, a forwarded message, a
+    # browser history) still works after the user has completed a reset with a
+    # different one, which is precisely when they would believe the matter
+    # closed.
+    #
+    # One outstanding token per user is the behaviour a user expects from
+    # "send me another link": the previous one stops working. It also removes a
+    # source of test fragility — a stale token minted by an earlier step is now
+    # dead rather than quietly usable.
+    await db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
+
     raw_token = secrets.token_urlsafe(32)  # ~43 chars, well above the 20 schema floor
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=settings.reset_token_ttl_minutes
