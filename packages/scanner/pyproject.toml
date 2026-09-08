@@ -27,7 +27,7 @@ dependencies = [
     "python-whois>=0.9",
     "Jinja2>=3.1",
     "watchdog>=4.0",
-    "playwright>=1.49",
+    "playwright>=1.62.0",
 ]
 
 [project.scripts]
