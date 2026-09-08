@@ -135,13 +135,19 @@ class TestRecordingThatAnObligationWasDischarged:
         source = inspect.getsource(incident_monitor.record_submission)
         assert "cannot precede the recorded detection time" in source
 
-    def test_recording_is_not_a_viewer_action(self):
+    def test_recording_a_filing_is_an_admin_attestation(self):
+        """Narrowed from admin+auditor, following the precedent set by
+        assets.attest_authority: recording that an Art. 23 notification was
+        filed with CSIRT Italia on a given date is an attestation about a legal
+        act performed outside this platform, not compliance work — and it is
+        precisely the record an auditor would later be examining."""
         from app.routers import incident_monitor
 
         module = inspect.getsource(incident_monitor)
         idx = module.index("async def record_submission")
-        decorator = module[max(0, idx - 400) : idx]
-        assert 'require_role("admin", "auditor")' in decorator
+        decorator = module[max(0, idx - 700) : idx]
+        assert 'require_role("admin")' in decorator
+        assert 'require_role("admin", "auditor")' not in decorator
 
     def test_the_csirt_reference_can_be_recorded_with_it(self):
         """The reference CSIRT Italia returns is the only evidence tying the

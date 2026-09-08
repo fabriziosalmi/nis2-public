@@ -36,6 +36,60 @@ from app.models.base import TimestampMixin
 # eradicated is one the operator has finished with.
 CLOSED_STATUSES = frozenset({"closed", "recovered", "eradicated"})
 
+# The Art. 23 lifecycle vocabulary, in order.
+#
+# These were unconstrained strings on the wire: IncidentCreateRequest accepted
+# any value for status, severity and incident_type, while six other enumerations
+# in this codebase carry a regex pattern. That is the ground the `eradicated` bug
+# grew on — two modules disagreeing about a value neither of them constrained —
+# and it left a sharper hole behind it: because `is_open` is membership in a set,
+# any value outside it makes an incident permanently open, its deadlines reported
+# as breached for ever and unclearable through the API.
+#
+# Note for anyone comparing this with app/routers/incidents.py: that module
+# describes a DIFFERENT entity. `IncidentReport` (table `incident_reports`) is
+# the CSIRT submission artefact and legitimately uses its own vocabulary —
+# "ongoing"/"contained"/"recovered" for status, "DoS/DDoS" and friends for type,
+# "Low"/"Significant"/"Critical" for severity. The two sets are not meant to
+# match. The names being nearly identical is the cost of two domain concepts
+# both being called "incident".
+INCIDENT_STATUSES = (
+    "detected",     # noticed; the Art. 23 clocks start from detected_at
+    "contained",    # spread stopped
+    "eradicated",   # threat removed
+    "recovered",    # service restored
+    "closed",       # the obligation is discharged and the record is final
+)
+
+INCIDENT_SEVERITIES = ("low", "medium", "high", "critical")
+
+INCIDENT_TYPES = (
+    "ransomware",
+    "data_breach",
+    "ddos",
+    "supply_chain",
+    "unauthorized_access",
+    "malware",
+    "other",
+)
+
+# Every status that stops the clock must be a status that can be set. A value in
+# CLOSED_STATUSES and not in INCIDENT_STATUSES would be unreachable through the
+# API and silently dead — which is how `eradicated` came to mean two things.
+assert CLOSED_STATUSES <= set(INCIDENT_STATUSES), (
+    "CLOSED_STATUSES contains a status the API will not accept"
+)
+
+
+def _pattern(values: tuple) -> str:
+    """A Pydantic `pattern` matching exactly one of `values`."""
+    return "^(" + "|".join(values) + ")$"
+
+
+INCIDENT_STATUS_PATTERN = _pattern(INCIDENT_STATUSES)
+INCIDENT_SEVERITY_PATTERN = _pattern(INCIDENT_SEVERITIES)
+INCIDENT_TYPE_PATTERN = _pattern(INCIDENT_TYPES)
+
 
 class Incident(TimestampMixin, Base):
     __tablename__ = "incidents"

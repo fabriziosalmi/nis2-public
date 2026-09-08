@@ -155,7 +155,14 @@ async def _check_deadlines() -> dict:
                     .join(Membership, Membership.user_id == User.id)
                     .where(
                         Membership.organization_id == incident.organization_id,
-                        Membership.role.in_(("admin", "owner")),
+                        # "owner" was in this filter and could never match:
+                        # registration creates an `admin` membership and both the
+                        # invite and role-change schemas constrain the value to
+                        # admin, auditor or viewer. No code path has ever written
+                        # it. Harmless here because admin also matches, but a
+                        # clause that cannot match is a claim about a role model
+                        # that does not exist.
+                        Membership.role == "admin",
                         User.is_active.is_(True),
                     )
                 )

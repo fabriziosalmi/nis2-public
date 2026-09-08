@@ -196,3 +196,66 @@ class TestTheObsoleteProtocolProbeCanActuallyFire:
         assert (
             CertificateAnalyzer._WEAK_PROBE_CIPHERS == Scanner._WEAK_PROBE_CIPHERS
         )
+
+
+class TestChainValidityIsTriState:
+    """`chain_valid` was a bool defaulting to False.
+
+    The verification block has a correct narrow handler that sets it False and
+    raises a CRITICAL finding when verification genuinely fails. Everything else
+    — a timeout, a reset connection, an unexpected parse error — fell into a bare
+    `except Exception: pass`, and because the default was already False the
+    analyser then reported `valid: false` to the API, the dashboard and the
+    export. It asserted a defect in the customer's certificate chain that the
+    scanner had never established.
+
+    The direction was the safe one; the answer was still wrong, in a document a
+    customer may hand to an auditor.
+    """
+
+    def test_the_default_is_undetermined_not_invalid(self):
+        assert CertificateInfo(domain="x", port=443).chain_valid is None
+
+    def test_an_incomplete_check_is_reported_rather_than_swallowed(self):
+        import inspect
+
+        source = inspect.getsource(CertificateAnalyzer._analyze_chain)
+        assert "info.errors.append" in source
+        assert "undetermined" in source
+        # The bare `except Exception: pass` is what published the wrong answer.
+        assert "pass" not in source.split("except Exception")[-1][:60]
+
+    def test_an_undetermined_chain_earns_neither_bonus_nor_penalty(self):
+        analyzer = CertificateAnalyzer()
+
+        # One deduction so the score starts below 100; the bonus is clamped by
+        # min(100, ...) and would otherwise be invisible on a clean certificate.
+        def _with(chain_valid):
+            info = CertificateInfo(domain="x", port=443)
+            info.findings.append({"severity": "MEDIUM", "message": "something"})
+            info.chain_valid = chain_valid
+            analyzer._calculate_score(info)
+            return info
+
+        undetermined = _with(None)
+        invalid = _with(False)
+        valid = _with(True)
+
+        assert undetermined.score == invalid.score, (
+            "an undetermined chain must not be scored as a confirmed failure"
+        )
+        assert valid.score > undetermined.score
+
+    def test_a_genuine_verification_failure_still_reports_false(self):
+        """The check has to keep working, not merely stop guessing."""
+        import inspect
+
+        source = inspect.getsource(CertificateAnalyzer._analyze_chain)
+        assert "except ssl.SSLCertVerificationError" in source
+        assert "info.chain_valid = False" in source
+
+    def test_it_matches_the_treatment_of_ct_logging(self):
+        """Same defect, same shape, same remedy — pinned together so the next
+        person adding a check sees the convention."""
+        info = CertificateInfo(domain="x", port=443)
+        assert info.chain_valid is None and info.ct_logged is None

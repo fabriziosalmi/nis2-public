@@ -44,7 +44,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_org, require_role
-from app.models.incident import CLOSED_STATUSES, Incident
+from app.models.incident import (
+    CLOSED_STATUSES,
+    INCIDENT_SEVERITY_PATTERN,
+    INCIDENT_STATUS_PATTERN,
+    INCIDENT_TYPE_PATTERN,
+    Incident,
+)
 from app.models.membership import Membership
 from app.models.user import User
 
@@ -243,15 +249,20 @@ def final_report_deadline_for(detected_at: datetime, notification_sent_at: Optio
 
 class IncidentCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    incident_type: str
-    severity: str
+    # Constrained on the wire, like every other enumeration in this codebase.
+    # Unconstrained, a typo in `status` made the incident permanently open: the
+    # deadlines were reported as breached for ever and could not be cleared
+    # through the API, because `is_open` is membership in a set the value would
+    # never join.
+    incident_type: str = Field(..., pattern=INCIDENT_TYPE_PATTERN)
+    severity: str = Field(..., pattern=INCIDENT_SEVERITY_PATTERN)
     description: str = Field(..., min_length=1)
     # Optional so the UI can default it, but it is the value every deadline is
     # computed from: an incident is usually entered some hours after it was
     # noticed, and starting the 24-hour clock at data-entry time would report a
     # deadline later than the law allows.
     detected_at: Optional[datetime] = None
-    status: str = "detected"
+    status: str = Field(default="detected", pattern=INCIDENT_STATUS_PATTERN)
     impact_category: str = "availability"
     estimated_impact_level: int = Field(3, ge=1, le=5)
     affected_systems: Optional[str] = None
@@ -262,10 +273,10 @@ class IncidentCreateRequest(BaseModel):
 
 class IncidentPatchRequest(BaseModel):
     title: Optional[str] = None
-    incident_type: Optional[str] = None
-    severity: Optional[str] = None
+    incident_type: Optional[str] = Field(None, pattern=INCIDENT_TYPE_PATTERN)
+    severity: Optional[str] = Field(None, pattern=INCIDENT_SEVERITY_PATTERN)
     description: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[str] = Field(None, pattern=INCIDENT_STATUS_PATTERN)
     impact_category: Optional[str] = None
     estimated_impact_level: Optional[int] = Field(None, ge=1, le=5)
     affected_systems: Optional[str] = None
@@ -408,7 +419,14 @@ class RecordSubmissionRequest(BaseModel):
 @router.post(
     "/{incident_id}/submissions",
     response_model=IncidentMonitorResponse,
-    dependencies=[Depends(require_role("admin", "auditor"))],
+    # Admin only, following the precedent already set by assets.attest_authority
+    # ("asserting authority over an address range is not an auditor action").
+    # Recording that an Art. 23 notification was filed with CSIRT Italia on a
+    # given date is an attestation about a legal act performed outside this
+    # platform, not compliance work — and it is precisely the record an auditor
+    # would later be examining. Everything else in the Art. 23 module stays open
+    # to the auditor role.
+    dependencies=[Depends(require_role("admin"))],
 )
 async def record_submission(
     incident_id: uuid.UUID,

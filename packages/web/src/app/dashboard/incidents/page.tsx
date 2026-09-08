@@ -168,6 +168,11 @@ export default function IncidentsPage() {
     { name: "status", label: t("statusLabel"), type: "select", options: [
       { value: "detected", label: t("st_detected") },
       { value: "contained", label: t("st_contained") },
+      // The incident-response lifecycle runs detected -> contained ->
+      // eradicated -> recovered -> closed. `eradicated` stops the Art. 23
+      // clock, and was offered by neither this form nor the API's own
+      // vocabulary while the alerting task already treated it as terminal.
+      { value: "eradicated", label: t("st_eradicated") },
       { value: "recovered", label: t("st_recovered") },
       { value: "closed", label: t("st_closed") },
     ] },

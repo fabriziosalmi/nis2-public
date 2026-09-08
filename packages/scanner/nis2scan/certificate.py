@@ -62,7 +62,16 @@ class CertificateInfo:
 
     # Chain
     chain_length: int = 0
-    chain_valid: bool = False
+    # Tri-state, like ct_logged. True means the chain verified, False means it
+    # was checked and did not, None means the check never completed.
+    #
+    # As a bool defaulting to False, an unclassified failure — a timeout, a reset
+    # connection, an unexpected parse error — was swallowed by the bare except
+    # below and published as `valid: false`: the report asserted a defect in the
+    # customer's certificate chain that the scanner had never established. The
+    # direction was the safe one, but the answer was still wrong, and it was
+    # wrong in a document a customer may hand to an auditor.
+    chain_valid: Optional[bool] = None
     chain_details: List[Dict[str, str]] = field(default_factory=list)
 
     # SANs
@@ -405,8 +414,15 @@ class CertificateAnalyzer:
                 "message": f"Chain validation failed: {e}",
                 "remediation": "Install missing intermediate certificates. Check: https://whatsmychaincert.com/",
             })
-        except Exception:
-            pass
+        except Exception as exc:
+            # Not a verification failure — something else went wrong, so the
+            # question is undetermined rather than answered. Leaving chain_valid
+            # at None keeps it out of both the finding and the score bonus.
+            logger.debug("Chain analysis did not complete for %s: %s", info.domain, exc)
+            info.errors.append(
+                f"Certificate chain validation did not complete ({type(exc).__name__}); "
+                f"chain validity is undetermined."
+            )
 
     def _detect_ca_type(self, info: CertificateInfo) -> None:
         """Detect the Certificate Authority type."""
@@ -597,7 +613,9 @@ class CertificateAnalyzer:
             score -= deductions.get(finding["severity"], 5)
 
         # Bonuses
-        if info.chain_valid:
+        # `is True` on purpose: an undetermined chain must earn neither the bonus
+        # nor a penalty.
+        if info.chain_valid is True:
             score = min(100, score + 5)
         # `is True` on purpose: an undetermined lookup must not be scored as
         # an absence.

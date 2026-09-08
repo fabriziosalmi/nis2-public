@@ -209,7 +209,11 @@ async def csirt_emergency_payload(
         organization_id=org_id,
         reported_by=user.id,
         title=(data.what_happened or "Emergency incident").strip()[:500],
-        incident_type="unknown",
+        # "other", not "unknown": the panic form asks three questions and cannot
+        # ask for a classification, but the value still has to be one the wire
+        # vocabulary accepts, or the incident it creates cannot afterwards be
+        # patched without changing its type first.
+        incident_type="other",
         severity="high",
         status="detected",
         detected_at=detected,

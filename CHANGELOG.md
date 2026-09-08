@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.6.17] - 2026-09-08
+
+Tier B of the repository audit: five findings of the same family as the ones
+already closed — a value or a capability believed to exist and not existing, or
+existing and not constrained.
+
+### 🐛 The Art. 23 lifecycle vocabulary is constrained
+
+`incident_type`, `severity` and `status` were unconstrained strings while six
+other enumerations in this codebase carried a regex pattern. That is the ground
+the `eradicated` divergence grew on, and it left a sharper hole: because
+`is_open` is membership in a set, any value outside it made an incident
+**permanently open** — deadlines reported as breached for ever and unclearable
+through the API. A single typo, `"Closed"` with a capital C, was enough.
+
+The vocabulary now lives next to the model with `CLOSED_STATUSES`, and an
+assertion holds the invariant that every status which stops the clock is a status
+the API will accept. `eradicated` is offered by the UI form for the first time,
+in all five locales. The Red Button wrote `incident_type="unknown"`, which the
+vocabulary does not contain — it writes `"other"` now, so the incident it creates
+can afterwards be edited.
+
+### 🐛 Certificate chain validity is tri-state
+
+`chain_valid` was a bool defaulting to False, and the verification block ended in
+a bare `except: pass`. A timeout, a reset connection or an unexpected parse error
+was therefore published as `valid: false` — the report asserted a defect in the
+customer's certificate chain that the scanner had never established. Now `None`
+means undetermined, the incomplete check is recorded in `errors`, and the score
+bonus tests `is True` so an undetermined chain earns neither bonus nor penalty.
+The same treatment `ct_logged` received, pinned together by a test so the next
+check follows the convention.
+
+### 🔧 The worker recognises itself
+
+NullPool — which is what makes `asyncio.run` per Celery task safe — was selected
+by `CELERY_WORKER=1`, set by the two bundled compose files and by nothing else. A
+worker started any other way (systemd, Kubernetes, a plain `celery ... worker` on
+a VM) silently got the pooled engine and reproduced a documented failure: the
+first task succeeded, the second raised `Event loop is closed`, and every
+subsequent one failed while the worker retried on a 30-second cycle.
+
+The mode is now derived from how the process was started; the environment
+variable remains as an explicit override. Verified by running a worker with the
+variable unset and watching it choose NullPool on its own. The choice is also
+logged at startup, because getting it wrong does not fail loudly — it fails on
+the *second* task, a long way from the decision that caused it.
+
+### 📋 The role model is three tiers, and says so
+
+The README advertised `owner/admin/auditor/viewer`. Nothing has ever assigned
+`owner`: registration creates an `admin` membership and both the invite and
+role-change schemas constrain the value to admin, auditor or viewer. The one
+place that referenced it — the deadline-alert recipient filter — carried a clause
+that could never match.
+
+The phantom role is gone from the code and the README, and the real model is
+documented where the check lives, in `app/dependencies.py`. The split runs along
+one axis: admin may destroy and reconfigure, auditor creates and edits the
+compliance record, viewer reads. **`auditor` is a compliance operator, not a
+reviewer** — the name oversells the restriction, and an organisation wanting a
+genuinely read-only reviewer should use `viewer`. Narrowing what auditor may do
+would break every deployment where a consultant works from that seat, so the
+model is documented rather than quietly changed.
+
+**One behaviour change**: `POST /incident-monitor/{id}/submissions` is now
+admin-only, following the precedent already set by `assets.attest_authority`
+("asserting authority over an address range is not an auditor action").
+Recording that an Art. 23 notification was filed with CSIRT Italia on a given
+date is an attestation about a legal act performed outside this platform, and it
+is precisely the record an auditor would later be examining. The endpoint shipped
+two days ago in 2.6.14, so this breaks no established integration.
+
 ## [2.6.16] - 2026-09-08
 
 The five highest-leverage findings from the repository audit — the ones in

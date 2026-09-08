@@ -3,6 +3,7 @@
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 import logging
 import os
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -48,9 +49,50 @@ _INTEGRATION_TEST_MODE = os.environ.get("INTEGRATION_DB") == "1"
 # tests, same "performance hit irrelevant for the workload"
 # justification (tasks run end-to-end in seconds, not milliseconds,
 # so the cost of opening a connection is amortised away).
-_CELERY_WORKER_MODE = os.environ.get("CELERY_WORKER") == "1"
+def _running_under_celery() -> bool:
+    """Is this process a Celery worker or beat scheduler?
+
+    Derived from how the process was started, not declared. The env var below is
+    kept as an explicit override, but it can no longer be the only thing standing
+    between a correct deployment and a broken one.
+
+    It used to be. CELERY_WORKER=1 was set by the two bundled compose files and
+    by nothing else, so a worker started any other way — a systemd unit, a
+    Kubernetes Deployment, a plain `celery -A app.tasks.celery_app worker` on a
+    VM — silently got the pooled engine and reproduced a documented failure: the
+    first task succeeded, the second raised "Event loop is closed", and every
+    subsequent one failed while the worker retried on a 30-second cycle. The
+    cause is that run_scan_task calls asyncio.run per task, minting a fresh event
+    loop, and a pooled asyncpg connection carried over from the previous task is
+    bound to a loop that has since closed.
+    """
+    argv = sys.argv
+    if not argv:
+        return False
+    # The whole of argv[0], not its basename: `celery -A ... worker` gives
+    # ".../bin/celery", while `python -m celery -A ... worker` gives
+    # ".../site-packages/celery/__main__.py" — Python rewrites argv[0] to the
+    # module path, so the basename is "__main__.py" and only the directory
+    # identifies it.
+    invoked_as_celery = "celery" in argv[0].lower()
+    return invoked_as_celery and any(a in ("worker", "beat") for a in argv)
+
+
+_CELERY_WORKER_MODE = (
+    os.environ.get("CELERY_WORKER") == "1" or _running_under_celery()
+)
 
 if _INTEGRATION_TEST_MODE or _CELERY_WORKER_MODE:
+    # Say which mode was chosen and why. The choice is invisible otherwise, and
+    # getting it wrong does not fail loudly — it fails on the SECOND Celery task,
+    # with "Event loop is closed", which is a long way from the decision that
+    # caused it.
+    logging.getLogger(__name__).info(
+        "Database pool: NullPool (%s)",
+        "integration tests" if _INTEGRATION_TEST_MODE
+        else "CELERY_WORKER=1" if os.environ.get("CELERY_WORKER") == "1"
+        else "detected a Celery worker/beat process",
+    )
     engine: AsyncEngine = create_async_engine(
         settings.database_url,
         echo=False,

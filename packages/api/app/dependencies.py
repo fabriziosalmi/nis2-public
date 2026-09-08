@@ -233,6 +233,34 @@ ROLES_AUDITOR_OR_ADMIN = ("admin", "auditor")
 ROLES_ANY = ("admin", "auditor", "viewer")
 
 
+# The role model, stated once.
+#
+# Three tiers exist, not the four the README used to advertise: nothing has ever
+# assigned `owner`. Registration creates an `admin` membership, and both the
+# invite and role-change schemas constrain the value to admin, auditor or viewer.
+#
+# The split between them is deliberate and runs along one axis — who may destroy
+# or reconfigure, versus who may do the compliance work:
+#
+#   admin    Everything. Exclusively: deleting any record, inviting and removing
+#            members, changing organisation settings, managing API keys,
+#            configuring notification channels (they hold credentials), attesting
+#            authority over a scan target, and recording that an Art. 23
+#            obligation was filed with the CSIRT. The last two are attestations
+#            about acts performed outside this platform.
+#
+#   auditor  Creates and modifies the compliance record: assets, scans, findings,
+#            vendors, business processes, governance items, incidents. Cannot
+#            delete anything and cannot change how the organisation is
+#            configured.
+#
+#   viewer   Reads.
+#
+# `auditor` is therefore a compliance operator, not a reviewer — the name
+# oversells the restriction. An organisation that wants a genuinely read-only
+# reviewer should use `viewer`. Changing what `auditor` may do would break every
+# deployment where a consultant works from that seat, so the model is documented
+# here rather than quietly narrowed.
 def require_role(*allowed: str):
     """Dependency factory: gate an endpoint to a set of membership roles.
 
