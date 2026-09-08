@@ -1,5 +1,70 @@
 # Changelog
 
+## [2.6.16] - 2026-09-08
+
+The five highest-leverage findings from the repository audit — the ones in
+*State, Persistence & Data Integrity*, which capped the overall result, plus the
+two rated high severity elsewhere.
+
+### 🐛 A damaged scan configuration is refused, not guessed at
+
+`scans.config_snapshot` is JSONB, and the worker rebuilt the scanner's
+configuration from it with `.get()` and a default for every key. 2.6.15 stopped
+the *consequence* — a scan that assessed nothing no longer scores 100 — but the
+*cause* remained: an empty or damaged snapshot still produced empty target lists
+without an error. A `ScanConfigSnapshot` schema now validates on both sides: the
+API refuses at request time when the selected assets produce no scannable
+target, and the worker refuses at execution time with the scan marked failed and
+the reason recorded. Unknown keys are still tolerated so snapshots from earlier
+releases stay re-runnable.
+
+### 🐛 Scans abandoned by a dead worker are reconciled
+
+A scan commits `running` in its own transaction before any work begins; the
+terminal state is written eighty lines later. A SIGKILL between the two — an
+out-of-memory kill during a large expansion is the realistic trigger — skips the
+handler, and nothing in the beat schedule looked at stale scans. The row stayed
+`running` for ever and the user saw a scan that never finished and could not be
+retried. A `reap_stuck_scans` task now marks them failed after six hours, with an
+explanation saying no results were recorded.
+
+### 🔐 DATA_ENCRYPTION_KEY can be rotated without losing every MFA enrolment
+
+That key encrypts every TOTP seed, every notification-channel credential and the
+leaked-secret evidence on findings. There was no re-encryption path, the rotation
+guide did not mention the variable — while still documenting `NEXTAUTH_SECRET`,
+which the project had removed — and both decrypt paths returned the ciphertext on
+failure. So rotating it, which the guide's own recommendations advise, silently
+locked out every MFA-enrolled user with nothing naming the cause.
+
+- `DATA_ENCRYPTION_KEY_PREVIOUS` keeps the old key readable for the duration of
+  a rotation.
+- `scripts/reencrypt.py` (`make reencrypt`, `make reencrypt-dry-run`) rewrites
+  every encrypted value under the current key. Idempotent and resumable.
+- A value no configured key opens now raises `EncryptionKeyMismatch` naming the
+  remedy, instead of returning ciphertext. Genuine pre-encryption cleartext still
+  passes through.
+- The guide documents the overlap procedure; the removed variable is gone.
+
+### 💾 Backup and restore are exercised, not described
+
+`UPGRADING.md` said "the dump is your rollback" and nothing in this repository
+had ever performed a restore. CI now dumps the seeded stack, restores into a
+fresh database, verifies the row count survived, checks the restored copy carries
+its Alembic revision, and runs `alembic upgrade head` against it. A rollback plan
+whose first execution is during an incident is not a plan.
+
+### 🧪 The frontend has tests
+
+13,618 lines of TypeScript were verified only by `tsc` and ESLint, neither of
+which can tell whether a countdown counts down — and the countdown in question is
+the Art. 23 statutory one. The deadline arithmetic is extracted to
+`lib/deadlines.ts` and covered by 14 tests including the boundaries that matter:
+the exact deadline instant, the edge of the urgency window, a filed obligation
+never flagged however late, a closed incident never flagged at all, and an
+overdue interval shown signed rather than clamped to zero. `npm test` runs in
+CI.
+
 ## [2.6.15] - 2026-09-08
 
 Eleven defects found by a 20-category audit of this repository, all of them

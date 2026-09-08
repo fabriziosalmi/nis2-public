@@ -16,7 +16,7 @@ import logging
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import TypeDecorator
 
-from app.utils.crypto import decrypt_json, encrypt_json
+from app.utils.crypto import EncryptionKeyMismatch, decrypt_json, encrypt_json
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,22 @@ class EncryptedJSON(TypeDecorator):
         if isinstance(value, dict) and set(value.keys()) == {_WRAP_KEY}:
             try:
                 return decrypt_json(value[_WRAP_KEY])
+            except EncryptionKeyMismatch:
+                # No configured key opens this. Keep the API up — a single
+                # unreadable notification credential must not take down every
+                # request that touches the row — but say precisely what happened
+                # and what to do, rather than the previous generic warning that
+                # left an operator to guess between a rotated key, a restored
+                # backup and a corrupt value.
+                logger.error(
+                    "EncryptedJSON: no configured key decrypts this value. If "
+                    "DATA_ENCRYPTION_KEY was rotated, set "
+                    "DATA_ENCRYPTION_KEY_PREVIOUS and run `make reencrypt`."
+                )
+                return value
             except Exception:  # noqa: BLE001
-                # Wrong/rotated key or tampering — don't crash the read; surface
-                # the opaque wrapper and log. (A key rotation needs a re-encrypt
-                # migration; this keeps the API up meanwhile.)
-                logger.warning("EncryptedJSON: decryption failed; returning raw value")
+                # Malformed or tampered ciphertext, as distinct from a key
+                # mismatch.
+                logger.warning("EncryptedJSON: value is not decryptable; returning raw")
                 return value
         return value

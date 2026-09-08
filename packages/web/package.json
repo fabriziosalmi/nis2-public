@@ -1,12 +1,13 @@
 {
   "name": "@nis2/web",
-  "version": "2.6.15",
+  "version": "2.6.16",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -52,7 +53,8 @@
     "playwright": "^1.62.1",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
   },
   "overrides": {
     "lodash": "^4.18.1",

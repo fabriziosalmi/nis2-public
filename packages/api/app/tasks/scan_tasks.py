@@ -5,7 +5,9 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+from pydantic import ValidationError
 
 from app.tasks.celery_app import celery_app
 from app.database import async_session_factory, set_rls_org_context
@@ -56,11 +58,32 @@ async def _run_scan(scan_id: str, org_id: str | None = None) -> dict:
         await db.commit()
 
         try:
-            results, report = await ScanService.execute_scan(
-                scan_id=str(scan.id),
-                config_snapshot=scan.config_snapshot or {},
-                org_id=str(scan.organization_id),
-            )
+            try:
+                results, report = await ScanService.execute_scan(
+                    scan_id=str(scan.id),
+                    config_snapshot=scan.config_snapshot or {},
+                    org_id=str(scan.organization_id),
+                )
+            except ValidationError as exc:
+                # A stored configuration that no longer describes a scannable
+                # target. Terminal by nature — retrying cannot repair a JSONB
+                # value — so record it and stop, rather than letting the generic
+                # handler below re-raise into two more attempts over a minute.
+                detail = exc.errors()[0].get("msg", "invalid scan configuration")
+                scan.status = "failed"
+                scan.error_message = (
+                    f"The stored scan configuration is not usable: {detail}"
+                )[:4096]
+                scan.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+                logger.error(
+                    "Scan %s has an unusable config_snapshot: %s", scan_id, detail
+                )
+                return {
+                    "status": "failed",
+                    "scan_id": scan_id,
+                    "error": scan.error_message,
+                }
 
             # Persist scan results
             for result in results:
@@ -389,3 +412,74 @@ def _should_run(cron_expr: str, last_run, now) -> bool:
             exc,
         )
         return False
+
+
+# ---------------------------------------------------------------------------
+# Stuck-scan reaper
+# ---------------------------------------------------------------------------
+
+# How long a scan may sit in `running` before it is presumed abandoned.
+#
+# A scan commits `status = "running"` in its own transaction before any work
+# begins, and the terminal state is written by the except handler roughly eighty
+# lines later. Between those two commits the database says a scan is running and
+# no process owns it. A SIGKILL — an out-of-memory kill during a large CIDR
+# expansion is the realistic trigger — skips the handler entirely, so nothing
+# writes a terminal state.
+#
+# Celery's acks_late covers the common case by redelivering the message, but
+# that is a broker guarantee on Redis, not a database one: if the message is
+# lost, the row stays `running` for ever. Before this task, nothing in the beat
+# schedule looked at stale scans, so the user saw a scan that never finished and
+# could not be retried.
+#
+# Generous on purpose: a legitimately long scan must never be reaped out from
+# under a live worker. Six hours is far beyond any scan this platform performs at
+# its configured ceilings, and the cost of waiting is a stale row rather than a
+# lost result.
+STUCK_SCAN_AFTER = timedelta(hours=6)
+
+
+@celery_app.task
+def reap_stuck_scans() -> dict:
+    """Beat task: mark abandoned `running` scans as failed."""
+    return asyncio.run(_reap_stuck_scans())
+
+
+async def _reap_stuck_scans() -> dict:
+    from sqlalchemy import func, select
+
+    from app.models.scan import Scan
+
+    cutoff = datetime.now(timezone.utc) - STUCK_SCAN_AFTER
+    reaped = 0
+
+    async with async_session_factory() as db:
+        # No RLS org context is set: this sweep is cross-tenant by nature, the
+        # same as the other janitor tasks, and it reads and writes only the
+        # lifecycle columns of scans it has already established are abandoned.
+        # coalesce because started_at is nullable at the schema level. It is
+        # written in the same commit that sets `running`, so it should always be
+        # present — but a NULL would make the comparison NULL and silently
+        # exempt exactly the rows this task exists to find, which is the failure
+        # mode a reaper can least afford.
+        started = func.coalesce(Scan.started_at, Scan.created_at)
+        result = await db.execute(
+            select(Scan).where(Scan.status == "running", started < cutoff)
+        )
+        for scan in result.scalars().all():
+            scan.status = "failed"
+            scan.error_message = (
+                "The worker running this scan did not report back. It was marked "
+                "failed by the stale-scan sweep; no results were recorded. "
+                "Re-run the scan."
+            )
+            scan.completed_at = datetime.now(timezone.utc)
+            reaped += 1
+            logger.warning(
+                "Reaped stuck scan %s (started_at=%s)", scan.id, scan.started_at
+            )
+        if reaped:
+            await db.commit()
+
+    return {"reaped": reaped, "cutoff": cutoff.isoformat()}

@@ -114,6 +114,17 @@ web-logs:
 db-migrate:
 	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic revision --autogenerate -m "$(msg)"
 
+# Re-encrypt every field-level secret under the current DATA_ENCRYPTION_KEY.
+# Run this DURING a key rotation, with the old key in
+# DATA_ENCRYPTION_KEY_PREVIOUS — see docs/guide/secrets-rotation.md. Without it,
+# rotating the key silently locks out every MFA-enrolled user.
+.PHONY: reencrypt reencrypt-dry-run
+reencrypt-dry-run:
+	docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T api python -m scripts.reencrypt --dry-run
+
+reencrypt:
+	docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T api python -m scripts.reencrypt
+
 db-upgrade:
 	docker compose --env-file .env -f infra/docker/docker-compose.dev.yml exec api alembic upgrade head
 

@@ -8,6 +8,8 @@ from nis2scan.compliance import ComplianceEngine, ComplianceReport
 from nis2scan.config import Config, Targets
 from nis2scan.scanner import ScanResult, Scanner
 
+from app.schemas.scan import ScanConfigSnapshot
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,28 +25,29 @@ class ScanService:
 
         The scanner and compliance engine code is used as-is from the nis2scan package.
         """
-        # Build Config from the stored snapshot
+        # Validate the snapshot before trusting it.
+        #
+        # This used to be a sequence of .get() calls with a default for every
+        # key, so a damaged or empty JSONB value produced empty target lists and
+        # no error — the scan then probed nothing and was scored 100. Parsing
+        # through the schema means a snapshot that does not describe at least one
+        # target raises here, and the caller records the scan as failed with the
+        # reason, instead of running a scan of nothing.
+        cfg = ScanConfigSnapshot.model_validate(config_snapshot)
+
         targets = Targets(
-            ip_ranges=config_snapshot.get("ip_ranges", []),
-            domains=config_snapshot.get("domains", []),
+            ip_ranges=cfg.ip_ranges,
+            domains=cfg.domains,
             asns=config_snapshot.get("asns", []),
         )
         config = Config(
             targets=targets,
-            project_name=config_snapshot.get("name", "NIS2 Scan"),
-            scan_timeout=config_snapshot.get("scan_timeout", 10),
-            concurrency=config_snapshot.get("concurrency", 20),
-            features=config_snapshot.get(
-                "features",
-                {
-                    "dns_checks": True,
-                    "web_checks": True,
-                    "port_scan": True,
-                    "whois_checks": True,
-                },
-            ),
-            max_hosts=config_snapshot.get("max_hosts", 100),
-            pinned_ips=config_snapshot.get("pinned_ips", {}),
+            project_name=cfg.name,
+            scan_timeout=cfg.scan_timeout,
+            concurrency=cfg.concurrency,
+            features=cfg.features,
+            max_hosts=cfg.max_hosts,
+            pinned_ips=cfg.pinned_ips,
         )
 
         logger.info(

@@ -260,6 +260,12 @@ jobs:
       # hook dependencies, or an <a> where a <Link> belongs.
       - name: Lint
         run: npm run lint
+      # The first frontend tests in this project. 13,618 lines of TypeScript
+      # were checked only by tsc and ESLint, neither of which can tell whether
+      # a countdown counts down — and the countdown in question is the Art. 23
+      # statutory one.
+      - name: Test
+        run: npm test
       # `next build` type-checks as a side effect, but a dedicated step fails
       # faster and says plainly which of the two broke.
       - name: Typecheck
@@ -402,6 +408,61 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"email":"ci@example.com","password":"C!password99","full_name":"CI","org_name":"CI Org"}')
           test "$CODE" = 201 || { echo "register returned $CODE"; exit 1; }
+
+      # ---------------------------------------------------------------
+      # Backup and restore, exercised rather than documented.
+      #
+      # UPGRADING.md tells the operator to take a pg_dump before upgrading and
+      # says "the dump is your rollback" — and nothing in this repository had
+      # ever performed a restore. A rollback plan whose first execution is
+      # during an incident is not a plan, and two things in particular were
+      # unverified: that the dump is sufficient, and that a restored database
+      # is at the same Alembic revision as the code expects.
+      #
+      # This runs against the stack the job has already seeded, so the dump has
+      # real rows in it.
+      - name: Backup, restore, and prove the restored copy is usable
+        run: |
+          set -euo pipefail
+          COMPOSE="docker compose --env-file .env -f infra/docker/docker-compose.dev.yml"
+          PGUSER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2-)
+          PGDB=$(grep '^POSTGRES_DB=' .env | cut -d= -f2-)
+
+          echo "--- rows before the dump"
+          BEFORE=$($COMPOSE exec -T postgres psql -U "$PGUSER" -d "$PGDB" -tAc \
+            "select count(*) from organizations")
+          echo "organizations: $BEFORE"
+          test "$BEFORE" -gt 0 || { echo "nothing seeded; the drill would prove nothing"; exit 1; }
+
+          echo "--- dump (the command UPGRADING.md gives the operator)"
+          $COMPOSE exec -T postgres pg_dump -U "$PGUSER" "$PGDB" > /tmp/backup.sql
+          test -s /tmp/backup.sql || { echo "empty dump"; exit 1; }
+
+          echo "--- restore into a fresh database"
+          $COMPOSE exec -T postgres psql -U "$PGUSER" -d postgres -c \
+            "drop database if exists nis2_restored"
+          $COMPOSE exec -T postgres psql -U "$PGUSER" -d postgres -c \
+            "create database nis2_restored"
+          $COMPOSE exec -T -e PGOPTIONS=--client-min-messages=warning postgres \
+            psql -q -v ON_ERROR_STOP=1 -U "$PGUSER" -d nis2_restored < /tmp/backup.sql
+
+          echo "--- the data survived"
+          AFTER=$($COMPOSE exec -T postgres psql -U "$PGUSER" -d nis2_restored -tAc \
+            "select count(*) from organizations")
+          echo "organizations: $AFTER"
+          test "$AFTER" = "$BEFORE" || { echo "restore lost rows: $BEFORE -> $AFTER"; exit 1; }
+
+          echo "--- and the restored copy carries the schema version"
+          REV=$($COMPOSE exec -T postgres psql -U "$PGUSER" -d nis2_restored -tAc \
+            "select version_num from alembic_version")
+          echo "alembic_version: $REV"
+          test -n "$REV" || { echo "restored database is not stamped; an upgrade would misbehave"; exit 1; }
+
+          echo "--- migrating the restored copy must be a no-op, not an error"
+          $COMPOSE exec -T \
+            -e DATABASE_URL="postgresql+asyncpg://$PGUSER:$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)@postgres:5432/nis2_restored" \
+            -e MIGRATION_DATABASE_URL="postgresql+asyncpg://$PGUSER:$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)@postgres:5432/nis2_restored" \
+            api alembic upgrade head
 
       - name: The production compose file must at least resolve
         # Not booted here (it wants port 80/443 and a real domain), but a

@@ -15,30 +15,13 @@ import { useIncidentMonitor, useCreateIncident, useUpdateIncident, useDeleteInci
 import { RedButtonDialog } from "@/components/incidents/red-button-dialog"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
+import { deadlineState, formatRemaining, type Deadline } from "@/lib/deadlines"
 
 const severityVariant: Record<string, "critical" | "high" | "medium" | "low"> = {
   critical: "critical",
   high: "high",
   medium: "medium",
   low: "low",
-}
-
-// Format a signed millisecond delta as "Dd HH:MM:SS" (or "HH:MM:SS" under a day).
-function fmt(ms: number): string {
-  const neg = ms < 0
-  let s = Math.floor(Math.abs(ms) / 1000)
-  const d = Math.floor(s / 86400); s %= 86400
-  const h = Math.floor(s / 3600); s %= 3600
-  const m = Math.floor(s / 60); s %= 60
-  const pad = (n: number) => String(n).padStart(2, "0")
-  const core = d > 0 ? `${d}d ${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(h)}:${pad(m)}:${pad(s)}`
-  return (neg ? "-" : "") + core
-}
-
-interface Deadline {
-  label: string
-  deadline: string | null
-  sent_at: string | null
 }
 
 function DeadlineChip({
@@ -57,12 +40,10 @@ function DeadlineChip({
   recording: boolean
 }) {
   const t = useTranslations("incidents")
-  if (!deadline.deadline) return null
-
-  const remainingMs = new Date(deadline.deadline).getTime() - nowMs
-  const sent = !!deadline.sent_at
-  const overdue = isOpen && !sent && remainingMs < 0
-  const urgent = isOpen && !sent && remainingMs >= 0 && remainingMs < 6 * 3600_000
+  // Derived in lib/deadlines so the arithmetic can be tested without a DOM.
+  const state = deadlineState(deadline, isOpen, nowMs)
+  if (!state) return null
+  const { remainingMs, sent, overdue, urgent } = state
 
   const tone = sent
     ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
@@ -84,12 +65,12 @@ function DeadlineChip({
         ) : overdue ? (
           <>
             <AlertOctagon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="font-mono text-sm font-semibold tabular-nums">{fmt(remainingMs)}</span>
+            <span className="font-mono text-sm font-semibold tabular-nums">{formatRemaining(remainingMs)}</span>
           </>
         ) : (
           <>
             <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="font-mono text-sm font-semibold tabular-nums">{fmt(remainingMs)}</span>
+            <span className="font-mono text-sm font-semibold tabular-nums">{formatRemaining(remainingMs)}</span>
           </>
         )}
       </div>

@@ -17,9 +17,12 @@ from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.scan import Scan
 from app.models.scan_result import ScanResult
+from pydantic import ValidationError
+
 from app.models.user import User
 from app.schemas.finding import FindingListResponse, FindingResponse
 from app.schemas.scan import (
+    ScanConfigSnapshot,
     ScanCreate,
     ScanListResponse,
     ScanResponse,
@@ -140,6 +143,10 @@ async def create_scan(
         elif asset.target_type in ("ip", "cidr"):
             ip_ranges.append(asset.target_value)
 
+    # Built through the same schema the worker validates on read, so what is
+    # stored is valid by construction rather than by hope. A scan whose assets
+    # resolved to nothing is refused here — at the request, where the user can
+    # act on it — instead of becoming a scan of nothing that scores 100.
     config_snapshot = {
         "name": payload.name,
         "domains": domains,
@@ -157,6 +164,19 @@ async def create_scan(
         "scan_timeout": payload.scan_timeout or 10,
         "max_hosts": payload.max_hosts or 0,  # 0 = unlimited
     }
+
+    try:
+        config_snapshot = ScanConfigSnapshot.model_validate(
+            config_snapshot
+        ).model_dump()
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "The selected assets produced no scannable target. "
+                f"({exc.errors()[0].get('msg', 'invalid scan configuration')})"
+            ),
+        )
 
     scan = Scan(
         organization_id=org_id,

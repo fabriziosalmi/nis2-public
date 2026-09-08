@@ -63,6 +63,15 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.incident_tasks.check_incident_deadlines",
         "schedule": 900.0,  # 15 minutes
     },
+    # Reconcile scans abandoned by a worker that died between the commit that
+    # marks a scan `running` and the one that writes its terminal state. Nothing
+    # looked at those rows before, so a SIGKILLed worker left a scan running for
+    # ever — visible to the user as a scan that never finishes and cannot be
+    # retried. Hourly is ample against a six-hour staleness threshold.
+    "reap-stuck-scans": {
+        "task": "app.tasks.scan_tasks.reap_stuck_scans",
+        "schedule": 3600.0,
+    },
 }
 
 # v2.4.19 hotfix: explicitly import the task modules so their

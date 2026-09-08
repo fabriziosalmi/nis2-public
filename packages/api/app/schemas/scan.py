@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ScanCreate(BaseModel):
@@ -78,3 +78,56 @@ class ScanResultListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ScanConfigSnapshot(BaseModel):
+    """The frozen scan configuration, validated on the way in AND on the way out.
+
+    `scans.config_snapshot` is a JSONB column, and the worker used to rebuild the
+    scanner's configuration from it with `.get()` and a default for every key.
+    That made a damaged or empty snapshot indistinguishable from a valid one: no
+    key raised, the target lists came back empty, the scan probed nothing, and
+    the compliance engine scored the result 100 — so losing a scan's own
+    configuration was recorded as perfect compliance.
+
+    The engine no longer scores an unassessed scan, which stops the wrong answer
+    reaching the dossier. This stops the wrong *input* being accepted at all: a
+    snapshot that does not describe at least one target is refused, loudly, with
+    the scan marked failed and the reason recorded, rather than silently becoming
+    a scan of nothing.
+
+    Unknown keys are tolerated deliberately. Snapshots written by earlier
+    releases must stay re-runnable, and a key this version does not read is not
+    evidence of damage — the invariant worth enforcing is that the targets and
+    the bounds are present and sane.
+    """
+
+    name: str = Field(..., min_length=1, max_length=256)
+    domains: list[str] = Field(default_factory=list)
+    ip_ranges: list[str] = Field(default_factory=list)
+    pinned_ips: dict[str, str] = Field(default_factory=dict)
+    scan_type: str = Field(default="full", max_length=50)
+    features: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "dns_checks": True,
+            "web_checks": True,
+            "port_scan": True,
+            "whois_checks": True,
+        }
+    )
+    # Bounds mirror ScanCreate: a snapshot that survived a hand-edit or a partial
+    # write must not be able to ask for concurrency the API would have rejected.
+    concurrency: int = Field(default=20, ge=1, le=200)
+    scan_timeout: int = Field(default=10, ge=1, le=120)
+    max_hosts: int = Field(default=0, ge=0, le=100000)
+
+    model_config = {"extra": "ignore"}
+
+    @model_validator(mode="after")
+    def _must_describe_at_least_one_target(self) -> "ScanConfigSnapshot":
+        if not self.domains and not self.ip_ranges:
+            raise ValueError(
+                "the scan configuration names no domains and no IP ranges, so "
+                "there is nothing to scan"
+            )
+        return self

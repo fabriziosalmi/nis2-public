@@ -125,6 +125,18 @@ class Settings(BaseSettings):
     # provisioned before this key existed (fine for HS256). RS256 mode has no
     # jwt_secret, so production REQUIRES this — see _validate_runtime_config.
     data_encryption_key: str = ""
+    # The key this deployment is rotating AWAY from. Set it to the old value for
+    # the duration of a rotation: decryption tries the current key first and
+    # falls back to this one, so existing MFA seeds and notification credentials
+    # keep working while `make reencrypt` rewrites them under the new key. Unset
+    # it once that has finished.
+    #
+    # Without an overlap, rotating DATA_ENCRYPTION_KEY was not merely unsupported
+    # but silently destructive: every TOTP seed and every stored credential
+    # became undecryptable, and the decrypt paths returned the ciphertext instead
+    # of raising, so the symptom was every MFA user being unable to log in with
+    # nothing in the response explaining why.
+    data_encryption_key_previous: str = ""
 
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7

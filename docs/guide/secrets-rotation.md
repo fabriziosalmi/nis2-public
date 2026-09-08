@@ -7,9 +7,14 @@
 | Secret | File | Purpose | Rotation Frequency |
 |--------|------|---------|-------------------|
 | `JWT_SECRET` | `.env` | Signs access/refresh tokens | Every 90 days |
-| `NEXTAUTH_SECRET` | `.env` | Signs Next.js session cookies | Every 90 days |
+| `DATA_ENCRYPTION_KEY` | `.env` | Encrypts MFA seeds, notification credentials and leaked-secret evidence at rest | Every 180 days — **read the procedure below first** |
 | `POSTGRES_PASSWORD` | `.env` | PostgreSQL authentication | Every 180 days |
-| `REDIS_URL` | `.env` | Redis connection (if auth enabled) | As needed |
+| `NIS2_APP_PASSWORD` | `.env` | The NOSUPERUSER runtime database role that makes RLS bind | Every 180 days |
+| `REDIS_PASSWORD` | `.env` | Redis authentication (broker + rate-limit counters) | As needed |
+
+`NEXTAUTH_SECRET` was removed in 2.6.x — `next-auth` is not a dependency of
+`packages/web` and nothing reads the variable. If your `.env` still carries one,
+it is inert and can be deleted.
 
 ## Generating Strong Secrets
 
@@ -46,15 +51,45 @@ curl -s http://localhost:8000/api/v1/health | jq .
 
 **Grace period**: There is no dual-key support. Rotation is immediate — all sessions are invalidated.
 
-### NEXTAUTH_SECRET Rotation
+### DATA_ENCRYPTION_KEY Rotation
 
-**Impact**: All frontend sessions are invalidated. Users must re-login.
+**This is the one rotation that can lose data if performed naively.**
+
+`DATA_ENCRYPTION_KEY` encrypts, at rest, every TOTP/MFA seed, every notification
+channel credential, and the leaked-secret evidence attached to findings.
+Replacing it without re-encrypting leaves all of those unreadable — and until
+2.6.16 the failure was silent: the decrypt path returned the ciphertext instead
+of raising, so the only symptom was every MFA-enrolled user finding that their
+codes no longer matched.
+
+Rotate through an overlap, not a cliff:
 
 ```bash
-NEW_SECRET=$(openssl rand -base64 32)
-sed -i "s/^NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$NEW_SECRET/" .env
-docker compose -f infra/docker/docker-compose.prod.yml restart web
+# 1. Old key becomes the fallback; new key becomes current.
+OLD_KEY=$(grep '^DATA_ENCRYPTION_KEY=' .env | cut -d= -f2-)
+NEW_KEY=$(openssl rand -base64 32)
+sed -i "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$NEW_KEY|" .env
+echo "DATA_ENCRYPTION_KEY_PREVIOUS=$OLD_KEY" >> .env
+
+# 2. Restart so both keys are accepted for reading. New writes use the new key.
+docker compose -f infra/docker/docker-compose.prod.yml up -d api celery-worker
+
+# 3. Check what would move, then move it.
+make reencrypt-dry-run
+make reencrypt
+
+# 4. Remove the fallback and restart. Anything missed now fails loudly.
+sed -i '/^DATA_ENCRYPTION_KEY_PREVIOUS=/d' .env
+docker compose -f infra/docker/docker-compose.prod.yml up -d api celery-worker
 ```
+
+**Impact**: none, if the sequence is followed — no user is logged out and no MFA
+enrolment is lost. Skipping step 3 loses every MFA enrolment and every stored
+channel credential.
+
+**Grace period**: as long as `DATA_ENCRYPTION_KEY_PREVIOUS` remains set. Leaving
+it set indefinitely is not harmful to availability, but it keeps the old key on
+disk, so remove it once step 3 reports zero unreadable values.
 
 ### POSTGRES_PASSWORD Rotation
 
