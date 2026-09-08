@@ -29,13 +29,66 @@ class Config:
     pinned_ips: dict = field(default_factory=dict)
     allow_private_ips: bool = False
 
+    # Keys this loader understands. An unknown key is a typo, and silently
+    # ignoring it was the defect: `concurrancy: 200` in a YAML file was accepted
+    # and the scan ran at the default 20, with no error and no warning. That
+    # matters more than a normal config typo here, because these values govern
+    # how hard the platform touches third-party infrastructure — concurrency and
+    # max_hosts are the two settings an operator reaches for after a customer
+    # complains about scan load, and both could be silently ignored.
+    _KNOWN_KEYS = frozenset({
+        "project_name", "scan_timeout", "concurrency", "targets",
+        "compliance_profile", "max_hosts", "features", "pinned_ips",
+        "allow_private_ips", "dry_run",
+    })
+    _KNOWN_TARGET_KEYS = frozenset({"ip_ranges", "domains", "asns"})
+
+    # Same bounds the API enforces on the equivalent request fields, so a config
+    # file cannot ask for something the HTTP surface would have rejected.
+    _BOUNDS = {
+        "concurrency": (1, 200),
+        "scan_timeout": (1, 120),
+        "max_hosts": (0, 100000),
+    }
+
     @classmethod
     def load(cls, path: str, max_hosts: int = 0, dry_run: bool = False) -> "Config":
         with open(path, "r") as f:
             data = yaml.safe_load(f)
 
-        # Manual parsing/validation since we dropped Pydantic
-        t_data = data.get('targets', {})
+        if data is None:
+            raise ValueError(f"{path} is empty.")
+        if not isinstance(data, dict):
+            raise ValueError(f"{path} must contain a mapping at the top level.")
+
+        unknown = set(data) - cls._KNOWN_KEYS
+        if unknown:
+            raise ValueError(
+                f"{path} has unrecognised key(s): {', '.join(sorted(unknown))}. "
+                f"Known keys: {', '.join(sorted(cls._KNOWN_KEYS))}."
+            )
+
+        for key, (low, high) in cls._BOUNDS.items():
+            if key not in data:
+                continue
+            value = data[key]
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"{path}: {key} must be an integer, got {value!r}.")
+            if not low <= value <= high:
+                raise ValueError(
+                    f"{path}: {key} must be between {low} and {high}, got {value}."
+                )
+
+        t_data = data.get('targets', {}) or {}
+        if not isinstance(t_data, dict):
+            raise ValueError(f"{path}: targets must be a mapping.")
+        unknown_targets = set(t_data) - cls._KNOWN_TARGET_KEYS
+        if unknown_targets:
+            raise ValueError(
+                f"{path}: targets has unrecognised key(s): "
+                f"{', '.join(sorted(unknown_targets))}."
+            )
+
         targets = Targets(
             ip_ranges=t_data.get('ip_ranges', []),
             domains=t_data.get('domains', []),

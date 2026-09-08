@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 os.environ["ENVIRONMENT"] = "development"
 
-from app.routers.auth import limiter
+from app.limiter import limiter
 
 @pytest.fixture(autouse=True)
 def disable_rate_limiter():

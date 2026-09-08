@@ -94,6 +94,12 @@ services:
     build:
       context: ../..
       dockerfile: packages/api/Dockerfile
+      # Stamped into the image so a running container can be traced back to
+      # its source. Empty when the variables are unset, and the Dockerfile
+      # defaults to "unknown" — misleading nobody.
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        APP_VERSION: ${APP_VERSION:-unknown}
     # 4 workers x (DB_POOL_SIZE 10 + DB_MAX_OVERFLOW 5) = 60 connections, which
     # fits inside postgres's max_connections of 100 alongside the Celery worker,
     # beat, and a psql session. Changing the worker count here without changing
@@ -247,6 +253,12 @@ services:
       context: ../../packages/web
       dockerfile: Dockerfile
       target: production
+      # Stamped into the image so a running container can be traced back to
+      # its source. Empty when the variables are unset, and the Dockerfile
+      # defaults to "unknown" — misleading nobody.
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        APP_VERSION: ${APP_VERSION:-unknown}
     # The production stage builds Next.js as a *standalone* bundle: only
     # `.next/standalone/server.js`, `.next/static/` and `public/` are
     # copied into the final image — no `node_modules`, no `package.json`,

@@ -531,6 +531,12 @@ prod-up: prod-preflight
 prod-down:
 	docker compose --env-file .env -f infra/docker/docker-compose.prod.yml down
 
+# Stamped into the images at build time (see the Dockerfiles' LABEL block) so a
+# running container can be traced back to the source it was built from. Exported
+# rather than passed inline so every compose invocation below picks them up.
+export GIT_COMMIT := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+export APP_VERSION := $(shell cat VERSION 2>/dev/null || echo unknown)
+
 # ─── Cleanup ─────────────────────────────────────────────────────────
 # Drops dev volumes (postgres data, etc.) and Python/Next caches.
 # Safe to re-run; preserves images and node_modules so the next `make dev`

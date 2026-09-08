@@ -30,7 +30,7 @@ from app.dependencies import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.routers.auth import limiter
+from app.limiter import limiter
 from app.models.membership import Membership
 from app.models.user import User
 
@@ -225,20 +225,17 @@ async def handle_tool_call(
         # internal address, and its certificate subject, issuer, SANs and
         # fingerprint came back in the tool response. routers/certificates.py
         # passes pinned_ip into the same analyzer call; this copy did not.
+        # Through the service, not around it. This transport used to import the
+        # analyzer directly and reimplement the call, which is how it came to
+        # drop the pinned IP the REST handler passes.
+        from app.services.scan_service import ScanService
+
         try:
-            validation = await validate_domain_pinned(domain)
+            return await ScanService.analyze_certificate(
+                domain, arguments.get("port", 443)
+            )
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
-
-        from nis2scan.certificate import CertificateAnalyzer
-
-        analyzer = CertificateAnalyzer(timeout=10)
-        info = await analyzer.analyze(
-            validation.target_value,
-            arguments.get("port", 443),
-            pinned_ip=validation.pinned_ip,
-        )
-        return analyzer.to_dict(info)
 
     elif name == "scan_target":
         from nis2scan.config import Config, Targets

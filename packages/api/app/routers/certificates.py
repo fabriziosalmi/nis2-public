@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from app.dependencies import get_current_org, require_role
 from app.models.membership import Membership
 from app.models.user import User
-from app.routers.auth import limiter  # share the single Limiter instance
+from app.limiter import limiter
 from app.utils.target_validator import (
     TargetValidationError,
     ValidationResult,
@@ -78,23 +78,23 @@ async def check_certificate(
     current_org: tuple[User, Membership] = Depends(get_current_org),
 ):
     """Deep certificate analysis for a single domain."""
-    from nis2scan.certificate import CertificateAnalyzer
+    from app.services.scan_service import ScanService
 
     _require_tls_port(payload.port)
-    validation = await _validate_cert_target(payload.domain)
-
-    analyzer = CertificateAnalyzer(timeout=10)
     try:
-        info = await analyzer.analyze(
-            validation.target_value, payload.port, pinned_ip=validation.pinned_ip
-        )
-        return analyzer.to_dict(info)
+        # Validation and pinning happen inside the service, so this handler and
+        # the MCP tool cannot drift apart again — they did, and the copy that
+        # drifted was the one that dropped the pinned IP.
+        return await ScanService.analyze_certificate(payload.domain, payload.port)
+    except TargetValidationError:
+        # Logged but never echoed back: the validation detail is an
+        # internal-network oracle.
+        logger.warning("Certificate target rejected: %s", payload.domain)
+        raise HTTPException(status_code=422, detail="Invalid or disallowed target.")
     except Exception:
         # Generic message to the caller; full detail server-side only.
         logger.exception(
-            "Certificate analysis failed for %s:%s",
-            validation.target_value,
-            payload.port,
+            "Certificate analysis failed for %s:%s", payload.domain, payload.port
         )
         raise HTTPException(status_code=422, detail="Certificate analysis failed.")
 
@@ -109,29 +109,22 @@ async def bulk_check_certificates(
     """Analyze certificates for multiple domains at once."""
     import asyncio
 
-    from nis2scan.certificate import CertificateAnalyzer
+    from app.services.scan_service import ScanService
 
     _require_tls_port(payload.port)
 
-    analyzer = CertificateAnalyzer(timeout=10)
-
     async def _check(domain: str):
-        # Validate/pin every domain up front; an invalid one gets a generic
-        # per-item error and is never connected to.
+        # Through the service, like the single-domain handler and the MCP tool.
+        # This was the third call site of the same operation; validation and
+        # pinning live in one place now, so a future change cannot reach two of
+        # them and miss the third.
         try:
-            validation = await validate_domain_pinned(domain)
+            return await ScanService.analyze_certificate(domain, payload.port)
         except TargetValidationError:
             logger.warning("Bulk certificate target rejected: %s", domain)
             return {"domain": domain, "error": "Invalid or disallowed target", "score": 0}
-        try:
-            info = await analyzer.analyze(
-                validation.target_value, payload.port, pinned_ip=validation.pinned_ip
-            )
-            return analyzer.to_dict(info)
         except Exception:
-            logger.exception(
-                "Bulk certificate analysis failed for %s", validation.target_value
-            )
+            logger.exception("Bulk certificate analysis failed for %s", domain)
             return {"domain": domain, "error": "Certificate analysis failed", "score": 0}
 
     tasks = [_check(d) for d in payload.domains]

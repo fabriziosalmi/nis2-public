@@ -330,7 +330,7 @@ def _fake_membership(role: str):
 class TestMcpRateLimit:
     def test_mcp_call_rate_limit(self, client, app):
         from app.dependencies import get_current_org
-        from app.routers.auth import limiter
+        from app.limiter import limiter
 
         # `viewer` is enough for list_governance_items (a read-only tool) and
         # keeps this test about rate limiting rather than authorisation.

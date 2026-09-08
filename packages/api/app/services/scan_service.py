@@ -74,3 +74,33 @@ class ScanService:
         )
 
         return results, report
+
+    @staticmethod
+    async def analyze_certificate(domain: str, port: int = 443) -> dict[str, Any]:
+        """Deep certificate analysis for one host, target validated and pinned.
+
+        The seam exists so that the two callers of this operation — the REST
+        handler and the MCP tool — cannot diverge, and they had. Both validated
+        the target with validate_domain_pinned; only one of them USED the result.
+        The MCP copy discarded it and handed the analyzer the hostname, which
+        resolved again, reopening the DNS-rebinding window the validation exists
+        to close: a domain answering a public address to the checking lookup and
+        169.254.169.254 to the connecting one got a TLS handshake against the
+        internal address, and its certificate came back in the tool response.
+
+        Fixing that copy left two call sites that must stay in step. This makes
+        them one.
+
+        Raises TargetValidationError for a blocked target; the caller decides
+        what a rejection looks like on its own transport.
+        """
+        from nis2scan.certificate import CertificateAnalyzer
+
+        from app.utils.target_validator import validate_domain_pinned
+
+        validation = await validate_domain_pinned(domain)
+        analyzer = CertificateAnalyzer(timeout=10)
+        info = await analyzer.analyze(
+            validation.target_value, port, pinned_ip=validation.pinned_ip
+        )
+        return analyzer.to_dict(info)

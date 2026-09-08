@@ -29,6 +29,13 @@ RUN npm run build
 # non-root user.
 # ----------------------------------------------------------------------
 FROM node:20.18.0-alpine3.20@sha256:b1e0880c3af955867bc2f1944b49d20187beb7afa3f30173e15a97149ab7f5f1 AS production
+
+ARG GIT_COMMIT=unknown
+ARG APP_VERSION=unknown
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.source="https://github.com/fabriziosalmi/nis2-public" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs && \

@@ -45,7 +45,7 @@ from app.routers import (
 )
 from app.routers import jwks as jwks_router
 from app.mcp_server import router as mcp_router
-from app.routers.auth import limiter
+from app.limiter import limiter
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from app.middleware.audit import log_action
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
-from app.routers.auth import limiter  # share the single Limiter instance
+from app.limiter import limiter
 from app.schemas.organization import (
     CreateOrgRequest,
     InviteMemberRequest,

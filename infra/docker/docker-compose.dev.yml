@@ -50,6 +50,12 @@ services:
     build:
       context: ../..
       dockerfile: packages/api/Dockerfile
+      # Stamped into the image so a running container can be traced back to
+      # its source. Empty when the variables are unset, and the Dockerfile
+      # defaults to "unknown" — misleading nobody.
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        APP_VERSION: ${APP_VERSION:-unknown}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ../../packages/api/app:/app/packages/api/app:ro
@@ -174,6 +180,12 @@ services:
       context: ../../packages/web
       dockerfile: Dockerfile
       target: dev
+      # Stamped into the image so a running container can be traced back to
+      # its source. Empty when the variables are unset, and the Dockerfile
+      # defaults to "unknown" — misleading nobody.
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        APP_VERSION: ${APP_VERSION:-unknown}
     command: npm run dev
     volumes:
       - ../../packages/web:/app

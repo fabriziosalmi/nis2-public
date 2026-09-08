@@ -3,6 +3,27 @@
 #               docker inspect --format='{{index .RepoDigests 0}}' python:3.14.5-slim-bookworm
 FROM python:3.14.6-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30
 
+# Traceability from a running container back to its source.
+#
+# Neither image carried anything identifying the commit it was built from. The
+# API could report a package version, so an artefact could be attributed to a
+# RELEASE — but not to a commit, and several commits share a version string
+# during development. A customer running a container had no way to establish
+# whether it came from the tagged commit, a branch, or a working tree with local
+# modifications; neither did the maintainer receiving a bug report. For AGPL
+# software distributed as images, being unable to identify which source
+# corresponds to a given image is also a licence-obligation problem.
+#
+# Passed by the compose files from the build context; "unknown" when built by
+# hand outside them, which is honest rather than misleading.
+ARG GIT_COMMIT=unknown
+ARG APP_VERSION=unknown
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.source="https://github.com/fabriziosalmi/nis2-public" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -23,12 +44,31 @@ WORKDIR /app
 # cache rebuild, no GUI deps). The runtime libraries here pull in
 # everything WeasyPrint touches at import time + render time. Build
 # tools (gcc, libpq-dev) stay for asyncpg / Pydantic compilation.
+# Versions pinned. These packages are the entire rendering stack for the PDF/A
+# dossier — Pango, Cairo, HarfBuzz and the DejaVu fonts are what WeasyPrint draws
+# with — plus the toolchain asyncpg and Pydantic compile against. Unpinned, two
+# builds of the same commit a month apart contained different renderers, so a
+# rendering regression introduced by a Debian point release could appear in a
+# customer's dossier with no change to this repository and could not be
+# reproduced by rebuilding the commit. For a document meant to be archival
+# evidence, a floating renderer is the wrong kind of variation.
+#
+# The trade-off, stated plainly: when Debian publishes a security update the old
+# version leaves the archive and this build fails with "Version '...' was not
+# found". That is the intended signal, not a defect. To refresh, run
+# `docker compose exec api dpkg-query -W -f='${Package}=${Version}\n' <pkg>`
+# against a freshly built image and update the list below in one commit.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        gcc libpq-dev \
-        libglib2.0-0 libpango-1.0-0 libpangoft2-1.0-0 \
-        libharfbuzz0b libcairo2 libffi8 \
-        fonts-dejavu-core && \
+        gcc=4:12.2.0-3 \
+        libpq-dev=15.19-0+deb12u1 \
+        libglib2.0-0=2.74.6-2+deb12u9 \
+        libpango-1.0-0=1.50.12+ds-1 \
+        libpangoft2-1.0-0=1.50.12+ds-1 \
+        libharfbuzz0b=6.0.0+dfsg-3 \
+        libcairo2=1.16.0-7 \
+        libffi8=3.4.4-1 \
+        fonts-dejavu-core=2.37-6 && \
     rm -rf /var/lib/apt/lists/*
 
 # Scanner is a local dependency of the API; install it first.

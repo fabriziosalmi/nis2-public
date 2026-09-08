@@ -1,5 +1,86 @@
 # Changelog
 
+## [2.6.18] - 2026-09-08
+
+Tier C of the repository audit — the remaining findings, closed in four batches.
+
+### 📈 The monitoring stack has something to monitor
+
+The production compose has shipped a Prometheus container since 2.4.x, scraping
+three jobs of which **two pointed at `/metrics` endpoints that did not exist**.
+So a deployment came up two-thirds red: no application telemetry at all, and a
+monitoring system whose targets are permanently red teaches whoever looks at it
+to stop looking.
+
+`/metrics` now answers, with deliberately few series: request rate, errors and
+latency by method, route **template** and status — the template, so an id in a URL
+cannot explode cardinality — plus database pool utilisation, the leading
+indicator of the failure this deployment is closest to. The web scrape job is
+removed rather than left failing; Next.js in standalone mode exposes nothing, and
+a job that can only ever fail is worse than no job.
+
+### 🔍 One operation can be followed end to end
+
+There was no correlation identifier. Four gunicorn workers write to one stream
+and a Celery worker writes asynchronously to another, so relating the records of
+a single operation was possible only by timestamp and guesswork — while the
+machinery to fix it was already present, carrying identity into the audit table.
+
+A request id is generated at the boundary, or taken from the caller and bounded
+and stripped so it cannot inject into a log line or a header; injected into every
+log record; and returned in `X-Request-Id` so a user reporting a problem can
+quote something an operator can grep for.
+
+### 📄 Three documentation claims that were false
+
+- `CONTRIBUTING.md` told contributors to run `ruff check .`, which uses ruff's
+  default rule set and returns over a thousand findings here — none of them what
+  the gate enforces. It says `make lint` now, and `make lint` was widened to
+  exactly what CI runs, so the three cannot disagree again.
+- The README's API-surface table **understated the surface by fourteen
+  endpoints**, including the asset ownership-verification flow and the Art. 23
+  submission-recording endpoint. Corrected, and `scripts/api_surface.py --check`
+  fails the build on drift.
+- The deployment guide told the operator to point `DATABASE_URL` at the bootstrap
+  superuser — which the API now refuses to start with — and to set
+  `NEXTAUTH_SECRET`/`NEXTAUTH_URL`, which nothing reads. Rewritten around the
+  two-identity model.
+
+`UPGRADING.md` gained a rollback procedure where there had been one sentence
+saying the dump was your rollback: application-only, application plus schema
+downgrade, and restore-from-dump.
+
+### 🏗️ Build and traceability
+
+- **apt versions pinned.** The rendering stack for the PDF/A dossier — Pango,
+  Cairo, HarfBuzz, DejaVu — floated, so two builds of the same commit a month
+  apart contained different renderers and a rendering regression could not be
+  reproduced. The trade-off is written in the Dockerfile: when Debian publishes a
+  security update the build fails, and that is the intended signal.
+- **Images carry their commit.** Neither image identified the source it was built
+  from, so an artefact could be attributed to a release but not to a commit — a
+  licence-obligation problem for AGPL software distributed as images, as well as
+  an engineering one. OCI labels plus `GET /api/v1/health`, which now reports
+  version and commit for an operator holding only an HTTP endpoint.
+
+### 🧹 Structure and correctness
+
+- **The rate limiter left `auth.py`.** Eight modules, including the composition
+  root, imported a 1608-line transport to obtain cross-cutting infrastructure.
+- **The certificate operation has one call site.** Three transports each
+  reimplemented it, which is how one came to drop the pinned IP. `ScanService`
+  owns validation and pinning now; no transport imports the analyzer.
+- **The deadline monitor no longer re-queries per incident.** Recipients are a
+  property of the organisation and were fetched once per incident, every fifteen
+  minutes — about 110 queries per tick where 20 would do, growing with exactly
+  the quantity a consultancy accumulates.
+- **The scanner's YAML is validated.** Unknown keys were ignored, so
+  `concurrancy: 200` ran at the default 20 with no error — and those values
+  govern how hard this platform touches third-party infrastructure. Unknown keys
+  and out-of-range values are now errors, with the same bounds the API enforces.
+- `packages/scanner/requirements.txt` deleted: no build installed it, but
+  scanners read it and reported advisories against versions nobody ships.
+
 ## [2.6.17] - 2026-09-08
 
 Tier B of the repository audit: five findings of the same family as the ones

@@ -43,7 +43,7 @@ from app.models.membership import Membership
 from app.models.scan import Scan
 from app.models.user import User
 from app.config import settings
-from app.routers.auth import limiter  # share the single Limiter instance
+from app.limiter import limiter
 from app.utils import report_dedup
 
 router = APIRouter(prefix="/reports", tags=["reports"])

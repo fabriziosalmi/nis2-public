@@ -67,25 +67,35 @@ class TestTheMcpCertificateToolUsesThePinnedIp:
     certificate came back in the tool response.
     """
 
-    def test_the_validation_result_is_bound(self):
-        from app import mcp_server
-
-        source = inspect.getsource(mcp_server.handle_tool_call)
-        assert "validation = await validate_domain_pinned(domain)" in source
-
     def test_the_pinned_ip_reaches_the_analyzer(self):
-        from app import mcp_server
+        """Inside the service now, which is the only place it can be."""
+        from app.services.scan_service import ScanService
 
-        source = inspect.getsource(mcp_server.handle_tool_call)
+        source = inspect.getsource(ScanService.analyze_certificate)
+        assert "validation = await validate_domain_pinned(domain)" in source
         assert "pinned_ip=validation.pinned_ip" in source
 
-    def test_it_matches_the_rest_handler(self):
-        """Two call sites is why one of them was wrong; until they share a
-        service function, pin that both pass the pinned IP."""
+    def test_both_transports_go_through_the_service(self):
+        """Two call sites is why one of them was wrong. They are one now: the
+        MCP tool imported the analyzer directly and reimplemented the call, which
+        is how it came to drop the pinned IP."""
+        from app import mcp_server
         from app.routers import certificates
 
-        rest = inspect.getsource(certificates)
-        assert "pinned_ip=validation.pinned_ip" in rest
+        for module in (mcp_server, certificates):
+            source = inspect.getsource(module)
+            assert "ScanService.analyze_certificate" in source
+            assert "CertificateAnalyzer(timeout=10)" not in source
+
+    def test_a_blocked_target_is_refused_on_both_transports(self):
+        """The service raises; each transport shapes the rejection for its own
+        protocol without leaking why, since the validation detail is an
+        internal-network oracle."""
+        from app import mcp_server
+        from app.routers import certificates
+
+        assert "Target blocked" in inspect.getsource(mcp_server.handle_tool_call)
+        assert "Invalid or disallowed target" in inspect.getsource(certificates)
 
 
 class TestAFailedMigrationStopsTheDeployment:
@@ -121,24 +131,33 @@ class TestTheRateLimiterIsShared:
     """
 
     def test_the_limiter_is_given_a_storage_uri(self):
-        from app.routers import auth
+        from app import limiter as limiter_module
 
-        source = inspect.getsource(auth)
+        source = inspect.getsource(limiter_module)
         assert "storage_uri=_limiter_storage_uri()" in source
 
     def test_it_degrades_rather_than_failing_the_login_path(self):
         """A Redis outage must not deny every login, and must not silently stop
         limiting either."""
-        from app.routers import auth
+        from app import limiter as limiter_module
 
-        source = inspect.getsource(auth)
+        source = inspect.getsource(limiter_module)
         assert "in_memory_fallback_enabled=True" in source
 
     def test_no_broker_configured_means_in_memory(self):
         """A bare local run and the unit tests must not require Redis."""
-        from app.routers.auth import _limiter_storage_uri
+        from app.limiter import _limiter_storage_uri
 
         assert _limiter_storage_uri() is None or _limiter_storage_uri().strip()
+
+    def test_it_no_longer_lives_in_a_transport_module(self):
+        """The composition root imported a 1608-line authentication router to
+        obtain a piece of cross-cutting infrastructure."""
+        from app import main
+
+        source = inspect.getsource(main)
+        assert "from app.limiter import limiter" in source
+        assert "from app.routers.auth import limiter" not in source
 
 
 class TestThePoolFitsInsideTheDatabase:

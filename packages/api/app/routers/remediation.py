@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_org, require_role
-from app.routers.auth import limiter  # share the single Limiter instance
+from app.limiter import limiter
 from app.models.finding import Finding
 from app.models.membership import Membership
 from app.models.user import User

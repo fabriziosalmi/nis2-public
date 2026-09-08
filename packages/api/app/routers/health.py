@@ -25,6 +25,7 @@ Three tiers — each suitable for a different probe type:
 """
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
@@ -43,8 +44,21 @@ _CELERY_PING_TIMEOUT = 3
 
 @router.get("")
 async def health() -> dict:
-    """Liveness probe — always 200 if the process is running."""
-    return {"status": "ok"}
+    """Liveness probe — always 200 if the process is running.
+
+    Carries the build stamp so a container can identify itself without
+    `docker inspect`, which an operator holding only an HTTP endpoint cannot
+    run. `version` comes from the installed package metadata; `commit` from the
+    build argument, and is "unknown" for an image built outside the compose
+    files — honest rather than misleading.
+    """
+    from app.main import API_VERSION
+
+    return {
+        "status": "ok",
+        "version": API_VERSION,
+        "commit": os.environ.get("GIT_COMMIT", "unknown"),
+    }
 
 
 @router.get("/live")

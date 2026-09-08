@@ -136,13 +136,22 @@ async def _check_deadlines() -> dict:
             )
             incidents.extend(_res.scalars().all())
 
-        for incident in incidents:
-            # Re-scope to this incident's org before its org-scoped reads/writes.
-            await set_rls_org_context(db, str(incident.organization_id))
-            # Load org's active notification channels once per incident
+        # Recipients are a property of the ORGANISATION, not of the incident, and
+        # were being re-queried once per incident: two selects each, plus an RLS
+        # re-scope, every fifteen minutes. An installation with ten client
+        # organisations and fifty open incidents performed about a hundred and
+        # ten queries per tick where roughly twenty would do — and it grew with
+        # exactly the quantity a consultancy managing many clients accumulates.
+        # Resolved once per organisation and cached for the loop below.
+        recipients_by_org: dict = {}
+
+        async def _recipients_for(org_id) -> list:
+            if org_id in recipients_by_org:
+                return recipients_by_org[org_id]
+            await set_rls_org_context(db, str(org_id))
             chan_result = await db.execute(
                 select(NotificationChannel).where(
-                    NotificationChannel.organization_id == incident.organization_id,
+                    NotificationChannel.organization_id == org_id,
                     NotificationChannel.is_active.is_(True),
                 )
             )
@@ -154,7 +163,7 @@ async def _check_deadlines() -> dict:
                     select(User)
                     .join(Membership, Membership.user_id == User.id)
                     .where(
-                        Membership.organization_id == incident.organization_id,
+                        Membership.organization_id == org_id,
                         # "owner" was in this filter and could never match:
                         # registration creates an `admin` membership and both the
                         # invite and role-change schemas constrain the value to
@@ -168,6 +177,17 @@ async def _check_deadlines() -> dict:
                 )
                 admins = admin_result.scalars().all()
                 channels = [_synthetic_email_channel(admin.email) for admin in admins]
+
+            recipients_by_org[org_id] = channels
+            return channels
+
+        for incident in incidents:
+            # Re-scope to this incident's org before its org-scoped reads/writes.
+            # _recipients_for scopes too, but only on a cache miss, so the write
+            # path below cannot rely on it having run.
+            await set_rls_org_context(db, str(incident.organization_id))
+            channels = await _recipients_for(incident.organization_id)
+            await set_rls_org_context(db, str(incident.organization_id))
 
             for deadline_field, sent_field, label, article_ref in _DEADLINES:
                 deadline: Optional[datetime] = getattr(incident, deadline_field, None)

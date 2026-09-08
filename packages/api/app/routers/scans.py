@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.utils import asset_verification
 from app.dependencies import dual_auth_with_scope, get_current_org, require_role
-from app.routers.auth import limiter  # share the single Limiter instance
+from app.limiter import limiter
 from app.models.asset import Asset
 from app.models.finding import Finding
 from app.models.membership import Membership

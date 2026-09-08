@@ -103,7 +103,14 @@ def test_interpolated_variables_are_documented_in_env_example(compose_file: str)
     declared = {
         m.group(1) for m in re.finditer(r"(?m)^([A-Z][A-Z0-9_]*)=", env_example)
     }
-    missing = interpolated - declared
+    # Build-time stamps, not deployment configuration. The Makefile exports them
+    # from `git rev-parse` and the VERSION file so the images carry an OCI
+    # revision label; an operator neither sets them nor should, and putting them
+    # in .env.example would invite someone to pin a commit by hand. The
+    # Dockerfiles default both to "unknown", so an image built outside the
+    # Makefile is labelled honestly rather than wrongly.
+    build_stamps = {"GIT_COMMIT", "APP_VERSION"}
+    missing = interpolated - declared - build_stamps
     assert not missing, (
         f"{compose_file} interpolates {sorted(missing)}, which .env.example does "
         f"not declare. An operator has no way to know to set them, so they "
