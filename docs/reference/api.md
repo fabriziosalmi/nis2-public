@@ -22,6 +22,12 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | POST | `/api/v1/auth/change-password` | Rotate the user's password. Verifies `current_password`, hashes `new_password`, stamps `password_changed_at` so every other still-active session is invalidated on its next request, re-issues this session's cookies. `5/min/IP` rate-limited | Yes |
 | POST | `/api/v1/auth/forgot-password` | Kick off the email-based reset flow. Always returns 204 regardless of whether the email exists, so the response can't be used to enumerate registered users. `5/min/IP` rate-limited | No |
 | POST | `/api/v1/auth/reset-password` | Complete the reset flow with a single-use token (delivered out-of-band by email) and a new password. Tokens are sha256-hashed at rest, expire after `RESET_TOKEN_TTL_MINUTES` (default 30), and a single 400 covers `{unknown, expired, used}` — no oracle on which one applies. `10/min/IP` rate-limited | No |
+| POST | `/api/v1/auth/accept-invite` | Activate an invited user's account by setting their password. The invite token is single-use | No |
+| GET | `/api/v1/auth/me/export` | GDPR Art. 15 export: everything held about the calling user, as JSON | Yes |
+| DELETE | `/api/v1/auth/me` | GDPR Art. 17 erasure of the calling user's account | Yes |
+| POST | `/api/v1/auth/totp/setup` | Begin TOTP/MFA enrolment. Returns the provisioning URI; the seed is encrypted at rest with `DATA_ENCRYPTION_KEY` | Yes |
+| POST | `/api/v1/auth/totp/verify` | Confirm enrolment (or a login challenge) with a 6-digit code | Yes |
+| POST | `/api/v1/auth/totp/disable` | Disable TOTP/MFA for the calling user | Yes |
 | POST | `/api/v1/auth/switch-org` | Switch the active organization for the current session. Body: `{"organization_id": "<uuid>"}`. Validates the caller has a membership for the target org (403 otherwise — the org may exist but the membership doesn't), then mints fresh access / refresh / csrf tokens with the new `org_id` claim and rotates the cookies. Returns `TokenResponse` (same shape as `/login`). Used by the web client's org-switcher dropdown; SDKs can call it the same way. `10/min/IP` rate-limited | Yes |
 
 ## Scans
@@ -58,6 +64,9 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | GET | `/api/v1/assets/{asset_id}` | Get asset details | Session or API key |
 | PATCH | `/api/v1/assets/{asset_id}` | Update an asset | Session |
 | DELETE | `/api/v1/assets/{asset_id}` | Delete an asset | Session |
+| POST | `/api/v1/assets/{asset_id}/verification/start` | Issue a DNS TXT challenge proving control of a domain. Returns the record name and value to publish | Admin/Auditor |
+| POST | `/api/v1/assets/{asset_id}/verification/check` | Look for the challenge record and, if found, mark the asset `verified` | Admin/Auditor |
+| POST | `/api/v1/assets/{asset_id}/attest` | For IP addresses and CIDR ranges, which have no DNS to prove anything with: a named, dated statement of authority, recorded in the audit log. Rejected for domains — those have evidence available | Admin |
 | POST | `/api/v1/assets/import` | Import assets from a CSV file | Session |
 
 ## Schedules
@@ -96,6 +105,7 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | Method | Path | Description | Auth |
 |---|---|---|---|
 | GET | `/api/v1/health` | Liveness check. Returns `{"status": "ok"}` | No |
+| GET | `/api/v1/health/live` | Explicit liveness alias, for the k8s naming convention | No |
 | GET | `/api/v1/health/ready` | Readiness check. Tests database and Redis connectivity | No |
 
 ## Certificates
@@ -120,12 +130,19 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
+| GET | `/api/v1/incidents/taxonomy` | NIS2 incident taxonomy (types, severities, statuses) — the wire vocabulary the forms and the ACN export share | Yes |
 | POST | `/api/v1/incidents` | Report an incident (CSIRT Art. 23 taxonomy) | Yes |
 | GET | `/api/v1/incidents` | List incidents for the organization | Yes |
 | GET | `/api/v1/incidents/{id}` | Get incident details | Yes |
 | PATCH | `/api/v1/incidents/{id}` | Update incident status or details | Yes |
+| DELETE | `/api/v1/incidents/{id}` | Delete an incident | Admin |
+| POST | `/api/v1/incidents/{id}/export` | Render the incident as an ACN/CSIRT submission package | Admin/Auditor |
 | GET | `/api/v1/incident-monitor` | Art. 23 deadline monitor — incidents with live 24h/72h/1-month countdowns (server-computed `seconds_remaining` / `breached`). Drives the Incidents dashboard page | Yes |
 | GET | `/api/v1/incident-monitor/{id}` | Single incident with its computed Art. 23 deadline states | Yes |
+| POST | `/api/v1/incident-monitor` | Open an Art. 23 clock for an incident: records the detection moment the 24h / 72h / 1-month deadlines run from | Yes |
+| PATCH | `/api/v1/incident-monitor/{id}` | Update the tracked incident | Admin/Auditor |
+| DELETE | `/api/v1/incident-monitor/{id}` | Stop tracking an incident | Admin |
+| POST | `/api/v1/incident-monitor/{id}/submissions` | Record that a notification was actually sent. Art. 23(4)(d) anchors the final report on the notification, not on detection, so this is what makes the last deadline correct | Admin/Auditor |
 
 ## Governance
 
@@ -136,6 +153,9 @@ Read-only endpoints under **scans / findings / assets** additionally accept a lo
 | POST | `/api/v1/governance/seed` | Seed the checklist from the governance template | Yes |
 | GET | `/api/v1/governance/score` | Weighted compliance score (CRITICAL×3 / HIGH×2 / MEDIUM×1) | Yes |
 | POST | `/api/v1/governance/sync-risk` | The scanner→compliance **bridge**: pulls open findings in as evidence and escalates the affected checklist items | Yes |
+| POST | `/api/v1/governance/bulk-update` | Update several checklist items in one request | Yes |
+| GET | `/api/v1/governance/subparagraphs` | Catalogue of the recognised Art. 21(2) sub-paragraphs | Yes |
+| GET | `/api/v1/governance/by-subparagraph` | Checklist items grouped by Art. 21(2) sub-paragraph | Yes |
 | GET | `/api/v1/governance/risk-summary` | Per-sub-paragraph risk signals derived from open findings | Yes |
 
 ## API Keys
@@ -149,6 +169,16 @@ Keys authenticate the **read endpoints** of scans / findings / assets (see those
 | GET | `/api/v1/api-keys` | List API keys for the organization (admin or auditor) | Yes |
 | POST | `/api/v1/api-keys` | Create a new API key (admin only). Response includes `raw_key` — shown once | Yes |
 | DELETE | `/api/v1/api-keys/{key_id}` | Revoke an API key (admin only) | Yes |
+
+## Notification Channels
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/api/v1/notification-channels` | List the organization's channels. Credentials are never returned | Yes |
+| POST | `/api/v1/notification-channels` | Create a channel (email / webhook / Slack). The credential is encrypted at rest with `DATA_ENCRYPTION_KEY` | Admin |
+| PATCH | `/api/v1/notification-channels/{channel_id}` | Update a channel | Admin |
+| DELETE | `/api/v1/notification-channels/{channel_id}` | Delete a channel | Admin |
+| POST | `/api/v1/notification-channels/{channel_id}/test` | Send a test notification through the channel | Admin |
 
 ## Audit Log
 
@@ -165,7 +195,10 @@ Every state-changing action under organizations / api-keys / auth (and increasin
 | GET | `/api/v1/vendors` | List vendors for the organization, ordered by criticality | Yes |
 | POST | `/api/v1/vendors` | Register a new vendor/supplier | Yes |
 | GET | `/api/v1/vendors/stats` | Supply chain risk overview: distribution by criticality, type, location | Yes |
+| GET | `/api/v1/vendors/score-formula` | The vendor risk scoring formula this platform applies, published so a score can be checked by hand | Yes |
 | GET | `/api/v1/vendors/{vendor_id}` | Get vendor details | Yes |
+| GET | `/api/v1/vendors/{vendor_id}/score` | Computed supply-chain risk score for one vendor, with the contributing factors | Yes |
+| POST | `/api/v1/vendors/{vendor_id}/score/apply` | Persist the computed score onto the vendor record | Admin/Auditor |
 | PATCH | `/api/v1/vendors/{vendor_id}` | Update vendor details, status, or security assessment | Yes |
 | DELETE | `/api/v1/vendors/{vendor_id}` | Remove a vendor | Yes |
 
@@ -177,6 +210,7 @@ Every state-changing action under organizations / api-keys / auth (and increasin
 | POST | `/api/v1/bia` | Register a business process for BIA | Yes |
 | GET | `/api/v1/bia/matrix` | BIA impact matrix with automatic gap detection | Yes |
 | GET | `/api/v1/bia/{process_id}` | Get business process details | Yes |
+| PATCH | `/api/v1/bia/{process_id}` | Update a business process (RTO / RPO / criticality / dependencies) | Yes |
 | DELETE | `/api/v1/bia/{process_id}` | Remove a business process | Yes |
 
 ## ACN Export (Italy)

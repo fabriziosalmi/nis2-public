@@ -165,7 +165,7 @@ This section describes the controls actually implemented in the codebase. Every 
 See [docs/guide/secrets-rotation.md](docs/guide/secrets-rotation.md) for the rotation procedure covering:
 
 - `JWT_SECRET`
-- `NEXTAUTH_SECRET`
+- `DATA_ENCRYPTION_KEY` (with `DATA_ENCRYPTION_KEY_PREVIOUS` for the overlap window)
 - Database credentials
 - API keys
 

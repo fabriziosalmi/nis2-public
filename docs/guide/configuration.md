@@ -11,6 +11,11 @@ All configuration is managed through environment variables defined in `.env`. Co
 | `POSTGRES_USER` | `nis2` | PostgreSQL user |
 | `POSTGRES_PASSWORD` | `nis2secret` | PostgreSQL password |
 | `POSTGRES_DB` | `nis2` | PostgreSQL database name |
+| `MIGRATION_DATABASE_URL` | (falls back to `DATABASE_URL`) | Privileged identity used ONLY for Alembic and the boot-time RLS setup. `DATABASE_URL` must point at a NOSUPERUSER NOBYPASSRLS role or every RLS policy is decorative — the API asserts this at startup and refuses to serve otherwise |
+| `MIGRATION_DATABASE_URL_SYNC` | (falls back to `DATABASE_URL_SYNC`) | Sync variant of the above |
+| `NIS2_APP_PASSWORD` | — | Password for the `nis2_app` runtime role, created on first volume init by `infra/docker/initdb/01-create-app-role.sh` |
+| `DB_POOL_SIZE` | `10` | Connections per pool, **per gunicorn worker** — gunicorn preforks, so each worker builds its own |
+| `DB_MAX_OVERFLOW` | `5` | Overflow per worker. Total demand is `workers × (pool + overflow)`; keep it below the server's `max_connections` (100 in the stock image) |
 
 ## Redis
 
@@ -26,6 +31,28 @@ All configuration is managed through environment variables defined in `.env`. Co
 | `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime in days |
+
+## Encryption at rest
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATA_ENCRYPTION_KEY` | — | AES-GCM key for TOTP seeds, notification-channel credentials and leaked-secret evidence. At least 32 characters; the API refuses to boot without strong key material |
+| `DATA_ENCRYPTION_KEY_PREVIOUS` | (empty) | The key being rotated away from. Set during a rotation only — see [Secrets rotation](secrets-rotation.md); decryption tries the current key first and falls back to this one |
+
+## Observability
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Verbosity for the API and the worker. Every record carries the request id, which also returns in the `X-Request-Id` response header |
+
+`GET /metrics` exposes Prometheus series — request rate, errors and latency by
+route template, plus database pool utilisation. It is **unauthenticated** and
+mounted outside `/api/v1`, because Prometheus scrapes it over the compose network
+by service name; block it at the edge if the API is exposed directly. The bundled
+`prometheus.yml` already scrapes it.
+
+`GET /api/v1/health` reports the running version and the commit the image was
+built from.
 
 ## Password reset (B05)
 
@@ -62,10 +89,11 @@ Generated reports (PDF / HTML / Markdown / JSON / CSV / JUnit XML) live under `/
 
 | Variable | Default | Description |
 |---|---|---|
-| `NEXTAUTH_URL` | `http://localhost:8077` | NextAuth base URL |
-| `NEXTAUTH_SECRET` | (change in production) | NextAuth encryption secret |
-| `API_URL` | `http://localhost:8000` | Internal API URL (server-side) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Public API URL (client-side) |
+
+`NEXTAUTH_URL`, `NEXTAUTH_SECRET` and `API_URL` were documented here and are not
+read by anything: `next-auth` is not a dependency of `packages/web`. If your
+`.env` still carries them they are inert.
 
 ## Production (Caddy)
 

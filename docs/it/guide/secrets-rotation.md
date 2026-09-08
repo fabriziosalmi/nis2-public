@@ -7,9 +7,14 @@
 | Segreto | File | Scopo | Frequenza di Rotazione |
 |--------|------|---------|-------------------|
 | `JWT_SECRET` | `.env` | Firma i token di accesso/aggiornamento | Ogni 90 giorni |
-| `NEXTAUTH_SECRET` | `.env` | Firma i cookie di sessione di Next.js | Ogni 90 giorni |
+| `DATA_ENCRYPTION_KEY` | `.env` | Cifra a riposo i seed MFA, le credenziali dei canali di notifica e le prove dei segreti trovati | Ogni 180 giorni — **leggi prima la procedura qui sotto** |
 | `POSTGRES_PASSWORD` | `.env` | Autenticazione PostgreSQL | Ogni 180 giorni |
-| `REDIS_URL` | `.env` | Connessione Redis (se l'auth è abilitata) | Al bisogno |
+| `NIS2_APP_PASSWORD` | `.env` | Il ruolo di runtime NOSUPERUSER che rende vincolante la RLS | Ogni 180 giorni |
+| `REDIS_PASSWORD` | `.env` | Autenticazione Redis (broker + contatori del rate limit) | Al bisogno |
+
+`NEXTAUTH_SECRET` è stato rimosso nella serie 2.6.x: `next-auth` non è una
+dipendenza di `packages/web` e nessuno legge quella variabile. Se il tuo `.env`
+la contiene ancora è inerte e puoi eliminarla.
 
 ## Generare Segreti Sicuri
 
@@ -46,15 +51,46 @@ curl -s http://localhost:8000/api/v1/health | jq .
 
 **Periodo di grazia**: Non è previsto il supporto a chiavi multiple. La rotazione ha effetto immediato — tutte le sessioni vengono invalidate.
 
-### Rotazione NEXTAUTH_SECRET
+### Rotazione DATA_ENCRYPTION_KEY
 
-**Impatto**: Tutte le sessioni del frontend vengono invalidate. Gli utenti dovranno effettuare nuovamente l'accesso.
+**È l'unica rotazione che può causare perdita di dati se eseguita ingenuamente.**
+
+`DATA_ENCRYPTION_KEY` cifra a riposo ogni seed TOTP/MFA, ogni credenziale dei
+canali di notifica e le prove dei segreti trovati nei rilievi. Sostituirla senza
+ri-cifrare rende tutto illeggibile — e fino alla 2.6.16 il fallimento era
+silenzioso: il percorso di decrittazione restituiva il testo cifrato anziché
+sollevare un errore, quindi l'unico sintomo era che i codici di ogni utente con
+MFA smettevano di corrispondere.
+
+Ruota con una sovrapposizione, non con uno strappo:
 
 ```bash
-NEW_SECRET=$(openssl rand -base64 32)
-sed -i "s/^NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$NEW_SECRET/" .env
-docker compose -f infra/docker/docker-compose.prod.yml restart web
+# 1. La vecchia chiave diventa il fallback; la nuova diventa quella corrente.
+OLD_KEY=$(grep '^DATA_ENCRYPTION_KEY=' .env | cut -d= -f2-)
+NEW_KEY=$(openssl rand -base64 32)
+sed -i "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$NEW_KEY|" .env
+echo "DATA_ENCRYPTION_KEY_PREVIOUS=$OLD_KEY" >> .env
+
+# 2. Riavvia: da qui entrambe le chiavi sono accettate in lettura, le nuove
+#    scritture usano quella nuova.
+docker compose -f infra/docker/docker-compose.prod.yml up -d api celery-worker
+
+# 3. Guarda cosa verrebbe riscritto, poi riscrivilo.
+make reencrypt-dry-run
+make reencrypt
+
+# 4. Togli il fallback e riavvia. Ciò che fosse sfuggito ora fallisce a voce alta.
+sed -i '/^DATA_ENCRYPTION_KEY_PREVIOUS=/d' .env
+docker compose -f infra/docker/docker-compose.prod.yml up -d api celery-worker
 ```
+
+**Impatto**: nessuno, se segui la sequenza — nessun utente viene disconnesso e
+nessuna iscrizione MFA va persa. Saltare il passo 3 fa perdere ogni iscrizione
+MFA e ogni credenziale dei canali.
+
+**Periodo di grazia**: finché `DATA_ENCRYPTION_KEY_PREVIOUS` resta impostata.
+Lasciarla non danneggia la disponibilità, ma tiene la vecchia chiave su disco:
+rimuovila quando il passo 3 riporta zero valori illeggibili.
 
 ### Rotazione POSTGRES_PASSWORD
 
@@ -80,7 +116,8 @@ docker compose -f infra/docker/docker-compose.prod.yml restart api worker
 - [ ] I segreti vengono ruotati in caso di uscita di un membro del team
 - [ ] I segreti vengono ruotati al minimo sospetto di compromissione
 - [ ] In produzione i segreti sono conservati in un secrets manager (Vault, AWS SSM, ecc.) quando possibile
-- [ ] `JWT_SECRET` e `NEXTAUTH_SECRET` hanno valori differenti
+- [ ] `JWT_SECRET` e `DATA_ENCRYPTION_KEY` hanno valori differenti
+- [ ] `DATA_ENCRYPTION_KEY` ha una copia di sicurezza in un posto diverso dal backup del database: se la si perde ogni colonna cifrata diventa illeggibile e nessun ripristino la recupera
 
 ## Raccomandazioni per la Produzione
 

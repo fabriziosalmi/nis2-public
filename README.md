@@ -70,10 +70,10 @@ Read this before the feature tables below. Several modules exist as a working RE
 | Business Impact Analysis | full read + write | full CRUD |
 | Incidents (Art. 23) | full read + write — declare, revise, close; the 24h/72h/1-month countdown runs from the recorded detection time | full CRUD (`/incident-monitor`) |
 | Notification channels | full read + write, with a test-send | `/notification-channels` |
-| **CSIRT "Red Button"** | **no UI** | `POST /csirt/emergency` |
-| **ACN export (Italy)** | **no UI** | `GET /acn-export/art18`, `/bia` |
-| **Compliance deadline countdown** | **no UI** | `GET /deadlines` |
-| **Deep certificate analysis** | **no UI** | `/certificates` (3 endpoints) |
+| CSIRT "Red Button" | three-field emergency declaration on the Incidents screen; declaring starts the Art. 23 clocks and returns the Early Warning payload | `POST /csirt/emergency` |
+| ACN export (Italy) | export buttons on Suppliers and Business Impact | `GET /acn-export/art18`, `/bia` |
+| Compliance deadline countdown | statutory dates with urgency bands on the Compliance screen | `GET /deadlines` |
+| Deep certificate analysis | dedicated Certificates screen — chain, key strength, CT presence, SANs, expiry | `/certificates` (3 endpoints) |
 | **AI remediation copilot** | **no UI** — findings show only the scanner's static remediation string | `POST /remediation/explain` |
 | TOTP MFA | enrolment, recovery codes and removal from the profile screen | `/auth/totp/setup\|verify\|disable` |
 
@@ -173,8 +173,8 @@ The NIS2 Directive requires each EU member state to transpose it into national l
 | Determina ACN 127434/2026 | Technical baseline references in the compliance matrix |
 | Determina ACN 127437/2026 | Art. 18 vendor inventory with ACN-specific fields |
 | ACN BIA template | Internal model in place; alignment to the official ACN model pending publication |
-| Compliance deadlines API | Real countdowns: CSIRT referent (Dec 2026), 24h notification (Jan 2027), baseline measures (Jul 2027). **API only — `GET /deadlines`; no dashboard screen** |
-| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia`. **API only — no export button in the dashboard** |
+| Compliance deadlines | Real countdowns: CSIRT referent (Dec 2026), 24h notification (Jan 2027), baseline measures (Jul 2027). Shown with urgency bands on the Compliance screen |
+| ACN-compatible JSON export | `/api/v1/acn-export/art18` and `/api/v1/acn-export/bia`, with export buttons on Suppliers and Business Impact. Schema is preliminary, pending the official ACN modello di categorizzazione |
 
 > **ACN export — preliminary schema.** The official *modello di categorizzazione* announced by ACN (publication expected May/June 2026 per the Tavolo NIS) has not been released yet. The current export is a best-effort structural mapping based on Determina 127437/2026; field names and shape will be re-validated and may change once the official template is published.
 
@@ -344,15 +344,19 @@ as a satisfied measure is worse than one that omits it.
 | `/api/v1/incidents` | 7 | CSIRT submission artefact (table `incident_reports`) |
 | `/api/v1/incident-monitor` | 6 | Art. 23 incident lifecycle — declare/revise/close, live 24h/72h/1-month countdowns |
 | `/api/v1/governance` | 9 | Art. 21 checklist, weighted score, `sync-risk` bridge, risk summary, by-subparagraph |
-| `/api/v1/certificates` | 3 | Deep certificate analysis. No dashboard screen |
+| `/api/v1/schedules` | 5 | Recurring scan schedules (cron-style, per asset set) |
+| `/api/v1/reports` | 3 | Report generation, status polling and download (PDF/A, CSV, JSON, Markdown, JUnit, HTML) |
+| `/api/v1/notifications` | 5 | Notification channels (email / signed webhook / Slack) with a per-channel test send |
+| `/api/v1/certificates` | 3 | Deep certificate analysis |
 | `/api/v1/remediation` | 5 | Playbooks, AI copilot, cost estimation. No dashboard screen |
-| `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema). No dashboard screen |
-| `/api/v1/deadlines` | 1 | Compliance deadline countdown. No dashboard screen |
-| `/api/v1/csirt/emergency` | 1 | "Red Button" — instant Early Warning payload. No dashboard button |
+| `/api/v1/acn-export` | 2 | ACN-compatible JSON export (Italy, preliminary schema). Export buttons on Suppliers and BIA |
+| `/api/v1/deadlines` | 1 | Compliance deadline countdown, shown on the Compliance screen |
+| `/api/v1/csirt/emergency` | 1 | "Red Button" — declares the incident, starts the Art. 23 clocks and returns the Early Warning payload |
 | `/api/v1/mcp` | 2 | Model Context Protocol for AI assistants |
 | `/.well-known/jwks.json` | 1 | RS256 public key set for JWT verification |
 | `/.well-known/security.txt` | 1 | Responsible disclosure contact |
-| `/health`, `/health/live`, `/health/ready` | 3 | Three-tier liveness / readiness (DB + Redis + Celery) |
+| `/health`, `/health/live`, `/health/ready` | 3 | Three-tier liveness / readiness (DB + Redis + Celery). `/health` also reports the running version and commit |
+| `/metrics` | 1 | Prometheus exposition: request rate, errors, latency by route template, and DB pool utilisation. **Unauthenticated** — block it at the edge if the API is directly exposed |
 
 ---
 
@@ -378,7 +382,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 | **Backend** | FastAPI, SQLAlchemy (async), Pydantic v2, Celery, Redis, slowapi |
 | **Database** | PostgreSQL 16 |
 | **Scanner** | Python asyncio, aiohttp, dnspython, Playwright, python-whois |
-| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting (SlowAPI), SSRF prevention, API key auth, RS256 JWT + JWKS, Postgres RLS tenant isolation under a `NOSUPERUSER NOBYPASSRLS` role, audit log retention (90 days). TOTP MFA is API-only — see the Art. 21(2)(j) warning |
+| **Security** | CSP/HSTS/X-Frame-Options at the proxy and API layers, rate limiting (SlowAPI), SSRF prevention, API key auth, RS256 JWT + JWKS, Postgres RLS tenant isolation under a `NOSUPERUSER NOBYPASSRLS` role, audit log retention (90 days). TOTP MFA is enrolled and removed from the profile screen, with an MFA-gated login |
 | **AI / MCP** | MCP Server (stdio + HTTP), Ollama/OpenAI |
 | **Infra** | Docker, Caddy 2 (auto-HTTPS), GitHub Actions CI |
 

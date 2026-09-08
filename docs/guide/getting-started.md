@@ -20,7 +20,7 @@ cd nis2-public
 cp .env.example .env
 ```
 
-Edit `.env` and set `JWT_SECRET` and `NEXTAUTH_SECRET` to random values. See [Configuration](./configuration.md) for all variables.
+Edit `.env` and set `JWT_SECRET` and `DATA_ENCRYPTION_KEY` to random values (`openssl rand -base64 32` for each). See [Configuration](./configuration.md) for all variables.
 
 3. **Start the platform:**
 

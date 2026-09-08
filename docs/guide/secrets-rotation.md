@@ -115,7 +115,8 @@ docker compose -f infra/docker/docker-compose.prod.yml restart api worker
 - [ ] Secrets are rotated after any team member departure
 - [ ] Secrets are rotated after any suspected compromise
 - [ ] Production secrets are stored in a secrets manager (Vault, AWS SSM, etc.) when possible
-- [ ] `JWT_SECRET` and `NEXTAUTH_SECRET` are different values
+- [ ] `JWT_SECRET` and `DATA_ENCRYPTION_KEY` are different values
+- [ ] `DATA_ENCRYPTION_KEY` is backed up somewhere the database backup is not — losing it makes every encrypted column unreadable, and no restore brings it back
 
 ## Production Recommendations
 

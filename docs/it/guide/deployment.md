@@ -20,25 +20,54 @@ cd nis2-public
 cp .env.example .env
 ```
 
-2. **Modifica `.env` per la produzione:**
+2. **Modifica `.env` per la produzione.**
+
+`.env.example` è il riferimento autorevole: contiene ogni variabile con la
+ragione per cui conta, e copiandolo al passo 1 hai già la forma corretta. Qui
+sotto c'è solo l'insieme che devi cambiare. **Non sostituire gli URL del
+database con un'unica connessione da superuser**, come indicavano le versioni
+precedenti di questa guida: l'API si rifiuta di avviarsi.
 
 ```bash
-# Imposta il tuo dominio per HTTPS automatico tramite Caddy
+# Caddy lo usa per l'HTTPS automatico.
 DOMAIN=nis2.tuodominio.com
 
-# Genera segreti crittografici sicuri
-JWT_SECRET=$(openssl rand -hex 32)
-NEXTAUTH_SECRET=$(openssl rand -hex 32)
+# Segreti. Almeno 32 caratteri ciascuno; l'API rifiuta l'avvio su un
+# segnaposto o su un valore corto, nominando la chiave che ha respinto.
+JWT_SECRET=$(openssl rand -base64 32)
+DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)   # seed MFA, credenziali dei canali
+POSTGRES_PASSWORD=$(openssl rand -base64 24)     # identità di bootstrap/DDL
+NIS2_APP_PASSWORD=$(openssl rand -base64 24)     # identità di runtime (vedi sotto)
+REDIS_PASSWORD=$(openssl rand -base64 24)
 
-# Imposta credenziali database robuste
-POSTGRES_PASSWORD=la-tua-password-sicura
-DATABASE_URL=postgresql+asyncpg://nis2:la-tua-password-sicura@postgres:5432/nis2
-DATABASE_URL_SYNC=postgresql://nis2:la-tua-password-sicura@postgres:5432/nis2
-
-# Aggiorna gli URL del frontend
-NEXTAUTH_URL=https://nis2.tuodominio.com
+# Dove il browser raggiunge l'API.
 NEXT_PUBLIC_API_URL=https://nis2.tuodominio.com/api
+CORS_ORIGINS=https://nis2.tuodominio.com
 ```
+
+**Due identità sul database, e perché.** L'isolamento fra clienti poggia sulla
+row-level security di Postgres, e Postgres la ignora incondizionatamente per i
+ruoli SUPERUSER e BYPASSRLS — nemmeno `FORCE ROW LEVEL SECURITY` li vincola.
+Quindi l'applicazione deve connettersi con un ruolo semplice, e qualcun altro
+deve possedere lo schema:
+
+| Variabile | Ruolo | Usata per |
+|---|---|---|
+| `DATABASE_URL` | `nis2_app` (NOSUPERUSER NOBYPASSRLS) | ogni richiesta e ogni task |
+| `MIGRATION_DATABASE_URL` | `nis2` (bootstrap) | Alembic e il setup RLS all'avvio |
+
+`nis2_app` viene creato alla prima inizializzazione del volume da
+`infra/docker/initdb/01-create-app-role.sh`, usando `NIS2_APP_PASSWORD`. Entrambi
+gli URL sono già corretti in `.env.example`: tu fornisci solo le due password.
+
+All'avvio l'API verifica che il proprio ruolo di runtime non sia SUPERUSER né
+BYPASSRLS e **si rifiuta di servire** in caso contrario, perché ogni policy RLS
+sarebbe decorativa. Se devi rimandare — un deployment esistente a ruolo unico in
+migrazione — imposta `RLS_SUPERUSER_OK=1` e leggi `UPGRADING.md`.
+
+`NEXTAUTH_SECRET` e `NEXTAUTH_URL` comparivano nelle versioni precedenti di
+questa guida. `next-auth` non è una dipendenza di `packages/web` e nessuno le
+legge: se il tuo `.env` le contiene ancora sono inerti e puoi eliminarle.
 
 3. **Avvia i servizi di produzione:**
 

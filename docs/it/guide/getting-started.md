@@ -20,7 +20,7 @@ cd nis2-public
 cp .env.example .env
 ```
 
-Modifica `.env` e imposta `JWT_SECRET` e `NEXTAUTH_SECRET` con valori casuali. Consulta [Configurazione](./configuration.md) per tutte le variabili.
+Modifica `.env` e imposta `JWT_SECRET` e `DATA_ENCRYPTION_KEY` con valori casuali (`openssl rand -base64 32` per ciascuno). Consulta [Configurazione](./configuration.md) per tutte le variabili.
 
 3. **Avvia la piattaforma:**
 
