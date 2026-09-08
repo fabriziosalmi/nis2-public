@@ -23,6 +23,12 @@ Gli endpoint di sola lettura sotto **scansioni / findings / asset** accettano in
 | POST | `/api/v1/auth/forgot-password` | Avvia il flusso di ripristino via email. Restituisce sempre 204 a prescindere dall'esistenza dell'email, in modo da non permettere l'enumerazione degli utenti. Rate limit: `5/min/IP` | No |
 | POST | `/api/v1/auth/reset-password` | Completa il flusso di ripristino con un token monouso (inviato out-of-band via email) e una nuova password. I token sono sottoposti ad hash sha256 a riposo, scadono dopo `RESET_TOKEN_TTL_MINUTES` (default 30) e un singolo 400 copre gli stati {sconosciuto, scaduto, usato} — impedendo attacchi oracolo. Rate limit: `10/min/IP` | No |
 | POST | `/api/v1/auth/switch-org` | Cambia l'organizzazione attiva per la sessione corrente. Body: `{"organization_id": "<uuid>"}`. Valida che il chiamante sia membro dell'organizzazione target (altrimenti 403), dopodiché emette nuovi token access / refresh / csrf con il claim `org_id` aggiornato e ruota i cookie. Restituisce `TokenResponse` (stessa struttura di `/login`). Rate limit: `10/min/IP` | Sì |
+| POST | `/api/v1/auth/accept-invite` | Attiva l'account di un utente invitato impostandone la password. Il token dell'invito è monouso | No |
+| GET | `/api/v1/auth/me/export` | Esportazione GDPR Art. 15: tutto ciò che è conservato sull'utente chiamante, in JSON | Sì |
+| DELETE | `/api/v1/auth/me` | Cancellazione GDPR Art. 17 dell'account dell'utente chiamante | Sì |
+| POST | `/api/v1/auth/totp/setup` | Avvia la registrazione TOTP/MFA. Restituisce l'URI di provisioning; il seed è cifrato a riposo con `DATA_ENCRYPTION_KEY` | Sì |
+| POST | `/api/v1/auth/totp/verify` | Conferma la registrazione (o una sfida di login) con un codice a 6 cifre | Sì |
+| POST | `/api/v1/auth/totp/disable` | Disattiva TOTP/MFA per l'utente chiamante | Sì |
 
 ## Scansioni
 
@@ -59,6 +65,9 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 | PATCH | `/api/v1/assets/{asset_id}` | Aggiorna un asset | Sessione |
 | DELETE | `/api/v1/assets/{asset_id}` | Elimina un asset | Sessione |
 | POST | `/api/v1/assets/import` | Importa asset da un file CSV | Sessione |
+| POST | `/api/v1/assets/{asset_id}/verification/start` | Emette una sfida DNS TXT che prova il controllo di un dominio. Restituisce nome e valore del record da pubblicare | Admin/Auditor |
+| POST | `/api/v1/assets/{asset_id}/verification/check` | Cerca il record della sfida e, se lo trova, marca l'asset come `verified` | Admin/Auditor |
+| POST | `/api/v1/assets/{asset_id}/attest` | Per indirizzi IP e intervalli CIDR, che non hanno un DNS con cui provare nulla: una dichiarazione di autorità nominativa e datata, registrata nell'audit log. Rifiutata per i domini, che hanno evidenze disponibili | Admin |
 
 ## Pianificazioni (Schedules)
 
@@ -97,6 +106,7 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 |---|---|---|---|
 | GET | `/api/v1/health` | Controllo di liveness. Restituisce `{"status": "ok"}` | No |
 | GET | `/api/v1/health/ready` | Controllo di readiness. Testa la connettività al database e Redis | No |
+| GET | `/api/v1/health/live` | Alias esplicito di liveness, per la convenzione di denominazione k8s | No |
 
 ## Certificati
 
@@ -120,19 +130,33 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 
 | Metodo | Percorso | Descrizione | Auth |
 |---|---|---|---|
+| GET | `/api/v1/incidents/taxonomy` | Tassonomia degli incidenti NIS2 (tipi, gravità, stati): il vocabolario condiviso da form ed esportazione ACN | Sì |
 | POST | `/api/v1/incidents` | Segnala un incidente (Tassonomia Art. 23 CSIRT) | Sì |
 | GET | `/api/v1/incidents` | Elenca gli incidenti dell'organizzazione | Sì |
 | GET | `/api/v1/incidents/{id}` | Dettagli di un incidente | Sì |
 | PATCH | `/api/v1/incidents/{id}` | Aggiorna i dettagli o lo stato dell'incidente | Sì |
+| DELETE | `/api/v1/incidents/{id}` | Elimina un incidente | Admin |
+| POST | `/api/v1/incidents/{id}/export` | Produce il pacchetto di notifica ACN/CSIRT per l'incidente | Admin/Auditor |
+| GET | `/api/v1/incident-monitor` | Monitor delle scadenze Art. 23: incidenti con i conti alla rovescia 24h/72h/1 mese calcolati dal server (`seconds_remaining` / `breached`) | Sì |
+| GET | `/api/v1/incident-monitor/{id}` | Singolo incidente con lo stato calcolato delle sue scadenze Art. 23 | Sì |
+| POST | `/api/v1/incident-monitor` | Avvia l'orologio Art. 23 su un incidente: registra il momento di rilevazione da cui decorrono le scadenze 24h / 72h / 1 mese | Sì |
+| PATCH | `/api/v1/incident-monitor/{id}` | Aggiorna l'incidente monitorato | Admin/Auditor |
+| DELETE | `/api/v1/incident-monitor/{id}` | Interrompe il monitoraggio dell'incidente | Admin |
+| POST | `/api/v1/incident-monitor/{id}/submissions` | Registra l'avvenuto invio di una notifica. L'Art. 23(4)(d) àncora la relazione finale alla notifica, non alla rilevazione: è questo a rendere corretta l'ultima scadenza | Admin/Auditor |
 
 ## Governance
 
 | Metodo | Percorso | Descrizione | Auth |
 |---|---|---|---|
-| GET | `/api/v1/governance/checklist` | Ottiene i 30 elementi della checklist di governance NIS2 coi relativi stati | Sì |
-| PATCH | `/api/v1/governance/checklist/{item_id}` | Aggiorna lo stato di una voce della checklist | Sì |
+| GET | `/api/v1/governance` | Ottiene i 30 elementi della checklist NIS2 Art. 21 con stati e statistiche | Sì |
+| PATCH | `/api/v1/governance/{item_id}` | Aggiorna una voce della checklist (stato / responsabile / evidenza) | Sì |
 | POST | `/api/v1/governance/seed` | Popola la checklist dal template di governance | Sì |
-| GET | `/api/v1/governance/score` | Ottiene il punteggio di conformità pesato | Sì |
+| GET | `/api/v1/governance/score` | Punteggio di conformità pesato (CRITICAL×3 / HIGH×2 / MEDIUM×1) | Sì |
+| POST | `/api/v1/governance/sync-risk` | Il **ponte** scanner→conformità: importa i finding aperti come evidenza ed eleva le voci della checklist interessate | Sì |
+| GET | `/api/v1/governance/risk-summary` | Segnali di rischio per sotto-paragrafo, derivati dai finding aperti | Sì |
+| POST | `/api/v1/governance/bulk-update` | Aggiorna più voci della checklist in una sola richiesta | Sì |
+| GET | `/api/v1/governance/subparagraphs` | Catalogo dei sotto-paragrafi dell'Art. 21(2) riconosciuti | Sì |
+| GET | `/api/v1/governance/by-subparagraph` | Voci della checklist raggruppate per sotto-paragrafo dell'Art. 21(2) | Sì |
 
 ## Chiavi API
 
@@ -141,6 +165,16 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 | GET | `/api/v1/api-keys` | Elenca le chiavi API dell'organizzazione (admin o auditor) | Sì |
 | POST | `/api/v1/api-keys` | Crea una nuova chiave API (solo admin). Il token grezzo è mostrato solo una volta | Sì |
 | DELETE | `/api/v1/api-keys/{key_id}` | Revoca una chiave API (solo admin) | Sì |
+
+## Canali di Notifica
+
+| Metodo | Percorso | Descrizione | Auth |
+|---|---|---|---|
+| GET | `/api/v1/notification-channels` | Elenca i canali dell'organizzazione. Le credenziali non vengono mai restituite | Sì |
+| POST | `/api/v1/notification-channels` | Crea un canale (email / webhook / Slack). La credenziale è cifrata a riposo con `DATA_ENCRYPTION_KEY` | Admin |
+| PATCH | `/api/v1/notification-channels/{channel_id}` | Aggiorna un canale | Admin |
+| DELETE | `/api/v1/notification-channels/{channel_id}` | Elimina un canale | Admin |
+| POST | `/api/v1/notification-channels/{channel_id}/test` | Invia una notifica di prova attraverso il canale | Admin |
 
 ## Audit Log
 
@@ -156,8 +190,11 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 | POST | `/api/v1/vendors` | Registra un nuovo fornitore/supplier | Sì |
 | GET | `/api/v1/vendors/stats` | Panoramica del rischio della supply chain | Sì |
 | GET | `/api/v1/vendors/{vendor_id}` | Dettagli del fornitore | Sì |
+| GET | `/api/v1/vendors/{vendor_id}/score` | Punteggio di rischio della catena di fornitura per un singolo fornitore, con i fattori che lo compongono | Sì |
+| POST | `/api/v1/vendors/{vendor_id}/score/apply` | Salva il punteggio calcolato sulla scheda del fornitore | Admin/Auditor |
 | PATCH | `/api/v1/vendors/{vendor_id}` | Aggiorna dettagli, stato o assessment di sicurezza | Sì |
 | DELETE | `/api/v1/vendors/{vendor_id}` | Rimuove un fornitore | Sì |
+| GET | `/api/v1/vendors/score-formula` | La formula di punteggio del rischio fornitori applicata dalla piattaforma, pubblicata perché un punteggio possa essere verificato a mano | Sì |
 
 ## Analisi di Impatto Aziendale (BIA)
 
@@ -167,6 +204,7 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 | POST | `/api/v1/bia` | Registra un processo aziendale per la BIA | Sì |
 | GET | `/api/v1/bia/matrix` | Matrice d'impatto BIA | Sì |
 | GET | `/api/v1/bia/{process_id}` | Dettagli del processo aziendale | Sì |
+| PATCH | `/api/v1/bia/{process_id}` | Aggiorna un processo aziendale (RTO / RPO / criticità / dipendenze) | Sì |
 | DELETE | `/api/v1/bia/{process_id}` | Rimuove un processo aziendale | Sì |
 
 ## Esportazione ACN (Italia)
@@ -188,6 +226,25 @@ Legenda colonna `Auth`: **Sessione** = cookie o `Bearer <jwt>`. **Chiave API** =
 |---|---|---|---|
 | POST | `/api/v1/csirt/emergency` | Genera il payload di Early Warning per l'Art. 23 a partire da dati minimi | Sì |
 
+## MCP (Model Context Protocol)
+
+| Metodo | Percorso | Descrizione | Auth |
+|---|---|---|---|
+| GET | `/api/v1/mcp/tools` | Elenca gli strumenti MCP esposti sul trasporto HTTP | Sì |
+| POST | `/api/v1/mcp/call` | Invoca uno strumento MCP. Eredita lo stesso scoping RLS per organizzazione di ogni altro endpoint multi-tenant | Sì |
+
+## Paginazione
+
+Gli endpoint di elenco accettano i parametri di query `skip` (offset) e `limit` (dimensione pagina):
+
+```
+GET /api/v1/findings?skip=0&limit=50&severity=high
+```
+
+Le risposte includono un campo `total` per il conteggio non filtrato.
+
+---
+
 ## Errori (Risposte)
 
 Tutti gli errori seguono un formato coerente:
@@ -208,3 +265,35 @@ Tutti gli errori seguono un formato coerente:
 | 422 | Entità non elaborabile (corpo della richiesta non valido) |
 | 429 | Troppe richieste (rate limit raggiunto) |
 | 500 | Errore interno del server |
+
+---
+
+## Esempi SDK
+
+### Python (httpx)
+
+```python
+import httpx
+
+BASE = "https://nis2.esempio.it/api/v1"
+
+# Login e recupero dei token
+resp = httpx.post(f"{BASE}/auth/login", json={
+    "email": "utente@esempio.it",
+    "password": "PasswordRobusta1!"
+})
+token = resp.json()["access_token"]
+headers = {"Authorization": f"Bearer {token}"}
+
+# Elenco dei finding ad alta gravità
+findings = httpx.get(f"{BASE}/findings", params={"severity": "high"}, headers=headers)
+print(findings.json())
+```
+
+### Con una chiave API
+
+```bash
+curl -s \
+  -H "Authorization: Bearer nis2_<chiave>" \
+  https://nis2.esempio.it/api/v1/findings?severity=critical | jq .
+```

@@ -107,7 +107,8 @@ export default defineConfig({
                         items: [
                             { text: 'API Reference', link: '/reference/api' },
                             { text: 'Scanner Checks', link: '/reference/scanner-checks' },
-                            { text: 'Architecture', link: '/reference/architecture' }
+                            { text: 'Architecture', link: '/reference/architecture' },
+                            { text: 'NIS2 Compliance Matrix', link: '/reference/compliance-matrix' }
                         ]
                     }
                 ],
@@ -161,7 +162,8 @@ export default defineConfig({
                         items: [
                             { text: 'Riferimento API', link: '/it/reference/api' },
                             { text: 'Controlli Scanner', link: '/it/reference/scanner-checks' },
-                            { text: 'Architettura', link: '/it/reference/architecture' }
+                            { text: 'Architettura', link: '/it/reference/architecture' },
+                            { text: 'Matrice di Conformità NIS2', link: '/it/reference/compliance-matrix' }
                         ]
                     }
                 ],

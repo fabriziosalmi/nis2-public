@@ -6,10 +6,22 @@ Questa checklist copre i requisiti organizzativi e di governance che non possono
 
 Utilizzala in abbinamento alla Matrice di Conformità (Compliance Matrix) della piattaforma:
 
-1. **Assessment**: esamina ogni voce e contrassegna lo stato attuale.
-2. **Assegnazione**: assegna un responsabile a ogni voce mancante (es. "Responsabile IT" per i Backup, "Legale" per i Contratti).
-3. **Tracciamento**: rivedi questo documento mensilmente durante le riunioni direzionali o del CdA.
-4. **Evidenze**: conserva le prove di conformità (PDF, screenshot, log) in un repository sicuro referenziato all'interno del documento.
+1. **Valutazione**: esamina ogni voce e registra lo stato attuale
+   (`pending`, `in_progress`, `compliant`, `not_applicable`).
+2. **Assegnazione**: assegna un responsabile a ogni voce aperta — un ruolo
+   ("Responsabile IT", "Legale"), non il nome di una persona, così da
+   sopravvivere ai cambi organizzativi.
+3. **Evidenze**: allega i riferimenti documentali — nomi delle policy, numeri di
+   versione, date dei verbali del CdA — e conserva le prove (PDF, screenshot,
+   log) in un repository a cui questo documento rimanda.
+4. **Cadenza di revisione**: rivedi la checklist ogni mese in una riunione
+   direzionale o del comitato sicurezza; trimestralmente come minimo assoluto.
+5. **Integrazione**: `POST /api/v1/governance/sync-risk` eleva automaticamente
+   le voci della checklist quando lo scanner ha finding aperti HIGH o CRITICAL
+   nell'area corrispondente dell'Art. 21.
+
+La checklist è disponibile nella piattaforma sotto **Governance** e via API su
+`GET /api/v1/governance`.
 
 Questa checklist è ordinata secondo una logica di "Sopravvivenza e Conformità Legale": in primis le misure che prevengono sanzioni immediate e blocchi operativi, in seguito la strutturazione, e infine l'ottimizzazione.
 

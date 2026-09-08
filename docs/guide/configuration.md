@@ -2,6 +2,12 @@
 
 All configuration is managed through environment variables defined in `.env`. Copy `.env.example` to `.env` and adjust values for your environment.
 
+## Application Environment
+
+| Variable | Default | Description |
+|---|---|---|
+| `ENVIRONMENT` | `development` | Set to `production` to enforce JWT validation, strict CORS, the RLS startup checks, and to disable the dev email outbox |
+
 ## Database
 
 | Variable | Default | Description |
@@ -31,6 +37,18 @@ All configuration is managed through environment variables defined in `.env`. Co
 | `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime in days |
+
+### RS256 key generation
+
+```bash
+openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in private_key.pem -out public_key.pem
+```
+
+Set `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` to the contents of those files
+(newlines escaped as `\n`, or use multi-line block syntax in `.env`). The public
+key is then served at `GET /.well-known/jwks.json` for third parties to verify
+tokens with.
 
 ## Encryption at rest
 
@@ -119,3 +137,9 @@ Organization-level settings are managed through the dashboard under **Settings**
 - Team member management (invite, role assignment)
 - API key management
 - Notification channel preferences
+
+## Row-Level Security
+
+| Variable | Default | Description |
+|---|---|---|
+| `RLS_SUPERUSER_OK` | — | Set to `1` to suppress the startup error when the database role is `SUPERUSER` or `BYPASSRLS`. Not recommended for production — provision a non-superuser app role instead |

@@ -132,7 +132,14 @@ def compare() -> list[str]:
     return problems
 
 
-REFERENCE = ROOT / "docs" / "reference" / "api.md"
+# Every hand-written REST reference, in every language. Checking only the
+# English one is how docs/it/reference/api.md sat four months stale, missing
+# 37 endpoints and documenting two governance paths the API never served, while
+# the check reported the surface as documented.
+REFERENCES = (
+    ROOT / "docs" / "reference" / "api.md",
+    ROOT / "docs" / "it" / "reference" / "api.md",
+)
 
 # A reference-doc row: | GET | `/api/v1/thing/{id}` | Description | Auth |
 _REF_ROW = re.compile(r"^\|\s*(?P<method>GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(?P<path>[^`]+)`")
@@ -156,8 +163,13 @@ def code_endpoints() -> set[tuple[str, str]]:
     """(METHOD, path) for every route the API mounts."""
     endpoints: set[tuple[str, str]] = set()
     main = (ROOT / "packages" / "api" / "app" / "main.py").read_text()
-    for path in sorted(ROUTERS.glob("*.py")):
-        if path.name == "__init__.py":
+    # mcp_server.py defines a router and is mounted like any other, but it does
+    # not live in routers/. Globbing one directory made the check believe two
+    # served endpoints were documentation-only.
+    sources = [p for p in sorted(ROUTERS.glob("*.py")) if p.name != "__init__.py"]
+    sources.append(ROOT / "packages" / "api" / "app" / "mcp_server.py")
+    for path in sources:
+        if not path.exists():
             continue
         src = path.read_text()
         # A router without prefix= is still mounted; skipping it would have made
@@ -177,9 +189,9 @@ def code_endpoints() -> set[tuple[str, str]]:
     return endpoints
 
 
-def reference_endpoints() -> set[tuple[str, str]]:
+def reference_endpoints(reference: pathlib.Path) -> set[tuple[str, str]]:
     endpoints: set[tuple[str, str]] = set()
-    for line in REFERENCE.read_text().splitlines():
+    for line in reference.read_text().splitlines():
         m = _REF_ROW.match(line)
         if m:
             endpoints.add((m.group("method"), _normalise(m.group("path"))))
@@ -197,11 +209,21 @@ def compare_reference() -> list[str]:
     never served. Counts were green throughout.
     """
     exempt = {(m, _normalise(p)) for m, p in REFERENCE_EXEMPT}
-    missing = code_endpoints() - reference_endpoints() - exempt
-    return [
-        f"{method} {path} is served but absent from docs/reference/api.md"
-        for method, path in sorted(missing, key=lambda e: (e[1], e[0]))
-    ]
+    served = code_endpoints()
+    problems: list[str] = []
+    for reference in REFERENCES:
+        rel = reference.relative_to(ROOT)
+        documented = reference_endpoints(reference)
+        for method, path in sorted(served - documented - exempt, key=lambda e: (e[1], e[0])):
+            problems.append(f"{method} {path} is served but absent from {rel}")
+        # A path in the reference that the API does not serve is the other half
+        # of the same defect, and the worse half: a caller who follows it gets a
+        # 404 with nothing to suggest the documentation is wrong.
+        for method, path in sorted(documented - served, key=lambda e: (e[1], e[0])):
+            if (method, path) in exempt:
+                continue
+            problems.append(f"{rel} documents {method} {path}, which the API does not serve")
+    return problems
 
 
 def main() -> int:
@@ -217,9 +239,12 @@ def main() -> int:
             print("The documented API surface has drifted from the code:\n")
             for p in problems:
                 print(f"  - {p}")
-            print("\nUpdate README.md and/or docs/reference/api.md, or run without --check to see the counts.")
+            print("\nUpdate README.md and/or the REST references, or run without --check to see the counts.")
             return 1
-        print(f"README table and docs/reference/api.md match the code ({sum(code.values())} endpoints).")
+        print(
+            f"README table and {len(REFERENCES)} REST references match the code "
+            f"({sum(code.values())} endpoints)."
+        )
         return 0
 
     print(f"{sum(code.values())} endpoints across {len(code)} routers:\n")

@@ -25,6 +25,8 @@ Scans for open ports on the following services:
 
 Each port is probed with an async TCP connection (2-second timeout). Findings are generated for exposed management ports (SSH, RDP, Telnet, SMB) and cleartext protocols (FTP, HTTP, Telnet), as well as exposed database ports (MySQL, PostgreSQL, Redis, MongoDB).
 
+**NIS2 mapping**: Art. 21(e) — secure acquisition, 21(h) — cryptography and network security.
+
 ## TLS/SSL
 
 - **Protocol version detection**: connects to port 443/8443 and reads the negotiated TLS version.
@@ -32,17 +34,32 @@ Each port is probed with an async TCP connection (2-second timeout). Findings ar
 - **Cipher detection**: reports the cipher suite negotiated on the primary connection.
 - **Certificate validation**: uses Python's `ssl` module to retrieve the peer certificate. Checks chain trust and hostname match.
 
+**NIS2 mapping**: Art. 21(h) — cryptography.
+
 ## HTTP Security Headers
 
-Checks for the presence of these headers on HTTP/HTTPS responses:
+The scanner performs an HTTP GET to the root path of each domain and inspects the response headers.
 
-| Header | Purpose |
+### Required headers
+
+| Header | Purpose | Finding when absent |
+|---|---|---|
+| `Strict-Transport-Security` | Enforce HTTPS, prevent protocol downgrade (HSTS) | Medium |
+| `Content-Security-Policy` | Restrict resource origins, mitigate XSS and injection | Medium |
+| `X-Frame-Options` | Prevent clickjacking via iframe embedding | Medium |
+
+### Information-leaking headers
+
+The scanner captures these headers when present and includes them in the finding detail. Presence is informational — they disclose technology stack details that aid attackers.
+
+| Header | What it leaks |
 |---|---|
-| `Strict-Transport-Security` | Enforce HTTPS (HSTS) |
-| `Content-Security-Policy` | XSS and injection mitigation |
-| `X-Frame-Options` | Clickjacking protection |
+| `Server` | Web server name and version |
+| `X-Powered-By` | Runtime or framework |
+| `X-AspNet-Version` | ASP.NET version |
+| `X-Generator` | CMS or generator |
 
-The scanner records all response headers. Information-leaking headers are also captured: `Server`, `X-Powered-By`, `X-AspNet-Version`, `X-Generator`.
+**NIS2 mapping**: Art. 21(e) — secure acquisition and development.
 
 ## DNS Security
 
@@ -55,6 +72,8 @@ DNS checks use `dnspython` and run in a thread executor to avoid blocking the as
 
 DNS checks are only run when the target is a domain (not an IP address or CIDR range).
 
+**NIS2 mapping**: Art. 21(e) — secure network configuration.
+
 ## Legal Compliance
 
 Legal checks use `playwright` (headless browser) to render the page and analyze the DOM. They only run on root domains and `www.` subdomains, not on IP addresses or service subdomains.
@@ -62,6 +81,8 @@ Legal checks use `playwright` (headless browser) to render the page and analyze 
 - **P.IVA (VAT number)**: searches for an Italian VAT number pattern (11 digits) in the page content. Required by Italian law for commercial sites.
 - **Privacy policy**: searches for keywords like "privacy policy", "informativa privacy" in the rendered page.
 - **Cookie banner**: searches for cookie consent keywords ("cookie", "accetta", "accept cookies", "manage cookies", etc.) in the rendered page.
+
+**NIS2 mapping**: Art. 21(a) — risk policies and governance.
 
 ## Secrets Detection
 
@@ -75,6 +96,8 @@ Scans the HTML body of HTTP responses for leaked secrets. The scanner checks for
 | `ghp_[a-zA-Z0-9]{36}` | GitHub personal access tokens |
 | `api[_-]?key[:=] ...` | Generic API key assignments (20+ character values) |
 | `eyJ...` (three Base64 segments separated by dots) | JWT tokens in page source |
+
+**NIS2 mapping**: Art. 21(e) — secure development practices.
 
 ## WHOIS
 
@@ -119,3 +142,32 @@ Analyzes `Set-Cookie` headers in the HTTP response:
 - **Secure** flag: cookie should only be sent over HTTPS.
 - **HttpOnly** flag: cookie should not be accessible via JavaScript.
 - **SameSite** attribute: CSRF protection.
+
+## Compliance Engine
+
+After the checks finish, the compliance engine turns findings into a score.
+
+It is computed **per host, then averaged over the hosts that answered** — not
+per NIS2 article. Each host starts at 100 and every finding on it deducts:
+
+| Severity | Deduction |
+|---|---|
+| CRITICAL | −50 |
+| HIGH | −20 |
+| MEDIUM | −10 |
+| LOW | −5 |
+| INFO | none — informational findings never move the score |
+
+A host score is floored at 0, and the scan's score is the mean of the host
+scores over `active_hosts` (the hosts that responded).
+
+**A scan that assessed nothing has no score at all.** Both ways that happens —
+no target resolved, or targets that never answered — used to produce 100/100,
+which reads as a clean bill of health for a scan that observed nothing. The
+score is now `null`, carrying the reason instead.
+
+Alongside the score the engine stores a `compliance_matrix` snapshot on the
+scan, mapping findings to the Art. 21(2) sub-paragraphs.
+
+Read the number conservatively: 70 means there are material open findings, not
+that the organisation is 70% compliant with the directive.

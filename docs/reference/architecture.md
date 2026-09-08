@@ -73,6 +73,13 @@ Caddy (reverse proxy, auto-HTTPS)
 3. The task result (including the file path) is stored in Redis as a Celery task result. There is no `reports` database table.
 4. The user polls status via `GET /api/v1/reports/status/{task_id}` and downloads via `GET /api/v1/reports/download/{task_id}`.
 
+### Art. 23 deadline alerts
+
+1. Celery Beat runs a deadline check task every 15 minutes.
+2. For each open incident, it computes the time remaining until the 24 h, 72 h, and 1-month CSIRT thresholds.
+3. When a threshold is within 2 hours or has just passed, an alert is dispatched to all configured notification channels (email, webhook, Slack).
+4. A Redis key prevents duplicate alerts for the same incident and threshold within a deduplification window.
+
 ## Database Schema (Tables)
 
 | Table | Description |
@@ -100,3 +107,55 @@ Data isolation is enforced at the organization level:
   - **Admin**: full access, manage members and settings.
   - **Auditor**: run scans, view all data, generate reports, manage schedules.
   - **Viewer**: read-only access.
+
+### How isolation is enforced
+
+Every user-facing table except `users`, `organizations`, `memberships`, and auth-related tables carries an `organization_id` column. PostgreSQL Row-Level Security (RLS) enforces isolation at the database layer:
+
+- Migration `002_add_rls_policies` enables RLS and creates a `tenant_isolation` policy on all tenant-scoped tables.
+- Every request sets `app.current_org_id` as a PostgreSQL session-local variable before executing queries.
+- The RLS policy predicate: `organization_id::text = current_setting('app.current_org_id', true) OR current_setting('app.bypass_rls', true) = 'on'`
+- The `app.bypass_rls = 'on'` path is used only for bootstrap operations (user creation, org creation) within the same transaction, then cleared automatically when the transaction ends.
+
+The application database role must be `NOSUPERUSER NOBYPASSRLS`. Superuser roles bypass RLS unconditionally even when `FORCE ROW LEVEL SECURITY` is set. If the application connects as a superuser, the API logs a warning and in `ENVIRONMENT=production` refuses to start.
+
+## Authentication Model
+
+### Session-based (web)
+
+1. `POST /auth/login` sets three httpOnly cookies: `access_token`, `refresh_token`, `csrf_token`.
+2. State-changing requests must echo `csrf_token` as the `X-CSRF-Token` header (double-submit CSRF protection).
+3. `POST /auth/refresh` issues a new access token and rotates the refresh token. Refresh tokens are single-use; reusing a spent token revokes the entire token family (jti chain tracking in `revoked_tokens`).
+
+### Bearer token (API / SDK)
+
+The JWT from any login response can also be passed as `Authorization: Bearer <token>`. No cookie is required.
+
+### API key
+
+Long-lived keys prefixed `nis2_` are accepted on read endpoints without a cookie. Keys carry explicit scopes (`finding:read`, `asset:read`, `scan:read`, etc.) and are validated against the endpoint's required scope on every request.
+
+### TOTP MFA
+
+After password validation, if the user has TOTP enabled, the login flow requires an additional `POST /auth/totp/verify` with a valid 6-digit TOTP code before issuing tokens. TOTP secrets are stored encrypted in the `users` table.
+
+### RS256 support
+
+When `JWT_ALGORITHM=RS256`, tokens are signed with the RSA private key and can be verified by third-party systems using the public key published at `GET /.well-known/jwks.json` in standard JWKS format.
+
+
+## Security Controls Summary
+
+| Control | Implementation |
+|---|---|
+| Tenant isolation | PostgreSQL RLS (`tenant_isolation` policy, `FORCE ROW LEVEL SECURITY`) |
+| Authentication | JWT (HS256 or RS256), httpOnly cookies, CSRF double-submit |
+| Multi-factor authentication | TOTP (RFC 6238) per user |
+| Session integrity | Refresh token rotation with family revocation |
+| Password security | bcrypt hashing, `password_changed_at` watermark for cross-session invalidation |
+| Rate limiting | SlowAPI on all auth and sensitive endpoints |
+| Audit trail | Per-request `audit_logs` with action, resource, IP, and user agent |
+| Content security | Content-Security-Policy, X-Frame-Options, HSTS (via Caddy) |
+| API key scopes | Endpoint-level scope enforcement via `dual_auth_with_scope()` |
+| Secret detection | gitleaks on full git history in CI |
+| Dependency audit | pip-audit (Python) and npm audit (Node.js) in CI |

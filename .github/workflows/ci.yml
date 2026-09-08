@@ -342,6 +342,19 @@ jobs:
         # deliberately does not set up Python.
         run: python3 -m scripts.api_surface --check
 
+      # The published GitHub wiki is rendered from docs/. It used to be
+      # maintained by hand and drifted into documenting a deployment that would
+      # not start and six endpoints under a prefix the API has never served —
+      # invisible to every test, because no test reads the wiki and the wiki is
+      # not in this repository.
+      #
+      # Push-only: a contributor cannot publish the wiki, so failing their PR
+      # for it would be blaming them for something they cannot fix. On main it
+      # is the maintainer's own `make wiki-sync` that clears it.
+      - name: Published wiki matches docs/
+        if: github.event_name == 'push'
+        run: python3 -m scripts.sync_wiki --check
+
       - name: No CORS wildcard
         run: |
           if grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py; then

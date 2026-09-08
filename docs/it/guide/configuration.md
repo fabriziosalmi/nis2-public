@@ -2,6 +2,12 @@
 
 Tutta la configurazione è gestita tramite variabili d'ambiente definite in `.env`. Copia `.env.example` in `.env` e adatta i valori al tuo ambiente.
 
+## Ambiente Applicativo
+
+| Variabile | Predefinito | Descrizione |
+|---|---|---|
+| `ENVIRONMENT` | `development` | Impostare a `production` per attivare la validazione JWT, il CORS restrittivo e i controlli RLS all'avvio, e per disattivare la casella email di sviluppo |
+
 ## Database
 
 | Variabile | Default | Descrizione |
@@ -31,6 +37,18 @@ Tutta la configurazione è gestita tramite variabili d'ambiente definite in `.en
 | `JWT_ALGORITHM` | `HS256` | Algoritmo di firma JWT |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Durata del token di accesso in minuti |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Durata del token di aggiornamento in giorni |
+
+### Generazione delle chiavi RS256
+
+```bash
+openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in private_key.pem -out public_key.pem
+```
+
+Imposta `JWT_PRIVATE_KEY` e `JWT_PUBLIC_KEY` con il contenuto di quei file (con
+gli a-capo come `\n`, oppure usando la sintassi multi-riga nel `.env`). La chiave
+pubblica viene poi esposta su `GET /.well-known/jwks.json`, perché terze parti
+possano verificare i token.
 
 ## Cifratura a riposo
 
@@ -119,3 +137,9 @@ Le impostazioni a livello organizzativo sono gestite dalla dashboard nella sezio
 - Gestione dei membri del team (inviti, assegnazione ruoli)
 - Gestione chiavi API
 - Preferenze per i canali di notifica
+
+## Row-Level Security
+
+| Variabile | Predefinito | Descrizione |
+|---|---|---|
+| `RLS_SUPERUSER_OK` | — | Impostare a `1` per sopprimere l'errore di avvio quando il ruolo database è `SUPERUSER` o `BYPASSRLS`. Sconsigliato in produzione — provisionare un ruolo applicativo non-superuser |

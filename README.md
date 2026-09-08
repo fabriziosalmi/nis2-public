@@ -113,6 +113,11 @@ The compliance matrix references all ten sub-paragraphs (a) through (j). Several
 | (i) Human resources security | Onboarding/offboarding, screening, PAM | **Manual** | Governance checklist (human verification required by design) |
 | (j) Authentication and access control | MFA, RBAC, PAM, SSO, access logging | **Implemented** — TOTP MFA, RBAC, audit log, API key scopes | TOTP MFA enrolled and removed from the profile screen, with single-use recovery codes and an MFA-gated login; role-based access in three tiers (admin / auditor / viewer, defined in `app/dependencies.py`: auditor creates and edits the compliance record but cannot delete or reconfigure), per-request scoped API keys (`dual_auth_with_scope`), per-request audit log, RS256 JWT with `GET /.well-known/jwks.json` |
 
+The per-sub-paragraph detail, with what each status rests on, is in
+[docs/reference/compliance-matrix.md](docs/reference/compliance-matrix.md)
+([italiano](docs/it/reference/compliance-matrix.md)). The statuses there and
+here are checked against each other in CI.
+
 **Legend**: *Implemented* = available end-to-end, dashboard included, with no manual step required. *Partial* = either the automated checks cover only the technically observable surface and organisational controls need human verification, or the capability exists in the API but not yet in the dashboard — the "How the platform supports it" column says which. *Manual* = the directive explicitly requires human judgement; automation cannot substitute.
 
 ### Art. 23 — Incident reporting (CSIRT)

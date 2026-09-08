@@ -239,6 +239,18 @@ Every state-changing action under organizations / api-keys / auth (and increasin
 | GET | `/api/v1/mcp/tools` | List available MCP tools | No |
 | POST | `/api/v1/mcp/call` | Execute an MCP tool call via HTTP | No |
 
+## Pagination
+
+List endpoints accept `skip` (offset) and `limit` (page size) query parameters:
+
+```
+GET /api/v1/findings?skip=0&limit=50&severity=high
+```
+
+Responses include a `total` field for the unfiltered count.
+
+---
+
 ## Error Responses
 
 All errors follow a consistent format:
@@ -262,3 +274,32 @@ Common HTTP status codes:
 | 429 | Too many requests (rate limited) |
 | 500 | Internal server error |
 
+## SDK Examples
+
+### Python (httpx)
+
+```python
+import httpx
+
+BASE = "https://nis2.example.com/api/v1"
+
+# Login and get tokens
+resp = httpx.post(f"{BASE}/auth/login", json={
+    "email": "user@example.com",
+    "password": "StrongPassword1!"
+})
+token = resp.json()["access_token"]
+headers = {"Authorization": f"Bearer {token}"}
+
+# List high-severity findings
+findings = httpx.get(f"{BASE}/findings", params={"severity": "high"}, headers=headers)
+print(findings.json())
+```
+
+### Using an API key
+
+```bash
+curl -s \
+  -H "Authorization: Bearer nis2_<key>" \
+  https://nis2.example.com/api/v1/findings?severity=critical | jq .
+```

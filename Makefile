@@ -267,6 +267,34 @@ test-integration:
 test-e2e:
 	bash scripts/test_e2e.sh
 
+# ─── Wiki ─────────────────────────────────────────────────────────────
+# The GitHub wiki is rendered from docs/, not maintained by hand. It used to be
+# a second copy of the guides and drifted far enough to document a deployment
+# that would not start; scripts/sync_wiki.py explains the rest.
+#
+#   make wiki-check   compare the published wiki with what docs/ renders (CI)
+#   make wiki-sync    republish it (needs push access to the wiki repository)
+.PHONY: wiki-check wiki-sync
+wiki-check:
+	$(PYTHON) -m scripts.sync_wiki --check
+
+wiki-sync:
+	@set -e; \
+	tmp=$$(mktemp -d); \
+	echo "  cloning the wiki into $$tmp"; \
+	git clone --quiet https://github.com/fabriziosalmi/nis2-public.wiki.git $$tmp/wiki; \
+	$(PYTHON) -m scripts.sync_wiki --out $$tmp/wiki >/dev/null; \
+	cd $$tmp/wiki; \
+	if git diff --quiet; then \
+	  echo "  wiki already matches docs/ — nothing to publish"; \
+	else \
+	  git add -A; \
+	  git commit -q -m "docs(wiki): render from docs/ (scripts/sync_wiki.py)"; \
+	  git push -q origin HEAD; \
+	  echo "  wiki republished from docs/"; \
+	fi; \
+	rm -rf $$tmp
+
 # Next.js production build.
 test-web:
 	cd packages/web && npm run build

@@ -143,3 +143,62 @@ Docker Compose rebuilds changed images and restarts affected services. Run migra
 ```bash
 make db-upgrade
 ```
+
+## Development vs. Production
+
+The repository ships two Docker Compose files:
+
+| File | Purpose |
+|---|---|
+| `infra/docker/docker-compose.dev.yml` | Local development. No TLS, mounts source code for hot reload, activates the in-memory email outbox |
+| `infra/docker/docker-compose.prod.yml` | Production. Caddy reverse proxy with automatic TLS from Let's Encrypt, no source mounts, environment set to `production` |
+
+`make dev` and `make prod` are aliases for the respective `docker compose up` invocations.
+
+
+## Database Operations
+
+### Running migrations
+
+Migrations are managed with Alembic. Always run migrations before starting a new version of the API:
+
+```bash
+# Apply all pending migrations
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic upgrade head
+
+# Check current revision
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic current
+
+# Show migration history
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic history
+```
+
+### Backup
+
+```bash
+# Dump the database to a file
+docker compose -f infra/docker/docker-compose.prod.yml exec postgres \
+  pg_dump -U nis2 nis2 > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Restore from a dump
+cat backup_20260101_120000.sql | \
+  docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+    psql -U nis2 nis2
+```
+
+Automate backups with a cron job on the host:
+
+```cron
+0 2 * * * /opt/nis2/scripts/backup.sh >> /var/log/nis2-backup.log 2>&1
+```
+
+### Row-Level Security
+
+The production database enforces PostgreSQL Row-Level Security (RLS) on all tenant-scoped tables. Migration `002_add_rls_policies` creates the `tenant_isolation` policy. The API application role must be `NOSUPERUSER NOBYPASSRLS` — if it is not, the API logs a warning at startup and in `ENVIRONMENT=production` refuses to start unless `RLS_SUPERUSER_OK=1` is set.
+
+To verify:
+
+```sql
+SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'nis2';
+-- Both columns should be false
+```

@@ -130,3 +130,20 @@ docker compose -f infra/docker/docker-compose.prod.yml restart api worker
    ```
 4. **Non loggare mai i segreti** — assicurati che la tua configurazione di log escluda le variabili d'ambiente
 5. **Usa i Docker secrets** in modalità Swarm, oppure i Kubernetes secrets nei deployment K8s
+
+### Chiave Privata RS256 (JWT_PRIVATE_KEY)
+
+**Impatto**: tutti i token esistenti firmati con la vecchia chiave diventano non validi. La vecchia chiave pubblica deve rimanere nell'endpoint JWKS brevemente se sistemi terzi la memorizzano nella cache.
+
+```bash
+# 1. Genera una nuova coppia di chiavi
+openssl genpkey -algorithm RSA -out nuova_chiave_privata.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in nuova_chiave_privata.pem -out nuova_chiave_pubblica.pem
+
+# 2. Aggiorna JWT_PRIVATE_KEY e JWT_PUBLIC_KEY in .env
+
+# 3. Riavvia l'API
+docker compose -f infra/docker/docker-compose.prod.yml restart api
+```
+
+I sistemi terzi che memorizzano nella cache la risposta JWKS potrebbero non riuscire a verificare i nuovi token fino alla scadenza della loro cache. Se questo è un problema, mantieni entrambe le chiavi nella risposta JWKS per un periodo di TTL della cache prima di rimuovere quella vecchia.

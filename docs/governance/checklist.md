@@ -6,10 +6,21 @@ This checklist covers organizational and governance requirements that cannot be 
 
 Use it alongside the platform's Compliance Matrix:
 
-1. **Assessment**: Go through each item and mark the current status.
-2. **Assignment**: Assign an owner to each missing item (e.g., "IT Manager" for Backups, "Legal" for Contracts).
-3. **Tracking**: Review this document monthly during board or management meetings.
-4. **Evidence**: Store proofs of compliance (PDFs, screenshots, logs) in a secure repository referenced here.
+1. **Assessment**: go through each item and record the current status
+   (`pending`, `in_progress`, `compliant`, `not_applicable`).
+2. **Assignment**: assign an owner to each open item — a job role ("IT Manager",
+   "Legal"), not a person's name, so it survives organisational changes.
+3. **Evidence**: attach document references — policy names, version numbers,
+   board minute dates — and keep the proofs themselves (PDFs, screenshots, logs)
+   in a repository this document points at.
+4. **Review cadence**: review the checklist monthly in a management or security
+   committee meeting; quarterly at the absolute minimum.
+5. **Integration**: `POST /api/v1/governance/sync-risk` escalates checklist
+   items automatically when the scanner has open HIGH or CRITICAL findings in
+   the corresponding Art. 21 area.
+
+The checklist is available in the platform under **Governance** and over the API
+at `GET /api/v1/governance`.
 
 This checklist is ordered by "Survival and Legal Compliance" logic: first, the items that save you from immediate sanctions and operational halts, then structure, and finally optimization.
 

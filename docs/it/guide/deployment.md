@@ -144,3 +144,62 @@ Docker Compose ricompila le immagini modificate e riavvia i servizi interessati.
 ```bash
 make db-upgrade
 ```
+
+## Sviluppo vs. Produzione
+
+Il repository include due file Docker Compose:
+
+| File | Utilizzo |
+|---|---|
+| `infra/docker/docker-compose.dev.yml` | Sviluppo locale. Nessun TLS, mount del codice sorgente per il hot reload, mailbox in-memory per le email |
+| `infra/docker/docker-compose.prod.yml` | Produzione. Reverse proxy Caddy con TLS automatico da Let's Encrypt, nessun mount di sorgenti, environment impostato a `production` |
+
+`make dev` e `make prod` sono alias per i rispettivi comandi `docker compose up`.
+
+
+## Operazioni sul Database
+
+### Eseguire le migrazioni
+
+Le migrazioni sono gestite con Alembic. Eseguile sempre prima di avviare una nuova versione dell'API:
+
+```bash
+# Applica tutte le migrazioni in sospeso
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic upgrade head
+
+# Controlla la revisione corrente
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic current
+
+# Mostra la cronologia delle migrazioni
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic history
+```
+
+### Backup
+
+```bash
+# Esporta il database su file
+docker compose -f infra/docker/docker-compose.prod.yml exec postgres \
+  pg_dump -U nis2 nis2 > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Ripristina da un backup
+cat backup_20260101_120000.sql | \
+  docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
+    psql -U nis2 nis2
+```
+
+Automatizza il backup con un cron job sull'host:
+
+```cron
+0 2 * * * /opt/nis2/scripts/backup.sh >> /var/log/nis2-backup.log 2>&1
+```
+
+### Row-Level Security
+
+Il database di produzione applica la Row-Level Security (RLS) di PostgreSQL su tutte le tabelle con dati tenant. La migrazione `002_add_rls_policies` crea la policy `tenant_isolation`. Il ruolo applicativo deve essere `NOSUPERUSER NOBYPASSRLS` — se non lo è, l'API registra un avviso all'avvio e in `ENVIRONMENT=production` si rifiuta di partire a meno che `RLS_SUPERUSER_OK=1` non sia impostato.
+
+Per verificare:
+
+```sql
+SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'nis2';
+-- Entrambe le colonne devono essere false
+```
