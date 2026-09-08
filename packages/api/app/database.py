@@ -57,11 +57,26 @@ if _INTEGRATION_TEST_MODE or _CELERY_WORKER_MODE:
         poolclass=NullPool,
     )
 else:
+    # Sized against the database's connection limit, not in isolation.
+    #
+    # gunicorn preforks, so each worker builds its own engine and its own pool:
+    # the numbers below are PER PROCESS. With `-w 4` in the production compose,
+    # pool_size 20 plus max_overflow 10 meant the API alone could demand 120
+    # connections, against a stock postgres:16-alpine whose max_connections is
+    # 100 — and the Celery worker draws on the same server. At saturation
+    # Postgres refuses outright ("sorry, too many clients already"), the
+    # readiness probe starts failing, and Caddy stops routing: the deployment
+    # presents as down rather than slow, with no warning beforehand because no
+    # pool metric is exported.
+    #
+    # 4 workers x (10 + 5) = 60, leaving room for the worker, beat, migrations
+    # and a psql session inside 100. Both values are configurable so an operator
+    # who changes the worker count or raises max_connections can follow.
     engine = create_async_engine(
         settings.database_url,
         echo=False,
-        pool_size=20,
-        max_overflow=10,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
         pool_pre_ping=True,
     )
 

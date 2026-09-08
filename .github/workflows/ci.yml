@@ -280,10 +280,19 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install ruff
         run: pip install ruff
+      # Whole packages, not just the source directories. Pointing ruff at
+      # nis2scan/ and app/ left packages/*/tests and scripts/ unchecked, and 16
+      # findings under this very rule set were sitting in them — including a
+      # test file added the same week with an unused import, which CI passed.
+      # An unused import in a test is often the residue of an assertion that was
+      # moved or deleted, so the defect class this catches there is "this test no
+      # longer checks what it was written to check".
       - name: Lint scanner
-        run: ruff check packages/scanner/nis2scan/ --select=E,W,F --ignore=E501
+        run: ruff check packages/scanner/ --select=E,W,F --ignore=E501
       - name: Lint API
-        run: ruff check packages/api/app/ --select=E,W,F --ignore=E501
+        run: ruff check packages/api/ --select=E,W,F --ignore=E501
+      - name: Lint scripts
+        run: ruff check scripts/ --select=E,W,F --ignore=E501
 
   # -----------------------------------------------------------------------
   # Policy Checks (cheap repo-wide invariants)
@@ -480,6 +489,18 @@ jobs:
         run: npm ci
       - name: Audit (high+)
         run: npm audit --omit=dev --audit-level=high
+
+      # The repository root is a second npm project — the VitePress docs build —
+      # with its own lockfile, and this job's working-directory never reached it.
+      # That is how release 2.6.10, cut specifically to pin nanoid, left the same
+      # advisory open in the root lockfile: the fix landed in packages/web and
+      # nothing audited the other half. Dev dependencies are included here
+      # because for a docs build that is all there is.
+      - name: Audit repository root (docs build)
+        working-directory: .
+        run: |
+          npm ci
+          npm audit --audit-level=high
 
   # -----------------------------------------------------------------------
   # Secret detection on full git history

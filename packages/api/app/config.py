@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # the historical single-identity behaviour for existing deployments.
     migration_database_url: str = ""
     migration_database_url_sync: str = ""
+    # SQLAlchemy pool, PER GUNICORN WORKER. The total demand on Postgres is
+    # workers x (db_pool_size + db_max_overflow), plus the Celery worker and
+    # beat. Keep that product below the server's max_connections (100 in the
+    # stock postgres image): the previous 20 + 10 with four workers asked for
+    # 120 and Postgres refuses the excess outright.
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
+
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"

@@ -58,8 +58,8 @@ class TestCliServe(unittest.TestCase):
         mock_server.return_value.__enter__.return_value = mock_instance
 
         # Run click command with custom port to avoid port conflict but actually TCPServer is mocked
-        result = self.runner.invoke(cli, ["serve", "--port", "9999"])
-        
+        self.runner.invoke(cli, ["serve", "--port", "9999"])
+
         # TCPServer should have been instantiated with ("127.0.0.1", 9999)
         mock_server.assert_called_once()
         server_address = mock_server.call_args[0][0]

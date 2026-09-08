@@ -5,16 +5,16 @@ from nis2scan.secrets import SecretsDetector
 from nis2scan.resilience import ResilienceChecker
 
 class TestFeatures(unittest.TestCase):
-    
+
     # --- Legal Checker Tests ---
     def test_legal_piva_detection(self):
         checker = LegalChecker()
-        
+
         # Positive case
         html_with_piva = "<html><footer>P.IVA 12345678901</footer></html>"
         result = asyncio.run(checker.analyze_page("http://example.com", html_with_piva))
         self.assertTrue(result['italian_compliance']['piva_found'])
-        
+
         # Negative case
         html_clean = "<html><body>Hello World</body></html>"
         result = asyncio.run(checker.analyze_page("http://example.com", html_clean))
@@ -32,7 +32,7 @@ class TestFeatures(unittest.TestCase):
         # Fake AWS Key
         content = "var key = 'AKIAIOSFODNN7EXAMPLE';"
         findings = detector.scan_content(content, "http://example.com")
-        
+
         self.assertTrue(len(findings) > 0)
         self.assertEqual(findings[0]['type'], 'aws_access_key_id')
 
@@ -40,7 +40,7 @@ class TestFeatures(unittest.TestCase):
         detector = SecretsDetector()
         content = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----"
         findings = detector.scan_content(content, "http://example.com")
-        
+
         self.assertTrue(len(findings) > 0)
         self.assertEqual(findings[0]['type'], 'private_key_pem')
 

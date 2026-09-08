@@ -59,7 +59,35 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # registered so existing hashes still verify and are transparently upgraded on
 # next login (verify_and_update).
 pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
-limiter = Limiter(key_func=get_remote_address)
+# Shared through Redis, not per process.
+#
+# With only a key function slowapi keeps its counters in process memory, and
+# production runs four gunicorn workers — so a decorator reading 10/minute
+# admitted up to forty requests a minute across the deployment, the effective
+# limit moved with the worker count, and restarting the API cleared every
+# counter. That last property is the worst of the three: the operational
+# response to suspected abuse was also the action that removed the protection.
+#
+# Redis is already a required dependency of every deployment, so this needs no
+# new infrastructure. In-memory remains the fallback when no broker is
+# configured, which keeps the unit tests and a bare `python -m app.main` working.
+def _limiter_storage_uri() -> str | None:
+    uri = (settings.redis_url or "").strip()
+    return uri or None
+
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=_limiter_storage_uri(),
+    # Degrade to per-process counters if Redis becomes unreachable, rather than
+    # doing either of the two things a bare Redis backend would do: raise on
+    # every rate-limited request, which turns a Redis blip into a total login
+    # outage, or swallow the error and stop limiting entirely. In-memory
+    # fallback keeps a weaker version of the control running through the
+    # outage — which is the same protection this deployment had before, so the
+    # failure mode is a return to the previous behaviour rather than a new one.
+    in_memory_fallback_enabled=True,
+)
 logger = logging.getLogger(__name__)
 
 

@@ -94,6 +94,11 @@ services:
     build:
       context: ../..
       dockerfile: packages/api/Dockerfile
+    # 4 workers x (DB_POOL_SIZE 10 + DB_MAX_OVERFLOW 5) = 60 connections, which
+    # fits inside postgres's max_connections of 100 alongside the Celery worker,
+    # beat, and a psql session. Changing the worker count here without changing
+    # the pool settings below is how the API came to demand 120 against a
+    # 100-connection server.
     command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
     # L11: block setuid-based privilege escalation inside the container.
     security_opt: ["no-new-privileges:true"]

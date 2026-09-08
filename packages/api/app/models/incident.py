@@ -18,6 +18,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.base import TimestampMixin
 
+# Which statuses stop the Art. 23 clock. Defined here, next to the column it
+# describes, because it was previously defined twice — routers/incident_monitor.py
+# had ("closed", "recovered") and tasks/incident_tasks.py had
+# frozenset({"closed", "recovered", "eradicated"}) — and the two disagreed.
+#
+# The consequence of that disagreement: an incident set to `eradicated` was
+# filtered out by the alerting task as closed, while the API computed
+# is_open=True for the same row, counted it in open_count and marked its
+# deadlines breached. The operator saw an open, breached statutory obligation on
+# the dashboard and received no alert about it — the half of the feature that
+# would have told someone was the half that had gone quiet.
+#
+# `eradicated` is included deliberately: the incident-response lifecycle
+# (detected -> contained -> eradicated -> recovered -> closed) treats eradication
+# as the point at which the threat is gone, and an obligation whose incident is
+# eradicated is one the operator has finished with.
+CLOSED_STATUSES = frozenset({"closed", "recovered", "eradicated"})
+
 
 class Incident(TimestampMixin, Base):
     __tablename__ = "incidents"

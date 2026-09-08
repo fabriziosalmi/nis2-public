@@ -215,8 +215,18 @@ async def handle_tool_call(
         )
 
         domain = arguments.get("domain", "")
+        # Bind the validation result. It used to be computed and discarded:
+        # validate_domain_pinned resolved the name, rejected private, reserved
+        # and blocked ranges, and returned the IP it had validated — and the
+        # analyzer was then handed the hostname and resolved it again. That
+        # reopened the DNS-rebinding window this validation exists to close: a
+        # domain answering a public address to the checking lookup and
+        # 169.254.169.254 to the connecting one got a TLS handshake against the
+        # internal address, and its certificate subject, issuer, SANs and
+        # fingerprint came back in the tool response. routers/certificates.py
+        # passes pinned_ip into the same analyzer call; this copy did not.
         try:
-            await validate_domain_pinned(domain)
+            validation = await validate_domain_pinned(domain)
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
 
@@ -224,8 +234,9 @@ async def handle_tool_call(
 
         analyzer = CertificateAnalyzer(timeout=10)
         info = await analyzer.analyze(
-            domain,
+            validation.target_value,
             arguments.get("port", 443),
+            pinned_ip=validation.pinned_ip,
         )
         return analyzer.to_dict(info)
 

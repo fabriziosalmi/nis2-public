@@ -150,7 +150,6 @@ class TestAttestationIsNotAShortcut:
     def test_attestation_is_admin_only(self):
         from app.routers import assets
 
-        source = inspect.getsource(assets.attest_authority)
         # The decorator sits above the function, so read the module around it.
         module_source = inspect.getsource(assets)
         idx = module_source.index("async def attest_authority")

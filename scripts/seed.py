@@ -204,7 +204,7 @@ async def seed():
         print(f"  User: admin@nis2.local / {admin_password}")
         print(f"  Org: NIS2 Demo Corp ({org.id})")
         print(f"  Assets: {len(assets)}")
-        print(f"  Scans: 1")
+        print("  Scans: 1")
         print(f"  Findings: {len(findings_data)}")
 
 

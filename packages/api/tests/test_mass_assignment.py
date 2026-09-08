@@ -62,24 +62,24 @@ def test_update_me_whitelisted_fields_only(client, fake_user):
 
 def test_update_me_non_whitelisted_fields_ignored(client, fake_user, monkeypatch):
     from app.schemas.auth import UserUpdate
-    
+
     original_dump = UserUpdate.model_dump
-    
+
     def mock_dump(*args, **kwargs):
         data = original_dump(*args, **kwargs)
         # Inject non-whitelisted fields simulating a schema change
         data["email_verified"] = True
         data["is_active"] = False
         return data
-        
+
     monkeypatch.setattr(UserUpdate, "model_dump", mock_dump)
-    
+
     payload = {
         "full_name": "New Name"
     }
     resp = client.patch("/api/v1/auth/me", json=payload)
     assert resp.status_code == 200
-    
+
     # Whitelist must prevent modifications to email_verified and is_active
     assert fake_user.full_name == "New Name"
     assert fake_user.email_verified is False
@@ -89,10 +89,10 @@ def test_update_me_non_whitelisted_fields_ignored(client, fake_user, monkeypatch
 def test_slim_token_response(fake_user):
     from fastapi import Response
     from app.routers.auth import _build_token_response
-    
+
     response = Response()
     org_id = uuid.uuid4()
-    
+
     # 1. Test when slim=False (default behavior)
     res_normal = _build_token_response(
         response=response,
@@ -105,7 +105,7 @@ def test_slim_token_response(fake_user):
     assert res_normal.refresh_token is not None
     assert res_normal.csrf_token is not None
     assert res_normal.org_id == str(org_id)
-    
+
     # 2. Test when slim=True (slim behavior)
     res_slim = _build_token_response(
         response=response,

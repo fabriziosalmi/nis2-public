@@ -96,17 +96,17 @@ def test_totp_setup_and_verify_generates_recovery_codes(client, fake_user):
     # Setup TOTP
     resp_setup = client.post("/api/v1/auth/totp/setup")
     assert resp_setup.status_code == 200
-    
+
     # Verify TOTP code with standard pyotp to enable MFA
     import pyotp
     totp = pyotp.TOTP(fake_user.totp_secret)
     code = totp.now()
-    
+
     resp_verify = client.post("/api/v1/auth/totp/verify", json={"code": code})
     assert resp_verify.status_code == 200
     data = resp_verify.json()
     assert data["mfa_enabled"] is True
-    
+
     # Check that recovery codes are generated and returned
     recovery_codes = data["recovery_codes"]
     assert len(recovery_codes) == 8
@@ -118,7 +118,7 @@ def test_totp_setup_and_verify_generates_recovery_codes(client, fake_user):
     assert fake_user.totp_recovery_codes is not None
     stored_hashes = fake_user.totp_recovery_codes.split(",")
     assert len(stored_hashes) == 8
-    
+
     # Verify the SHA-256 match
     for raw_code, stored_hash in zip(recovery_codes, stored_hashes):
         assert hashlib.sha256(raw_code.encode()).hexdigest() == stored_hash

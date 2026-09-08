@@ -87,20 +87,20 @@ class TestAuth:
     def test_user_update_avatar_url_validation(self):
         from app.schemas.auth import UserUpdate
         from pydantic import ValidationError
-        
+
         # Valid URLs
         UserUpdate(avatar_url="https://example.com/avatar.png")
         UserUpdate(avatar_url="http://example.com/avatar.png")
         UserUpdate(avatar_url="/avatars/user.png")
         UserUpdate(avatar_url=None)
-        
+
         # Invalid URLs
         with pytest.raises(ValidationError):
             UserUpdate(avatar_url="javascript:alert(1)")
-            
+
         with pytest.raises(ValidationError):
             UserUpdate(avatar_url="data:image/png;base64,abc")
-            
+
         with pytest.raises(ValidationError):
             UserUpdate(avatar_url="ftp://example.com/avatar.png")
 

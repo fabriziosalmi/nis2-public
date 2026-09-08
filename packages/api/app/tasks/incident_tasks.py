@@ -39,6 +39,7 @@ import httpx
 import redis as redis_sync
 
 from app.config import settings
+from app.models.incident import CLOSED_STATUSES
 from app.tasks.celery_app import celery_app
 from app.utils.target_validator import validate_url_against_ssrf
 
@@ -54,8 +55,10 @@ _TTL_APPROACHING: int = int((WARN_HOURS_BEFORE + 1) * 3600)
 # OVERDUE key re-alerts once per day if the deadline is still missed.
 _TTL_OVERDUE: int = 86400  # 24 h
 
-# Incident statuses considered "closed" — no alerts needed.
-_CLOSED_STATUSES = frozenset({"closed", "recovered", "eradicated"})
+# Incident statuses considered "closed" — no alerts needed. Imported rather than
+# restated; see the note on CLOSED_STATUSES in app/models/incident.py for what
+# the second copy cost.
+_CLOSED_STATUSES = CLOSED_STATUSES
 
 # Each entry describes one Art. 23 deadline to monitor.
 # (deadline_field, sent_field, label, article_ref)

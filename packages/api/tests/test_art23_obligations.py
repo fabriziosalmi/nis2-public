@@ -35,7 +35,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.routers.incident_monitor import (
-    _EARLY_WARNING_WINDOW,
     _FINAL_REPORT_WINDOW,
     _NOTIFICATION_WINDOW,
     RecordSubmissionRequest,

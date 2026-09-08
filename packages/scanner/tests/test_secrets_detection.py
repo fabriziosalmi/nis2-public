@@ -13,7 +13,6 @@ import pathlib
 import re
 import textwrap
 
-import pytest
 import yaml
 
 from nis2scan.secrets import (

@@ -44,14 +44,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_org, require_role
-from app.models.incident import Incident
+from app.models.incident import CLOSED_STATUSES, Incident
 from app.models.membership import Membership
 from app.models.user import User
 
 router = APIRouter(prefix="/incident-monitor", tags=["incident-monitor"])
 
-# Statuses that stop the Art. 23 clock (no more deadlines to chase).
-_CLOSED_STATUSES = ("closed", "recovered")
+# Statuses that stop the Art. 23 clock. Imported rather than restated: this
+# module and tasks/incident_tasks.py each had their own copy and they disagreed
+# on `eradicated`, so an incident in that state was closed for the alerting and
+# open for the API at the same time.
+_CLOSED_STATUSES = CLOSED_STATUSES
 
 
 class DeadlineState(BaseModel):

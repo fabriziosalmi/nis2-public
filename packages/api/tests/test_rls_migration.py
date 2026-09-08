@@ -64,12 +64,63 @@ class TestMigrationFileExists:
         assert "def downgrade" in src
 
 
+def _migration_tenant_tables() -> set:
+    """The TENANT_TABLES list the migration actually loops over.
+
+    Parsed rather than pattern-matched, because the migration builds its
+    statements in a loop: the source contains the list, not one ALTER TABLE per
+    table, so searching the file text for a table name proves only that the name
+    appears somewhere — a comment or the DROP POLICY loop would satisfy it.
+    """
+    import ast
+
+    tree = ast.parse(_migration_source())
+    for node in ast.walk(tree):
+        targets = []
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target]
+        elif isinstance(node, ast.Assign):
+            targets = [t for t in node.targets if isinstance(t, ast.Name)]
+        for t in targets:
+            if t.id == "TENANT_TABLES" and node.value is not None:
+                return set(ast.literal_eval(node.value))
+    raise AssertionError("TENANT_TABLES not found in the migration")
+
+
 class TestMigrationEnablesRLS:
     def test_enable_rls_for_all_tenant_tables(self):
+        """Every tenant table must be in the list the migration iterates.
+
+        This assertion used to be loop-invariant: it checked that the phrase
+        "ENABLE ROW LEVEL SECURITY" appeared somewhere in the file, which stays
+        true as long as any single table still has it, and that the table name
+        appeared somewhere, which the DROP POLICY loop satisfies. Deleting RLS
+        for one table left the test green — on the control that stops one
+        customer reading another's findings.
+        """
+        declared = _migration_tenant_tables()
+        missing = set(EXPECTED_TENANT_TABLES) - declared
+        assert not missing, (
+            f"these tenant tables are not in the migration's TENANT_TABLES list, "
+            f"so RLS is never enabled for them: {sorted(missing)}"
+        )
+
+    def test_the_loop_applies_all_three_statements_per_table(self):
+        """The list being right is necessary and not sufficient — the loop body
+        has to enable, force and create the policy for each entry."""
         src = _migration_source()
-        for t in EXPECTED_TENANT_TABLES:
-            assert "ENABLE ROW LEVEL SECURITY" in src, "Missing ENABLE ROW LEVEL SECURITY"
-            assert t in src, f"Table {t!r} not mentioned in migration"
+        assert "for t in TENANT_TABLES:" in src, (
+            "the migration no longer iterates TENANT_TABLES, so checking that "
+            "list is no longer evidence that anything is applied per table"
+        )
+        # Each statement must interpolate the loop variable. A statement naming
+        # a fixed table would apply to one and leave the rest unprotected.
+        for stmt in (
+            "ALTER TABLE {t} ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE {t} FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON {t} ",
+        ):
+            assert stmt in src, f"not applied per table: {stmt}"
 
     def test_force_rls_present(self):
         src = _migration_source()

@@ -36,7 +36,6 @@ import asyncio
 import socket
 import ssl
 import subprocess
-import tempfile
 import threading
 from pathlib import Path
 
@@ -88,6 +87,24 @@ class TlsServer:
                 pytest.skip("this OpenSSL build cannot serve the obsolete protocol")
         return ctx
 
+    def _handle(self, ctx: ssl.SSLContext, conn: socket.socket) -> None:
+        # A timeout on the accepted socket, because the client legitimately
+        # walks away mid-handshake: check_tls opens a validating connection, a
+        # lax one and then one probe per obsolete protocol, and several of those
+        # are expected to fail. Without a timeout the server blocks in
+        # wrap_socket waiting for bytes that never arrive.
+        try:
+            conn.settimeout(5)
+            with ctx.wrap_socket(conn, server_side=True):
+                pass
+        except Exception:
+            pass
+        finally:
+            try:
+                conn.close()
+            except OSError:
+                pass
+
     def _serve(self) -> None:
         ctx = self._context()
         while True:
@@ -95,11 +112,13 @@ class TlsServer:
                 conn, _ = self.sock.accept()
             except OSError:
                 return
-            try:
-                with ctx.wrap_socket(conn, server_side=True):
-                    pass
-            except Exception:
-                pass
+            # One thread per connection. Serially, a single stuck handshake held
+            # the accept loop and the next probe sat in the backlog until it
+            # timed out — which made this test fail roughly one run in twelve,
+            # reporting "no weak versions" against a server that only speaks
+            # TLS 1.0. A flaky test on exactly the assertion that caught the
+            # original defect is worse than no test.
+            threading.Thread(target=self._handle, args=(ctx, conn), daemon=True).start()
 
     def __enter__(self) -> "TlsServer":
         self._thread.start()

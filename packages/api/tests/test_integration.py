@@ -66,8 +66,8 @@ async def _bootstrap_async() -> None:
     """Drop and recreate the schema, then apply RLS policies."""
     async with engine.begin() as conn:
         await conn.execute(text("""
-            DO $$ 
-            DECLARE 
+            DO $$
+            DECLARE
                 pol record;
             BEGIN
                 FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' LOOP
