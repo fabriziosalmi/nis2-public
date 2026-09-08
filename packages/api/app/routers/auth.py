@@ -297,6 +297,21 @@ async def register(
     user.email_verified = True
     await db.flush()
 
+    # Commit before answering.
+    #
+    # The request's session is committed in the dependency's teardown, and
+    # FastAPI runs that AFTER the response has been sent. A client that acts on
+    # the response immediately — which is what a client does — can therefore
+    # beat the commit and observe the state from before it. It is not
+    # theoretical: registering and then creating an organisation with the token
+    # just issued returned 401 "User not found", and asking for a reset link and
+    # then following it returned "invalid or expired" for a token that had just
+    # been minted.
+    #
+    # Committing here makes the success we report true at the moment we report
+    # it. The teardown commit that follows is then a no-op.
+    await db.commit()
+
     return _build_token_response(response, user, org.id, "admin", slim=slim)
 
 
@@ -1377,6 +1392,13 @@ async def forgot_password(
     )
     db.add(token_row)
     await db.flush()
+    # Commit BEFORE sending. The email carries the raw token, so from the moment
+    # send_email returns someone may be holding a working link — and in
+    # development the dev outbox hands it over immediately. The session commits
+    # in the dependency's teardown, which FastAPI runs after the response has
+    # been sent, so following a freshly-minted link could answer "invalid or
+    # expired" for a token that had just been created.
+    await db.commit()
 
     # 3. Send. The link points at the FE route; the FE then POSTs
     #    {token, new_password} back to /reset-password.
@@ -1513,6 +1535,10 @@ async def reset_password(
             request=request,
         )
 
+    # A 204 here means the password changed and the token is spent. Leaving the
+    # commit to the teardown made that claim true only slightly after we made
+    # it, which is the window the single-use race lived in.
+    await db.commit()
     return None
 
 
