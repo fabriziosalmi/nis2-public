@@ -178,3 +178,13 @@ def test_postgres_provisions_the_least_privilege_role(compose_file: str):
         f"{compose_file}: postgres has no NIS2_APP_PASSWORD, so the initdb "
         f"wrapper aborts"
     )
+
+
+def test_makefile_has_db_backup_and_restore_targets():
+    """Makefile must provide operational backup and restore targets."""
+    text = MAKEFILE.read_text(encoding="utf-8")
+    assert "db-backup:" in text, "Makefile missing db-backup target"
+    assert "db-restore:" in text, "Makefile missing db-restore target"
+    assert "pg_dump" in text, "Makefile missing pg_dump invocation in db-backup"
+    assert "psql" in text, "Makefile missing psql invocation in db-restore"
+

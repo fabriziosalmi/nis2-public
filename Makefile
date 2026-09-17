@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 
-.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-seed db-provision-app-role version version-check version-check-release version-set test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
+.PHONY: dev dev-up dev-up-fresh dev-down dev-logs api-logs web-logs db-migrate db-upgrade db-stamp db-history db-seed db-provision-app-role db-backup db-restore version version-check version-check-release version-set test test-api test-scanner lint check test-integration test-e2e test-web h5-validate verify clean clean-all prod prod-preflight prod-up prod-down
 
 # ─── Cross-platform Python detection ─────────────────────────────────
 # v2.4.28: pre-2.4.28 the Makefile invoked `python` literally, which on
@@ -33,7 +33,7 @@
 # cross-platform interpreter detection. (venv/bin is POSIX; on Windows the
 # wildcard misses and we use the py launcher branch.)
 ifneq ($(wildcard venv/bin/python),)
-  PYTHON := venv/bin/python
+  PYTHON := $(CURDIR)/venv/bin/python
 else ifeq ($(OS),Windows_NT)
   PYTHON := $(firstword $(shell where py 2>nul) $(shell where python3 2>nul) $(shell where python 2>nul))
 else
@@ -174,6 +174,30 @@ db-provision-app-role:
 	@echo "  superuser in MIGRATION_DATABASE_URL, then restart the API."
 	@echo ""
 
+# Database backup and restore targets (production or dev)
+# Usage:
+#   make db-backup [OUT=backup.sql] [COMPOSE_FILE=infra/docker/docker-compose.prod.yml]
+#   make db-restore IN=backup.sql [COMPOSE_FILE=infra/docker/docker-compose.prod.yml]
+db-backup:
+	@OUT=$${OUT:-backup-$$(date +%F).sql}; \
+	COMPOSE_FILE=$${COMPOSE_FILE:-infra/docker/docker-compose.prod.yml}; \
+	echo "== Backing up database to $$OUT using $$COMPOSE_FILE =="; \
+	docker compose --env-file .env -f "$$COMPOSE_FILE" exec -T postgres \
+	  sh -c 'pg_dump -U "$${POSTGRES_USER:-nis2}" "$${POSTGRES_DB:-nis2}"' > "$$OUT" && \
+	echo "Backup successfully saved to $$OUT"
+
+db-restore:
+	@if [ -z "$(IN)" ] || [ ! -f "$(IN)" ]; then \
+	  echo "ERROR: specify a valid backup file with IN=<path/to/backup.sql>"; \
+	  exit 1; \
+	fi; \
+	COMPOSE_FILE=$${COMPOSE_FILE:-infra/docker/docker-compose.prod.yml}; \
+	echo "== Restoring database from $(IN) using $$COMPOSE_FILE =="; \
+	docker compose --env-file .env -f "$$COMPOSE_FILE" exec -T postgres \
+	  sh -c 'psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER:-nis2}" -d "$${POSTGRES_DB:-nis2}"' < "$(IN)" && \
+	echo "Restore successfully completed from $(IN)"
+
+
 # ─── Versioning ──────────────────────────────────────────────────────
 # `VERSION` at the repo root is the single source of truth. Four manifests and
 # SECURITY.md's supported-versions table are derived from it by `version-set`,
@@ -243,7 +267,7 @@ endif
 # dependency audits. pip-audit is best-effort (skipped if not installed).
 check: lint
 	@echo "== policy: no bare 'except:' =="
-	@! grep -rn "^[[:space:]]*except:$$" --include="*.py" packages/ || (echo "  FAIL" && exit 1)
+	@! grep -rn "^[[:space:]]*except:$$" --include="*.py" --exclude-dir=node_modules packages/ || (echo "  FAIL" && exit 1)
 	@echo "== policy: no CORS wildcard =="
 	@! grep -q 'allow_origins=\["\*"\]' packages/api/app/main.py || (echo "  FAIL" && exit 1)
 	@echo "== version consistency =="

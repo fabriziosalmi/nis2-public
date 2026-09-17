@@ -96,13 +96,36 @@ this platform is marketed for, it is not.
 
 ## 0. Always back up first
 
+Before performing upgrades or applying schema migrations, snapshot your database to ensure a clean rollback path:
+
 ```bash
-# adjust the compose file / creds to your deployment
-docker compose -f infra/docker/docker-compose.prod.yml exec -T postgres \
-  pg_dump -U "${POSTGRES_USER:-nis2}" "${POSTGRES_DB:-nis2}" > backup-$(date +%F).sql
+# Recommended: using Makefile target (defaults to prod compose and dated filename)
+make db-backup OUT=backup-$(date +%F).sql
+
+# Or directly via docker compose:
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "${POSTGRES_USER:-nis2}" "${POSTGRES_DB:-nis2}"' > backup-$(date +%F).sql
 ```
 
 A schema upgrade is hard to undo cleanly; the dump is your rollback.
+
+### Rollback / Restore procedure
+
+If an upgrade fails or data rollback is required, restore the database from your snapshot:
+
+```bash
+# Recommended: using Makefile target
+make db-restore IN=backup-$(date +%F).sql
+
+# Or directly via docker compose:
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-nis2}" -d "${POSTGRES_DB:-nis2}"' < backup-$(date +%F).sql
+```
+
+After restoring, verify table accessibility and check the current Alembic revision:
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec api alembic current
+```
 
 ---
 
