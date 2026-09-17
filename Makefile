@@ -183,7 +183,7 @@ db-backup:
 	COMPOSE_FILE=$${COMPOSE_FILE:-infra/docker/docker-compose.prod.yml}; \
 	echo "== Backing up database to $$OUT using $$COMPOSE_FILE =="; \
 	docker compose --env-file .env -f "$$COMPOSE_FILE" exec -T postgres \
-	  sh -c 'pg_dump -U "$${POSTGRES_USER:-nis2}" "$${POSTGRES_DB:-nis2}"' > "$$OUT" && \
+	  sh -c 'pg_dump --clean --if-exists -U "$${POSTGRES_USER:-nis2}" "$${POSTGRES_DB:-nis2}"' > "$$OUT" && \
 	echo "Backup successfully saved to $$OUT"
 
 db-restore:

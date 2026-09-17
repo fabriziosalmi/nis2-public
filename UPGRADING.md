@@ -104,7 +104,7 @@ make db-backup OUT=backup-$(date +%F).sql
 
 # Or directly via docker compose:
 docker compose --env-file .env -f infra/docker/docker-compose.prod.yml exec -T postgres \
-  sh -c 'pg_dump -U "${POSTGRES_USER:-nis2}" "${POSTGRES_DB:-nis2}"' > backup-$(date +%F).sql
+  sh -c 'pg_dump --clean --if-exists -U "${POSTGRES_USER:-nis2}" "${POSTGRES_DB:-nis2}"' > backup-$(date +%F).sql
 ```
 
 A schema upgrade is hard to undo cleanly; the dump is your rollback.

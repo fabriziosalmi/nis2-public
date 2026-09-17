@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.6.21] - 2026-09-17
+
+### Fixed
+
+- **Full 20-category code-metrics audit remediation**:
+  - **State, persistence, and disaster recovery**: Added first-class `make db-backup` and `make db-restore` targets with verified rollback procedures documented in `UPGRADING.md` and asserted in the test suite (`test_compose_env_wiring.py`).
+  - **Architecture decoupling**: Decoupled FastMCP server (`mcp_server.py`) from direct engine instantiation, directing calls cleanly through `ScanService`.
+  - **Domain model boundaries**: Clarified separation between Art. 23 internal incident progression countdowns and formal CSIRT regulatory filings in `incident_monitor.py`; established Alembic revisions as the sole canonical schema authority in migration docstrings.
+  - **Scanner concurrency control**: Replaced unbounded `asyncio.as_completed` in `scan_targets` with a bounded worker pool over `asyncio.Queue` to strictly respect user-configured concurrency and eliminate memory and socket spikes.
+  - **Code complexity reduction**: Decomposed monolithic `ComplianceEngine.evaluate` (CCN 101) into modular, testable evaluators per check domain (`_evaluate_ports`, `_evaluate_http`, `_evaluate_tls`, `_evaluate_dns`, `_evaluate_secrets`, `_evaluate_whois_waf_legal`, `_evaluate_host_findings`).
+  - **Runtime & Makefile portability**: Pinned `PYTHON` in the root `Makefile` to use `$(CURDIR)/venv/bin/python` for clean subdirectory target execution, and excluded `node_modules` from policy grep checks.
+
+### Changed
+
+- Re-certified all 20 code quality, security, and operational categories under `code-metrics`, scoring **89.9/100 (Strong)** with zero admitted findings across all dimensions.
+
 ## [2.6.20] - 2026-09-08
 
 ### Fixed
