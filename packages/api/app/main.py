@@ -90,9 +90,10 @@ async def lifespan(app: FastAPI):
         "NIS2 Platform API %s started (env=%s)", API_VERSION, settings.environment
     )
     # Bootstrap missing tables/columns on a fresh DB and heal any
-    # additive schema drift on existing volumes. See ensure_schema for
-    # the debt note — this is a stopgap until alembic/versions/ is
-    # populated with proper revisions.
+    # additive schema drift on existing volumes. Alembic is the canonical
+    # schema authority (revisions 001-009); ensure_schema() is an
+    # intentional idempotent fallback so a bare docker compose up or
+    # test container works without running alembic upgrade head first.
     try:
         await ensure_schema()
     except Exception:

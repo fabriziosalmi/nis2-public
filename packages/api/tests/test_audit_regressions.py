@@ -97,6 +97,14 @@ class TestTheMcpCertificateToolUsesThePinnedIp:
         assert "Target blocked" in inspect.getsource(mcp_server.handle_tool_call)
         assert "Invalid or disallowed target" in inspect.getsource(certificates)
 
+    def test_mcp_server_does_not_import_nis2scan_directly(self):
+        """NIS2PU-ARCH-01: MCP tools must go through ScanService."""
+        from app import mcp_server
+
+        source = inspect.getsource(mcp_server)
+        assert "from nis2scan" not in source
+        assert "import nis2scan" not in source
+
 
 class TestAFailedMigrationStopsTheDeployment:
     """The entrypoint logged a warning and started the API anyway.

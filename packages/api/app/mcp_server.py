@@ -238,9 +238,7 @@ async def handle_tool_call(
             return {"error": f"Target blocked: {exc}"}
 
     elif name == "scan_target":
-        from nis2scan.config import Config, Targets
-        from nis2scan.scanner import Scanner
-        from nis2scan.compliance import ComplianceEngine
+        from app.services.scan_service import ScanService
 
         target = arguments.get("target", "")
 
@@ -256,14 +254,16 @@ async def handle_tool_call(
         )
         import ipaddress as _ipaddress
 
+        pinned_ip = None
         try:
             # Heuristic: if it parses as an IP, validate as IP;
             # otherwise treat as domain.
             try:
                 _ipaddress.ip_address(target)
-                validate_ip_pinned(target)
+                val = validate_ip_pinned(target)
             except ValueError:
-                await validate_domain_pinned(target)
+                val = await validate_domain_pinned(target)
+            pinned_ip = getattr(val, "pinned_ip", None)
         except TargetValidationError as exc:
             return {"error": f"Target blocked: {exc}"}
 
@@ -285,17 +285,9 @@ async def handle_tool_call(
                 "port_scan": True,
             },
         )
-        config = Config(
-            targets=Targets(domains=[target]),
-            features=features,
-            scan_timeout=10,
-            concurrency=5,
-            max_hosts=1,
+        _results, report = await ScanService.scan_single_target(
+            target, features=features, pinned_ip=pinned_ip
         )
-        scanner = Scanner(config)
-        results = await scanner.run()
-        engine = ComplianceEngine(config)
-        report = engine.evaluate(results)
 
         return {
             "target": target,

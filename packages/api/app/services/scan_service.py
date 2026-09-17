@@ -104,3 +104,36 @@ class ScanService:
             validation.target_value, port, pinned_ip=validation.pinned_ip
         )
         return analyzer.to_dict(info)
+
+    @staticmethod
+    async def scan_single_target(
+        target: str,
+        features: dict[str, Any] | None = None,
+        pinned_ip: str | None = None,
+    ) -> tuple[list[ScanResult], ComplianceReport]:
+        """Ad-hoc single target scan for lightweight callers (such as MCP).
+
+        Ensures MCP tools do not import or instantiate nis2scan engines directly,
+        preserving ScanService as the sole boundary between API transports and
+        the scanning engine.
+        """
+        if features is None:
+            features = {
+                "dns_checks": True,
+                "web_checks": True,
+                "port_scan": True,
+            }
+        pinned_ips = {target: pinned_ip} if pinned_ip else None
+        config = Config(
+            targets=Targets(domains=[target]),
+            features=features,
+            scan_timeout=10,
+            concurrency=5,
+            max_hosts=1,
+            pinned_ips=pinned_ips,
+        )
+        scanner = Scanner(config)
+        results = await scanner.run()
+        engine = ComplianceEngine(config)
+        report = engine.evaluate(results)
+        return results, report
