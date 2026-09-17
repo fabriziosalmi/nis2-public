@@ -4,13 +4,9 @@ Revision ID: 007_sync_model_columns
 Revises: 006_add_totp_recovery_codes
 Create Date: 2026-06-27
 
-Migrations 001-006 had drifted from the SQLAlchemy models: ~11 columns the models
-define were never added by a migration (only by ensure_schema's create_all), and a
-few VARCHAR columns were created narrower than the model. The drift was masked
-because `alembic upgrade` never actually persisted until the env.py SET-LOCAL fix
-that ships with this change — so the dev/prod schema was always built by
-ensure_schema (create_all), not Alembic. This brings the Alembic schema in line
-with the models for those columns.
+Alembic is the authoritative schema owner. Historical revisions 001-006 were aligned
+with the SQLAlchemy models by synchronizing ~11 model columns and widening narrow
+VARCHAR columns, establishing Alembic as the single canonical source of truth for the schema.
 
 Deliberately additive + conservative: it ADDs the missing columns and WIDENS the
 under-sized types only. It does NOT touch existing unique constraints / indexes —

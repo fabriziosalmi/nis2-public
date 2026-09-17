@@ -181,7 +181,6 @@ class LegalChecker:
         await self._playwright_semaphore.acquire()
         try:
             async with async_playwright() as p:
-                # We assume 'playwright install' has been run.
                 try:
                     browser = await p.chromium.launch(
                         headless=True,

@@ -138,10 +138,10 @@ git pull origin main
 make prod
 ```
 
-Docker Compose rebuilds changed images and restarts affected services. Run migrations if needed:
+Docker Compose rebuilds changed images and restarts affected services. Run migrations using the privileged migration identity (see `.env.example` for the split database identity model where `MIGRATION_DATABASE_URL` carries superuser/migration rights while `DATABASE_URL` runs as the restricted `nis2_app` runtime role):
 
 ```bash
-make db-upgrade
+docker compose -f infra/docker/docker-compose.prod.yml exec api alembic upgrade head
 ```
 
 ## Development vs. Production

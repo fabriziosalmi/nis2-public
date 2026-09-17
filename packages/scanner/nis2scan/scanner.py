@@ -622,23 +622,54 @@ class Scanner:
         return all_targets
 
     async def scan_targets(self, targets: List[tuple]):
-        tasks = []
+        if not targets:
+            return
 
-        # 3. Create Tasks
+        # Handle dry run mode
         if self.config.dry_run:
             logger.info("DRY RUN: Skipping actual network scan.")
             for ip, original_target in targets:
-                 # Return a mock "INFO" result
-                 res = ScanResult(target=original_target, ip=ip, is_alive=False)
-                 res.errors.append("Dry Run: Skipped")
-                 tasks.append(asyncio.create_task(self._mock_return(res)))
-        else:
-            for ip, original_target in targets:
-                 tasks.append(self.scan_ip(ip, original_target))
+                res = ScanResult(target=original_target, ip=ip, is_alive=False)
+                res.errors.append("Dry Run: Skipped")
+                yield res
+            return
 
-        # Iteratively yield results as they finish
-        for task in asyncio.as_completed(tasks):
-            yield await task
+        # Bounded worker pool: allocate at most concurrency worker tasks
+        # pulling from a queue, bounding both memory footprint and network load.
+        queue: asyncio.Queue[tuple | None] = asyncio.Queue()
+        out_queue: asyncio.Queue[ScanResult] = asyncio.Queue()
+
+        for item in targets:
+            queue.put_nowait(item)
+
+        worker_count = min(max(1, self.config.concurrency), len(targets))
+        for _ in range(worker_count):
+            queue.put_nowait(None)
+
+        async def worker():
+            while True:
+                item = await queue.get()
+                if item is None:
+                    queue.task_done()
+                    break
+                ip, original_target = item
+                try:
+                    res = await self.scan_ip(ip, original_target)
+                except Exception as exc:
+                    res = ScanResult(target=original_target, ip=ip)
+                    res.errors.append(f"Scan error: {exc}")
+                await out_queue.put(res)
+                queue.task_done()
+
+        workers = [asyncio.create_task(worker()) for _ in range(worker_count)]
+
+        remaining = len(targets)
+        while remaining > 0:
+            result = await out_queue.get()
+            yield result
+            remaining -= 1
+
+        await asyncio.gather(*workers)
 
     async def run(self) -> List[ScanResult]:
         # Legacy/Simple wrapper

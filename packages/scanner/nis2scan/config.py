@@ -100,10 +100,11 @@ class Config:
         # If config file is missing it, default to 0 (unlimited)
         final_max_hosts = max_hosts if max_hosts > 0 else data.get('max_hosts', 0)
 
+        concurrency_val = data.get('concurrency', 20)
         return cls(
             project_name=data.get('project_name', "NIS2 Scan"),
             scan_timeout=data.get('scan_timeout', 10),
-            concurrency=data.get('concurrency', 20),
+            concurrency=concurrency_val,
             targets=targets,
             compliance_profile=data.get('compliance_profile', 'default'),
             max_hosts=final_max_hosts,

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence
 from .scanner import ScanResult
 from . import cvss
 from .summary import SummaryGenerator
@@ -93,7 +93,796 @@ class ComplianceEngine:
     def __init__(self, config):
         self.config = config
 
-    def evaluate(self, scan_results: List[ScanResult], scan_id: str = "N/A") -> ComplianceReport:
+    def _evaluate_ports(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # 1. CRITICAL EXPOSURE
+        critical_map = {
+            445: "SMB (Server Message Block)",
+            3389: "RDP (Remote Desktop)",
+            3306: "MySQL Database",
+            5432: "PostgreSQL Database",
+            6379: "Redis Key-Value Store",
+            27017: "MongoDB"
+        }
+
+        for port, name in critical_map.items():
+            if port in host.open_ports:
+                 f = ComplianceFinding(
+                    severity="CRITICAL",
+                    category="ACCESS CONTROL",
+                    message=f"{name} Port ({port}) is EXPOSED",
+                    rationale="Critical infrastructure services must not be exposed directly to the public internet.",
+                    target=host.ip,
+                    reference="D.Lgs 138/2024 Art. 21.2.i (Access Control)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                    technical_detail=f"Port {port} is open and accepting connections from public IP.",
+                    remediation="Block access to this port immediately via Firewall/ACL. Use VPN for administrative access.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.i (Access Control)"
+                )
+                 host_findings.append(f)
+
+        # 2. HIGH EXPOSURE
+        if 23 in host.open_ports:
+            f = ComplianceFinding(
+                severity="HIGH",
+                category="EXPOSURE",
+                message="Telnet Port (23) is OPEN",
+                rationale="Use of insecure legacy protocols exposing cleartext credentials.",
+                target=host.ip,
+                reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                technical_detail="Telnet service detected. Credential sniffing possible.",
+                remediation="Disable Telnet and replace with SSH. Ensure port 23 is closed.",
+                remediation_cost="Low",
+                remediation_effort="Medium",
+                compliance_article="Art. 21.2.h (Cryptography)"
+            )
+            host_findings.append(f)
+
+        if 21 in host.open_ports:
+             f = ComplianceFinding(
+                severity="MEDIUM",
+                category="EXPOSURE",
+                message="FTP Port (21) is OPEN",
+                rationale="Legacy protocol usage should be minimized. Ensure FTPS is enforced.",
+                target=host.ip,
+                reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                technical_detail="Unencrypted FTP service reachable.",
+                remediation="Migrate to SFTP/SCP or enforce FTPS (TLS).",
+                remediation_cost="Medium",
+                remediation_effort="Medium",
+                compliance_article="Art. 21.2.h (Cryptography)"
+            )
+             host_findings.append(f)
+
+        return host_findings
+
+    def _evaluate_http(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # 3. ENCRYPTION
+        for port, info in host.http_info.items():
+            # Accuracy Fix: Check if HTTP service was actually reachable/valid
+            status = info.get('status')
+            if not status:
+                # Service didn't respond with HTTP status, so don't flag "Redirect" issues.
+                continue
+
+            if port == 80:
+                 if not any("https://" in r for r in info.get('redirects', [])):
+                     f = ComplianceFinding(
+                        severity="LOW",
+                        category="ENCRYPTION",
+                        message="Port 80 does not force redirect to HTTPS",
+                        rationale="Data in transit must be encrypted.",
+                        target=host.ip,
+                        reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                        technical_detail="HTTP response code 200 OK on port 80 without redirect location.",
+                        remediation="Configure web server to Redirect (301) all HTTP traffic to HTTPS.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.h (Cryptography)"
+                     )
+                     host_findings.append(f)
+
+            # Header QUALITY, from nis2scan.headers. The presence check below
+            # stays for the missing-HSTS case, but these carry the findings a
+            # presence check structurally cannot raise: a CSP that allows
+            # 'unsafe-inline', a wildcard script source, max-age=1, or
+            # max-age=0 (which instructs browsers to forget the policy) all
+            # used to count as satisfied controls.
+            for issue in info.get('header_issues', []):
+                # The plain "header absent" cases are already covered by the
+                # dedicated findings below and in the missing-headers list;
+                # emitting both would double-count them in the score.
+                if "not set" in issue['summary'] or "No Content-Security-Policy" in issue['summary']:
+                    continue
+                f = ComplianceFinding(
+                    severity=issue['severity'],
+                    category="CYBER HYGIENE",
+                    message=f"{issue['summary']} on port {port}",
+                    rationale=(
+                        "A security header that is present but permissive is not a "
+                        "control; it reads as one in an audit."
+                    ),
+                    target=f"{host.ip}:{port}",
+                    reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                    technical_detail=issue['detail'],
+                    remediation="Tighten the header — see the technical detail.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                )
+                host_findings.append(f)
+
+            missing = info.get('missing_headers', [])
+            if 'Strict-Transport-Security' in missing and port in [443, 8443]:
+                 f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="RESILIENCE",
+                    message=f"HSTS Header missing on port {port}",
+                    rationale="Prevents downgrade attacks to insecure protocols.",
+                    target=host.ip,
+                    reference="NIS2 Directive Art. 21.2.g (Cyber Hygiene)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    technical_detail="Strict-Transport-Security header not returned by server.",
+                    remediation="Enable HSTS headers (max-age=31536000; includeSubDomains).",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                 )
+                 host_findings.append(f)
+
+            # Cookie Security
+            cookies = info.get('cookies_analysis', [])
+            for c in cookies:
+                # Check Secure Flag (only relevant for HTTPS)
+                if port in [443, 8443] and not c.get('secure'):
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="CYBER HYGIENE",
+                        message="Cookie Missing 'Secure' Flag",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                        rationale="Cookies without the Secure flag can be transmitted over unencrypted connections.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                        technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
+                        remediation="Set the 'Secure' flag for all sensitive cookies.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                    )
+                    host_findings.append(f)
+
+                # SameSite=None is sent on cross-site requests — weaker than
+                # omitting the attribute in browsers that default to Lax.
+                # Substring matching could not tell it from SameSite=Strict.
+                if c.get('samesite') == 'None':
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="CYBER HYGIENE",
+                        message="Cookie sets SameSite=None",
+                        rationale=(
+                            "The cookie is attached to cross-site requests, which is "
+                            "weaker than omitting the attribute in browsers defaulting "
+                            "to Lax."
+                        ),
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                        technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
+                        remediation="Use SameSite=Lax or Strict unless the cookie is genuinely needed cross-site.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                    )
+                    host_findings.append(f)
+
+                # Check HttpOnly Flag
+                if not c.get('httponly'):
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="CYBER HYGIENE",
+                        message="Cookie Missing 'HttpOnly' Flag",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
+                        rationale="Cookies without HttpOnly are accessible to JavaScript, increasing XSS risk.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                        technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
+                        remediation="Set the 'HttpOnly' flag for session cookies.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                    )
+                    host_findings.append(f)
+
+            # SRI Check
+            sri_missing = info.get('sri_missing', [])
+            if sri_missing:
+                # Limit to first few to avoid spam
+                for src in sri_missing[:3]:
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="SUPPLY CHAIN SECURITY",
+                        message="Subresource Integrity (SRI) Missing",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N",
+                        rationale="External scripts without SRI can be tampered with to inject malware.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.d (Supply Chain Security)",
+                        technical_detail=f"Script: {src}",
+                        remediation="Add 'integrity' and 'crossorigin' attributes to external script tags.",
+                        remediation_cost="Low",
+                        remediation_effort="Medium",
+                        compliance_article="Art. 21.2.d (Supply Chain Security)"
+                    )
+                    host_findings.append(f)
+
+        return host_findings
+
+    def _evaluate_tls(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # TLS
+        for port, info in host.tls_info.items():
+            # Check Negotiated Version
+            version = info.get('version', '')
+            if version in ['TLSv1', 'TLSv1.1']:
+                f = ComplianceFinding(
+                    severity="HIGH",
+                    category="ENCRYPTION",
+                    message=f"Obsolete TLS Version ({version}) Negotiated on port {port}",
+                    rationale="Weak cryptography.",
+                    target=host.ip,
+                    reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                    technical_detail=f"Server negotiated {version} which is deprecated.",
+                    remediation="Disable support for TLS 1.0 and 1.1. Enforce TLS 1.2 or 1.3.",
+                    remediation_cost="Medium",
+                    remediation_effort="Medium",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+            # Check Supported Weak Versions (Active Probe)
+            weak_versions = info.get('weak_versions', [])
+            if weak_versions:
+                f = ComplianceFinding(
+                    severity="HIGH",
+                    category="ENCRYPTION",
+                    message=f"Weak TLS Versions Supported ({', '.join(weak_versions)}) on port {port}",
+                    cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                    rationale="Server supports obsolete protocols (TLS 1.0/1.1) allowing downgrade attacks.",
+                    target=host.ip,
+                    reference="NIS2 Art. 21.2.h (Cryptography)",
+                    technical_detail=f"Accepted connection using: {', '.join(weak_versions)}",
+                    remediation="Disable TLS 1.0 and TLS 1.1 in server configuration.",
+                    remediation_cost="Medium",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+            # Check Weak Ciphers (Negotiated)
+            cipher = info.get('cipher', '')
+            weak_ciphers = ['RC4', '3DES', 'DES', 'NULL', 'EXPORT', 'MD5', 'anon']
+            if any(w in cipher for w in weak_ciphers):
+                f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="ENCRYPTION",
+                    message=f"Weak Cipher Suite Negotiated ({cipher}) on port {port}",
+                    cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                    rationale="The server negotiated a cipher suite known to be weak.",
+                    target=host.ip,
+                    reference="NIS2 Art. 21.2.h (Cryptography)",
+                    technical_detail=f"Cipher: {cipher}",
+                    remediation="Reconfigure server to prioritize strong ciphers (AES-GCM, ChaCha20) and disable weak ones.",
+                    remediation_cost="Medium",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+            # Check for TLS Errors (e.g. Self-signed, Verify Failed)
+            if info.get('error'):
+                f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="CRYPTO",
+                    message=f"SSL/TLS Certificate Verification Failed on {port}",
+                    rationale="Certificate is invalid, self-signed, or untrusted.",
+                    target=host.ip,
+                    reference="NIS2 Directive Art. 21.2.h (Cryptography)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    technical_detail=f"TLS Error: {info.get('error')}",
+                    remediation="Ensure a valid, trusted certificate is installed (e.g. Let's Encrypt).",
+                    remediation_cost="Medium",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+            # Chain / hostname verification. The scanner previously connected
+            # with CERT_OPTIONAL and check_hostname=False and reported the
+            # outcome as `valid`, so "valid" meant "a handshake completed" —
+            # it could not tell a trusted certificate from a self-signed one,
+            # and with no SNI it was frequently reading a different site's
+            # certificate altogether. Now the probe validates for real, so
+            # these are the first TLS trust findings the scanner can support.
+            if info.get('chain_valid') is False:
+                detail = info.get('chain_error') or 'chain verification failed'
+                if info.get('hostname_match') is False:
+                    f = ComplianceFinding(
+                        severity="HIGH",
+                        category="ENCRYPTION",
+                        message=f"TLS certificate does not match the hostname on port {port}",
+                        rationale=(
+                            "A certificate issued for a different name gives clients no "
+                            "assurance they are talking to this service."
+                        ),
+                        target=host.ip,
+                        reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                        technical_detail=f"Verification (with SNI): {detail}",
+                        remediation="Install a certificate whose SAN list covers this hostname.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.h (Cryptography)"
+                    )
+                else:
+                    f = ComplianceFinding(
+                        severity="HIGH",
+                        category="ENCRYPTION",
+                        message=f"TLS certificate chain does not validate on port {port}",
+                        rationale=(
+                            "Clients cannot establish trust: the certificate is expired, "
+                            "self-signed, or missing an intermediate."
+                        ),
+                        target=host.ip,
+                        reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
+                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                        technical_detail=f"Verification (with SNI): {detail}",
+                        remediation=(
+                            "Renew or replace the certificate and serve the full "
+                            "intermediate chain."
+                        ),
+                        remediation_cost="Medium",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.h (Cryptography)"
+                    )
+                host_findings.append(f)
+
+            # Say so when the check could not run, instead of leaving a
+            # missing finding to be read as a clean result. On the shipped
+            # bookworm image this probe was silently inert for every scan
+            # ever run: OpenSSL's default security level refused TLS 1.0/1.1
+            # client-side, the handshake died before reaching the target, and
+            # `weak_versions` came back empty for every host.
+            if info.get('weak_probe_supported') is False:
+                f = ComplianceFinding(
+                    severity="INFO",
+                    category="ENCRYPTION",
+                    message=f"Obsolete-protocol probe unavailable on port {port}",
+                    rationale=(
+                        "This scanner's OpenSSL build refuses to negotiate TLS 1.0/1.1, "
+                        "so their absence from this report is not evidence of absence."
+                    ),
+                    target=host.ip,
+                    reference="Scanner limitation",
+                    technical_detail=(
+                        "TLS 1.0/1.1 client contexts could not be created even at "
+                        "SECLEVEL=0. Verify with an external tool before relying on "
+                        "this result."
+                    ),
+                    remediation="Run the scanner on an image whose OpenSSL permits the probe.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+            if info.get('expired'):
+                f = ComplianceFinding(
+                    severity="HIGH",
+                    category="CRYPTO",
+                    message=f"SSL Certificate Expired on {port}",
+                    rationale="Failure to maintain security infrastructure.",
+                    target=host.ip,
+                    reference="NIS2 Directive Art. 21.2.h (Cryptography)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
+                    technical_detail="Certificate date is past 'notAfter' field.",
+                    remediation="Renew the SSL certificate immediately.",
+                    remediation_cost="Medium",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.h (Cryptography)"
+                )
+                host_findings.append(f)
+
+        return host_findings
+
+    def _evaluate_dns(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # DNS Checks
+        if host.dns_info:
+            if host.dns_info.get('zone_transfer_exposed'):
+                f = ComplianceFinding(
+                    severity="CRITICAL",
+                    category="EXPOSURE",
+                    message="DNS Zone Transfer (AXFR) Allowed",
+                    rationale="Public disclosure of entire DNS zone is a severe information leak.",
+                    target=host.target,
+                    reference="NIS2 Directive Art. 21.2.e (Network Security)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+                    technical_detail="Nameserver allowed AXFR query resulting in full zone dump.",
+                    remediation="Restrict AXFR (Zone Transfers) to trusted secondary nameservers only.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.e (Net Security)"
+                )
+                host_findings.append(f)
+
+            if not host.dns_info.get('dnssec_enabled'):
+                f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="RESILIENCE",
+                    message="DNSSEC Not Enabled",
+                    rationale="Domain does not integrity-protect its records.",
+                    target=host.ip,
+                    reference="NIS2 Directive Art. 21.2.e (Network Security)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    technical_detail=(
+                        "Zone is signed (DNSKEY present) but the parent publishes no DS "
+                        "record, so resolvers ignore the signatures and the zone is "
+                        "unprotected — the most common DNSSEC misconfiguration."
+                        if host.dns_info.get('dnssec_dnskey')
+                        else "No DNSKEY record: the zone is not signed."
+                    ),
+                    remediation="Enable and configure DNSSEC at your registrar and DNS provider.",
+                    remediation_cost="Low",
+                    remediation_effort="Medium",
+                    compliance_article="Art. 21.2.e (Network Security)"
+                )
+                host_findings.append(f)
+
+            # Email Security (SPF/DMARC)
+            spf_info = host.dns_info.get('spf', {})
+            if not spf_info.get('present'):
+                f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="EMAIL SECURITY",
+                    message="SPF Record Missing",
+                    rationale="Lack of SPF allows attackers to spoof emails from your domain.",
+                    target=host.target, # Domain level
+                    reference="NIS2 Art. 21.2.j (Secured Communications)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    technical_detail="No TXT record starting with 'v=spf1' found.",
+                    remediation="Configure SPF record (e.g., 'v=spf1 mx -all') to authorize senders.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.j (Secured Communications)"
+                )
+                host_findings.append(f)
+
+            dmarc_info = host.dns_info.get('dmarc', {})
+            if not dmarc_info.get('present'):
+                f = ComplianceFinding(
+                    severity="MEDIUM",
+                    category="EMAIL SECURITY",
+                    message="DMARC Record Missing",
+                    rationale="DMARC is essential for email authentication and reporting spoofing attempts.",
+                    target=host.target, # Domain level
+                    reference="NIS2 Art. 21.2.j (Secured Communications)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    technical_detail="No TXT record found at _dmarc subdomain.",
+                    remediation="Implement DMARC policy (start with p=none for monitoring).",
+                    remediation_cost="Low",
+                    remediation_effort="Medium",
+                    compliance_article="Art. 21.2.j (Secured Communications)"
+                )
+                host_findings.append(f)
+
+        # ========== PHASE 5: ADVANCED CHECKS ==========
+
+        return host_findings
+
+    def _evaluate_secrets(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # 1. Secrets Detection
+        for port, http_data in host.http_info.items():
+            if 'secrets' in http_data and http_data['secrets']:
+                for secret in http_data['secrets']:
+                    f = ComplianceFinding(
+                        severity="CRITICAL",
+                        category="DATA PROTECTION",
+                        message=f"Leaked Secret Detected: {secret['type']}",
+                        rationale=(
+                            "A credential is readable by anyone who requests the page. Scored "
+                            "for the disclosure that was actually observed (C:H); the previous "
+                            "9.8 additionally claimed integrity and availability impact, which "
+                            "would require knowing what the key is authorised to do — the scan "
+                            "cannot see that, and the true impact may be higher."
+                        ),
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.h (Cryptography)",
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                        technical_detail=f"Found {secret['type']} at position {secret['position']}",
+                        remediation="Immediately rotate exposed credentials. Remove secrets from code/responses. Use environment variables or secret management systems.",
+                        remediation_cost="High",
+                        remediation_effort="High",
+                        compliance_article="Art. 21.2.h (Cryptography & Encryption)"
+                    )
+                    host_findings.append(f)
+
+        return host_findings
+
+    def _evaluate_whois_waf_legal(self, host: ScanResult) -> List[ComplianceFinding]:
+        host_findings: List[ComplianceFinding] = []
+        # 2. WHOIS Domain Expiry & Data Accuracy (Art. 28)
+        if host.whois_info:
+            # Expiry Check
+            if host.whois_info.get('warning'):
+                days_left = host.whois_info.get('days_remaining', 0)
+                f = ComplianceFinding(
+                    severity="HIGH",
+                    category="BUSINESS CONTINUITY",
+                    message=f"Domain Expiring Soon ({days_left} days)",
+                    rationale="Domain expiration can cause service disruption and loss of control.",
+                    target=host.ip,
+                    reference="NIS2 Art. 21.2.c (Business Continuity)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L",
+                    technical_detail=f"Domain expires: {host.whois_info.get('expiry_date', 'Unknown')}",
+                    remediation="Renew domain registration immediately. Enable auto-renewal.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.c (Business Continuity)"
+                )
+                host_findings.append(f)
+
+            # Data Availability Check (Art. 28)
+            # If we have WHOIS info but critical fields are missing/empty (beyond redaction)
+            # This is a heuristic. If 'registrar' is missing, it's suspicious.
+            if not host.whois_info.get('registrar') and not host.whois_info.get('org'):
+                 f = ComplianceFinding(
+                    severity="LOW",
+                    category="DOMAIN DATA",
+                    message="Incomplete Domain Registration Data",
+                    rationale="Entities must ensure domain registration data is accurate and complete.",
+                    target=host.ip,
+                    reference="NIS2 Art. 28 (Domain Registration Data)",
+                    technical_detail="Registrar or Organization field missing in WHOIS data.",
+                    remediation="Verify domain registration details with your registrar.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 28 (Domain Data)"
+                )
+                 host_findings.append(f)
+        else:
+            # WHOIS Lookup Failed or Empty
+            pass # Already handled by scanner errors or just ignored
+
+        # 3. WAF/CDN Protection (Positive finding - reduces risk)
+        for port, http_data in host.http_info.items():
+            if 'waf_cdn' in http_data and http_data['waf_cdn'].get('protected'):
+                # This is a POSITIVE finding - we note it but don't penalize
+                # We could add an INFO level finding or just track in stats
+                pass  # No penalty for having protection
+
+        # 4. Italian Legal Compliance
+        for port, http_data in host.http_info.items():
+            if 'legal' in http_data:
+                legal = http_data['legal']
+                # A check that could not run is not a check that failed.
+                # The browser launch returns an explicit marker now; without
+                # this guard an empty result read as three confirmed
+                # violations against the scanned business.
+                if legal.get('unavailable'):
+                    f = ComplianceFinding(
+                        severity="INFO",
+                        category="LEGAL COMPLIANCE",
+                        message="Italian legal checks not assessed",
+                        rationale=(
+                            legal.get('unavailable_reason')
+                            or "The legal checks could not be performed on this host."
+                        ),
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.f (Effectiveness assessment)",
+                        technical_detail="P.IVA, privacy policy and cookie banner were not evaluated.",
+                        remediation="Install the headless browser on the scanner host and re-run the scan.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                    )
+                    host_findings.append(f)
+                    continue
+                italian = legal.get('italian_compliance', {})
+
+                # P.IVA check (for Italian sites)
+                if not italian.get('piva_found'):
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="LEGAL COMPLIANCE",
+                        message="Italian P.IVA Not Found",
+                        rationale="Italian companies must display VAT number (P.IVA) on their website.",
+                        target=f"{host.ip}:{port}",
+                        reference="Italian D.Lgs 138/2024",
+                        technical_detail="P.IVA pattern not detected in HTML",
+                        remediation="Add P.IVA to website footer or legal notice section.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Italian Legal Requirements"
+                    )
+                    host_findings.append(f)
+
+                # Privacy Policy check
+                if not italian.get('privacy_policy_found'):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="LEGAL COMPLIANCE",
+                        message="Privacy Policy Link Not Found",
+                        rationale="GDPR and Italian law require accessible privacy policy.",
+                        target=f"{host.ip}:{port}",
+                        reference="GDPR Art. 13, D.Lgs 196/2003",
+                        technical_detail="Privacy policy keywords not detected",
+                        remediation="Add visible Privacy Policy link to website.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="GDPR Compliance"
+                    )
+                    host_findings.append(f)
+
+                # Cookie Banner check
+                cookie_banner = legal.get('cookie_banner', {})
+                if not cookie_banner.get('banner_detected'):
+                    f = ComplianceFinding(
+                        severity="MEDIUM",
+                        category="LEGAL COMPLIANCE",
+                        message="Cookie Consent Banner Not Detected",
+                        rationale="GDPR requires explicit consent for non-essential cookies.",
+                        target=f"{host.ip}:{port}",
+                        reference="GDPR Art. 7, ePrivacy Directive",
+                        technical_detail="Cookie consent keywords not found",
+                        remediation="Implement cookie consent banner (e.g., Cookiebot, OneTrust).",
+                        remediation_cost="Medium",
+                        remediation_effort="Medium",
+                        compliance_article="GDPR Compliance"
+                    )
+                    host_findings.append(f)
+
+            # Security.txt Check
+            if http_data.get('security_txt_found'):
+                # Positive finding (optional to report, but good to track)
+                pass
+            else:
+                # Only report if it's a main web port to avoid noise
+                if port in [80, 443]:
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="VULNERABILITY HANDLING",
+                        message="Security.txt Missing",
+                        rationale="A security.txt file helps security researchers report vulnerabilities safely and supports incident reporting obligations.",
+                        target=f"{host.ip}:{port}",
+                        reference="RFC 9116, NIS2 Art. 21.2.e & Art. 23 (Reporting)",
+                        technical_detail="File not found at /.well-known/security.txt or /security.txt",
+                        remediation="Publish a security.txt file with contact details.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.e (Vulnerability Handling)"
+                    )
+                    host_findings.append(f)
+
+            # Sensitive Files Check (Git/Env)
+            if 'sensitive_files' in http_data and http_data['sensitive_files']:
+                for sfile in http_data['sensitive_files']:
+                    f = ComplianceFinding(
+                        severity="CRITICAL",
+                        category="SUPPLY CHAIN SECURITY",
+                        message=f"Sensitive File Exposed ({sfile})",
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                        rationale="Exposed configuration or version control files can lead to full system compromise.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.d (Supply Chain Security)",
+                        technical_detail=f"Found accessible {sfile}",
+                        remediation=f"Immediately remove or deny access to {sfile}.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.d (Supply Chain Security)"
+                    )
+                    host_findings.append(f)
+
+            # Server Header Information Leakage
+            headers = http_data.get('headers', {})
+            for h_name in ['Server', 'X-Powered-By']:
+                # Case insensitive lookup
+                h_val = next((v for k, v in headers.items() if k.lower() == h_name.lower()), None)
+                if h_val:
+                    f = ComplianceFinding(
+                        severity="LOW",
+                        category="CYBER HYGIENE",
+                        message=f"Information Leakage ({h_name})",
+                        rationale="Revealing server versions helps attackers target specific vulnerabilities.",
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
+                        technical_detail=f"Header {h_name}: {h_val}",
+                        remediation="Configure server to suppress version banners.",
+                        remediation_cost="Low",
+                        remediation_effort="Low",
+                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
+                    )
+                    host_findings.append(f)
+
+        # 5. Obsolete Software & Information Disclosure (Passive)
+        for port, http_data in host.http_info.items():
+            # Check for Information Disclosure (Tech Stack)
+            if 'tech_stack' in http_data and http_data['tech_stack']:
+                f = ComplianceFinding(
+                    severity="LOW",
+                    category="INFO DISCLOSURE",
+                    message="Technology Stack Exposed",
+                    rationale="Exposing detailed version information aids attackers in targeting specific vulnerabilities.",
+                    target=f"{host.ip}:{port}",
+                    reference="NIS2 Art. 21.2.e (Security in Acquisition)",
+                    cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                    technical_detail=f"Headers found: {', '.join(http_data['tech_stack'])}",
+                    remediation="Configure web server to suppress 'X-Powered-By', 'X-AspNet-Version' and similar headers.",
+                    remediation_cost="Low",
+                    remediation_effort="Low",
+                    compliance_article="Art. 21.2.e (Security in Acquisition)"
+                )
+                host_findings.append(f)
+
+            # Check for Obsolete/Vulnerable Software (Basic Banner Matching)
+            # This is a simplified check. In a real scenario, this would query a CVE database.
+            server_header = http_data.get('headers', {}).get('Server', '').lower()
+
+            # Example: Apache 2.2 (EOL 2017), PHP 5.x (EOL 2018), IIS 6.0 (EOL 2015)
+            obsolete_signatures = [
+                ('apache/2.2', 'Apache 2.2 is EOL since 2017'),
+                ('apache/2.0', 'Apache 2.0 is EOL since 2013'),
+                ('nginx/1.0', 'Nginx 1.0 is severely outdated'),
+                ('php/5.', 'PHP 5.x is EOL since 2018'),
+                ('php/7.0', 'PHP 7.0 is EOL since 2019'),
+                ('microsoft-iis/6.0', 'IIS 6.0 is EOL since 2015'),
+                ('microsoft-iis/7.0', 'IIS 7.0 is EOL since 2020')
+            ]
+
+            for sig, reason in obsolete_signatures:
+                if sig in server_header or any(sig in ts.lower() for ts in http_data.get('tech_stack', [])):
+                    f = ComplianceFinding(
+                        severity="HIGH",
+                        category="VULNERABILITY",
+                        message="Obsolete/EOL Software Detected",
+                        rationale=(
+                            "End-of-life software receives no security patches. This is a "
+                            "vulnerability-management failure, not an observed vulnerability: "
+                            "no CVSS score is published because none can be computed. The "
+                            "previous 9.8 was annotated in the source as 'assuming critical "
+                            "CVEs exist' — CVSS scores a specific vulnerability, and a banner "
+                            "match is not one. Banners are also spoofable and routinely stale "
+                            "where a distribution backports fixes without changing the version "
+                            "string, so the evidence here is the banner and nothing more."
+                        ),
+                        target=f"{host.ip}:{port}",
+                        reference="NIS2 Art. 21.2.e (Vulnerability Handling)",
+                        technical_detail=f"Banner matched: {reason} (Source: {server_header})",
+                        remediation="Upgrade to a supported version immediately.",
+                        remediation_cost="High",
+                        remediation_effort="High",
+                        compliance_article="Art. 21.2.e (Vulnerability Handling)"
+                    )
+                    host_findings.append(f)
+                    break # Report once per host/port
+
+        return host_findings
+
+    def _evaluate_host_findings(self, host: ScanResult) -> List[ComplianceFinding]:
+        findings: List[ComplianceFinding] = []
+        findings.extend(self._evaluate_ports(host))
+        findings.extend(self._evaluate_http(host))
+        findings.extend(self._evaluate_tls(host))
+        findings.extend(self._evaluate_dns(host))
+        findings.extend(self._evaluate_secrets(host))
+        findings.extend(self._evaluate_whois_waf_legal(host))
+        return findings
+
+    def evaluate(self, scan_results: Sequence[ScanResult], scan_id: str = "N/A") -> ComplianceReport:
         all_findings = []
         stats = {
             'analyzed_hosts': 0,
@@ -175,764 +964,8 @@ class ComplianceEngine:
                 has_spf_dmarc = True
 
             stats['active_hosts'] += 1
-            host_findings = []
+            host_findings = self._evaluate_host_findings(host)
             current_host_score = 100
-
-            # 1. CRITICAL EXPOSURE
-            critical_map = {
-                445: "SMB (Server Message Block)",
-                3389: "RDP (Remote Desktop)",
-                3306: "MySQL Database",
-                5432: "PostgreSQL Database",
-                6379: "Redis Key-Value Store",
-                27017: "MongoDB"
-            }
-
-            for port, name in critical_map.items():
-                if port in host.open_ports:
-                     f = ComplianceFinding(
-                        severity="CRITICAL",
-                        category="ACCESS CONTROL",
-                        message=f"{name} Port ({port}) is EXPOSED",
-                        rationale="Critical infrastructure services must not be exposed directly to the public internet.",
-                        target=host.ip,
-                        reference="D.Lgs 138/2024 Art. 21.2.i (Access Control)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
-                        technical_detail=f"Port {port} is open and accepting connections from public IP.",
-                        remediation="Block access to this port immediately via Firewall/ACL. Use VPN for administrative access.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.i (Access Control)"
-                    )
-                     host_findings.append(f)
-
-            # 2. HIGH EXPOSURE
-            if 23 in host.open_ports:
-                f = ComplianceFinding(
-                    severity="HIGH",
-                    category="EXPOSURE",
-                    message="Telnet Port (23) is OPEN",
-                    rationale="Use of insecure legacy protocols exposing cleartext credentials.",
-                    target=host.ip,
-                    reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                    technical_detail="Telnet service detected. Credential sniffing possible.",
-                    remediation="Disable Telnet and replace with SSH. Ensure port 23 is closed.",
-                    remediation_cost="Low",
-                    remediation_effort="Medium",
-                    compliance_article="Art. 21.2.h (Cryptography)"
-                )
-                host_findings.append(f)
-
-            if 21 in host.open_ports:
-                 f = ComplianceFinding(
-                    severity="MEDIUM",
-                    category="EXPOSURE",
-                    message="FTP Port (21) is OPEN",
-                    rationale="Legacy protocol usage should be minimized. Ensure FTPS is enforced.",
-                    target=host.ip,
-                    reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
-                    technical_detail="Unencrypted FTP service reachable.",
-                    remediation="Migrate to SFTP/SCP or enforce FTPS (TLS).",
-                    remediation_cost="Medium",
-                    remediation_effort="Medium",
-                    compliance_article="Art. 21.2.h (Cryptography)"
-                )
-                 host_findings.append(f)
-
-            # 3. ENCRYPTION
-            for port, info in host.http_info.items():
-                # Accuracy Fix: Check if HTTP service was actually reachable/valid
-                status = info.get('status')
-                if not status:
-                    # Service didn't respond with HTTP status, so don't flag "Redirect" issues.
-                    continue
-
-                if port == 80:
-                     if not any("https://" in r for r in info.get('redirects', [])):
-                         f = ComplianceFinding(
-                            severity="LOW",
-                            category="ENCRYPTION",
-                            message="Port 80 does not force redirect to HTTPS",
-                            rationale="Data in transit must be encrypted.",
-                            target=host.ip,
-                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
-                            technical_detail="HTTP response code 200 OK on port 80 without redirect location.",
-                            remediation="Configure web server to Redirect (301) all HTTP traffic to HTTPS.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.h (Cryptography)"
-                         )
-                         host_findings.append(f)
-
-                # Header QUALITY, from nis2scan.headers. The presence check below
-                # stays for the missing-HSTS case, but these carry the findings a
-                # presence check structurally cannot raise: a CSP that allows
-                # 'unsafe-inline', a wildcard script source, max-age=1, or
-                # max-age=0 (which instructs browsers to forget the policy) all
-                # used to count as satisfied controls.
-                for issue in info.get('header_issues', []):
-                    # The plain "header absent" cases are already covered by the
-                    # dedicated findings below and in the missing-headers list;
-                    # emitting both would double-count them in the score.
-                    if "not set" in issue['summary'] or "No Content-Security-Policy" in issue['summary']:
-                        continue
-                    f = ComplianceFinding(
-                        severity=issue['severity'],
-                        category="CYBER HYGIENE",
-                        message=f"{issue['summary']} on port {port}",
-                        rationale=(
-                            "A security header that is present but permissive is not a "
-                            "control; it reads as one in an audit."
-                        ),
-                        target=f"{host.ip}:{port}",
-                        reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                        technical_detail=issue['detail'],
-                        remediation="Tighten the header — see the technical detail.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                    )
-                    host_findings.append(f)
-
-                missing = info.get('missing_headers', [])
-                if 'Strict-Transport-Security' in missing and port in [443, 8443]:
-                     f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="RESILIENCE",
-                        message=f"HSTS Header missing on port {port}",
-                        rationale="Prevents downgrade attacks to insecure protocols.",
-                        target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.g (Cyber Hygiene)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail="Strict-Transport-Security header not returned by server.",
-                        remediation="Enable HSTS headers (max-age=31536000; includeSubDomains).",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                     )
-                     host_findings.append(f)
-
-                # Cookie Security
-                cookies = info.get('cookies_analysis', [])
-                for c in cookies:
-                    # Check Secure Flag (only relevant for HTTPS)
-                    if port in [443, 8443] and not c.get('secure'):
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="CYBER HYGIENE",
-                            message="Cookie Missing 'Secure' Flag",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
-                            rationale="Cookies without the Secure flag can be transmitted over unencrypted connections.",
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
-                            remediation="Set the 'Secure' flag for all sensitive cookies.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                        )
-                        host_findings.append(f)
-
-                    # SameSite=None is sent on cross-site requests — weaker than
-                    # omitting the attribute in browsers that default to Lax.
-                    # Substring matching could not tell it from SameSite=Strict.
-                    if c.get('samesite') == 'None':
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="CYBER HYGIENE",
-                            message="Cookie sets SameSite=None",
-                            rationale=(
-                                "The cookie is attached to cross-site requests, which is "
-                                "weaker than omitting the attribute in browsers defaulting "
-                                "to Lax."
-                            ),
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
-                            remediation="Use SameSite=Lax or Strict unless the cookie is genuinely needed cross-site.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                        )
-                        host_findings.append(f)
-
-                    # Check HttpOnly Flag
-                    if not c.get('httponly'):
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="CYBER HYGIENE",
-                            message="Cookie Missing 'HttpOnly' Flag",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
-                            rationale="Cookies without HttpOnly are accessible to JavaScript, increasing XSS risk.",
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            technical_detail=f"Cookie: {c.get('name', '(unnamed)')}",
-                            remediation="Set the 'HttpOnly' flag for session cookies.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                        )
-                        host_findings.append(f)
-
-                # SRI Check
-                sri_missing = info.get('sri_missing', [])
-                if sri_missing:
-                    # Limit to first few to avoid spam
-                    for src in sri_missing[:3]:
-                        f = ComplianceFinding(
-                            severity="MEDIUM",
-                            category="SUPPLY CHAIN SECURITY",
-                            message="Subresource Integrity (SRI) Missing",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N",
-                            rationale="External scripts without SRI can be tampered with to inject malware.",
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.d (Supply Chain Security)",
-                            technical_detail=f"Script: {src}",
-                            remediation="Add 'integrity' and 'crossorigin' attributes to external script tags.",
-                            remediation_cost="Low",
-                            remediation_effort="Medium",
-                            compliance_article="Art. 21.2.d (Supply Chain Security)"
-                        )
-                        host_findings.append(f)
-
-            # TLS
-            for port, info in host.tls_info.items():
-                # Check Negotiated Version
-                version = info.get('version', '')
-                if version in ['TLSv1', 'TLSv1.1']:
-                    f = ComplianceFinding(
-                        severity="HIGH",
-                        category="ENCRYPTION",
-                        message=f"Obsolete TLS Version ({version}) Negotiated on port {port}",
-                        rationale="Weak cryptography.",
-                        target=host.ip,
-                        reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                        technical_detail=f"Server negotiated {version} which is deprecated.",
-                        remediation="Disable support for TLS 1.0 and 1.1. Enforce TLS 1.2 or 1.3.",
-                        remediation_cost="Medium",
-                        remediation_effort="Medium",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-                # Check Supported Weak Versions (Active Probe)
-                weak_versions = info.get('weak_versions', [])
-                if weak_versions:
-                    f = ComplianceFinding(
-                        severity="HIGH",
-                        category="ENCRYPTION",
-                        message=f"Weak TLS Versions Supported ({', '.join(weak_versions)}) on port {port}",
-                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                        rationale="Server supports obsolete protocols (TLS 1.0/1.1) allowing downgrade attacks.",
-                        target=host.ip,
-                        reference="NIS2 Art. 21.2.h (Cryptography)",
-                        technical_detail=f"Accepted connection using: {', '.join(weak_versions)}",
-                        remediation="Disable TLS 1.0 and TLS 1.1 in server configuration.",
-                        remediation_cost="Medium",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-                # Check Weak Ciphers (Negotiated)
-                cipher = info.get('cipher', '')
-                weak_ciphers = ['RC4', '3DES', 'DES', 'NULL', 'EXPORT', 'MD5', 'anon']
-                if any(w in cipher for w in weak_ciphers):
-                    f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="ENCRYPTION",
-                        message=f"Weak Cipher Suite Negotiated ({cipher}) on port {port}",
-                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                        rationale="The server negotiated a cipher suite known to be weak.",
-                        target=host.ip,
-                        reference="NIS2 Art. 21.2.h (Cryptography)",
-                        technical_detail=f"Cipher: {cipher}",
-                        remediation="Reconfigure server to prioritize strong ciphers (AES-GCM, ChaCha20) and disable weak ones.",
-                        remediation_cost="Medium",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-                # Check for TLS Errors (e.g. Self-signed, Verify Failed)
-                if info.get('error'):
-                    f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="CRYPTO",
-                        message=f"SSL/TLS Certificate Verification Failed on {port}",
-                        rationale="Certificate is invalid, self-signed, or untrusted.",
-                        target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.h (Cryptography)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail=f"TLS Error: {info.get('error')}",
-                        remediation="Ensure a valid, trusted certificate is installed (e.g. Let's Encrypt).",
-                        remediation_cost="Medium",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-                # Chain / hostname verification. The scanner previously connected
-                # with CERT_OPTIONAL and check_hostname=False and reported the
-                # outcome as `valid`, so "valid" meant "a handshake completed" —
-                # it could not tell a trusted certificate from a self-signed one,
-                # and with no SNI it was frequently reading a different site's
-                # certificate altogether. Now the probe validates for real, so
-                # these are the first TLS trust findings the scanner can support.
-                if info.get('chain_valid') is False:
-                    detail = info.get('chain_error') or 'chain verification failed'
-                    if info.get('hostname_match') is False:
-                        f = ComplianceFinding(
-                            severity="HIGH",
-                            category="ENCRYPTION",
-                            message=f"TLS certificate does not match the hostname on port {port}",
-                            rationale=(
-                                "A certificate issued for a different name gives clients no "
-                                "assurance they are talking to this service."
-                            ),
-                            target=host.ip,
-                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                            technical_detail=f"Verification (with SNI): {detail}",
-                            remediation="Install a certificate whose SAN list covers this hostname.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.h (Cryptography)"
-                        )
-                    else:
-                        f = ComplianceFinding(
-                            severity="HIGH",
-                            category="ENCRYPTION",
-                            message=f"TLS certificate chain does not validate on port {port}",
-                            rationale=(
-                                "Clients cannot establish trust: the certificate is expired, "
-                                "self-signed, or missing an intermediate."
-                            ),
-                            target=host.ip,
-                            reference="D.Lgs 138/2024 Art. 21.2.h (Cryptography)",
-                            cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
-                            technical_detail=f"Verification (with SNI): {detail}",
-                            remediation=(
-                                "Renew or replace the certificate and serve the full "
-                                "intermediate chain."
-                            ),
-                            remediation_cost="Medium",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.h (Cryptography)"
-                        )
-                    host_findings.append(f)
-
-                # Say so when the check could not run, instead of leaving a
-                # missing finding to be read as a clean result. On the shipped
-                # bookworm image this probe was silently inert for every scan
-                # ever run: OpenSSL's default security level refused TLS 1.0/1.1
-                # client-side, the handshake died before reaching the target, and
-                # `weak_versions` came back empty for every host.
-                if info.get('weak_probe_supported') is False:
-                    f = ComplianceFinding(
-                        severity="INFO",
-                        category="ENCRYPTION",
-                        message=f"Obsolete-protocol probe unavailable on port {port}",
-                        rationale=(
-                            "This scanner's OpenSSL build refuses to negotiate TLS 1.0/1.1, "
-                            "so their absence from this report is not evidence of absence."
-                        ),
-                        target=host.ip,
-                        reference="Scanner limitation",
-                        technical_detail=(
-                            "TLS 1.0/1.1 client contexts could not be created even at "
-                            "SECLEVEL=0. Verify with an external tool before relying on "
-                            "this result."
-                        ),
-                        remediation="Run the scanner on an image whose OpenSSL permits the probe.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-                if info.get('expired'):
-                    f = ComplianceFinding(
-                        severity="HIGH",
-                        category="CRYPTO",
-                        message=f"SSL Certificate Expired on {port}",
-                        rationale="Failure to maintain security infrastructure.",
-                        target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.h (Cryptography)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
-                        technical_detail="Certificate date is past 'notAfter' field.",
-                        remediation="Renew the SSL certificate immediately.",
-                        remediation_cost="Medium",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.h (Cryptography)"
-                    )
-                    host_findings.append(f)
-
-            # DNS Checks
-            if host.dns_info:
-                if host.dns_info.get('zone_transfer_exposed'):
-                    f = ComplianceFinding(
-                        severity="CRITICAL",
-                        category="EXPOSURE",
-                        message="DNS Zone Transfer (AXFR) Allowed",
-                        rationale="Public disclosure of entire DNS zone is a severe information leak.",
-                        target=host.target,
-                        reference="NIS2 Directive Art. 21.2.e (Network Security)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
-                        technical_detail="Nameserver allowed AXFR query resulting in full zone dump.",
-                        remediation="Restrict AXFR (Zone Transfers) to trusted secondary nameservers only.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.e (Net Security)"
-                    )
-                    host_findings.append(f)
-
-                if not host.dns_info.get('dnssec_enabled'):
-                    f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="RESILIENCE",
-                        message="DNSSEC Not Enabled",
-                        rationale="Domain does not integrity-protect its records.",
-                        target=host.ip,
-                        reference="NIS2 Directive Art. 21.2.e (Network Security)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail=(
-                            "Zone is signed (DNSKEY present) but the parent publishes no DS "
-                            "record, so resolvers ignore the signatures and the zone is "
-                            "unprotected — the most common DNSSEC misconfiguration."
-                            if host.dns_info.get('dnssec_dnskey')
-                            else "No DNSKEY record: the zone is not signed."
-                        ),
-                        remediation="Enable and configure DNSSEC at your registrar and DNS provider.",
-                        remediation_cost="Low",
-                        remediation_effort="Medium",
-                        compliance_article="Art. 21.2.e (Network Security)"
-                    )
-                    host_findings.append(f)
-
-                # Email Security (SPF/DMARC)
-                spf_info = host.dns_info.get('spf', {})
-                if not spf_info.get('present'):
-                    f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="EMAIL SECURITY",
-                        message="SPF Record Missing",
-                        rationale="Lack of SPF allows attackers to spoof emails from your domain.",
-                        target=host.target, # Domain level
-                        reference="NIS2 Art. 21.2.j (Secured Communications)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail="No TXT record starting with 'v=spf1' found.",
-                        remediation="Configure SPF record (e.g., 'v=spf1 mx -all') to authorize senders.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.j (Secured Communications)"
-                    )
-                    host_findings.append(f)
-
-                dmarc_info = host.dns_info.get('dmarc', {})
-                if not dmarc_info.get('present'):
-                    f = ComplianceFinding(
-                        severity="MEDIUM",
-                        category="EMAIL SECURITY",
-                        message="DMARC Record Missing",
-                        rationale="DMARC is essential for email authentication and reporting spoofing attempts.",
-                        target=host.target, # Domain level
-                        reference="NIS2 Art. 21.2.j (Secured Communications)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
-                        technical_detail="No TXT record found at _dmarc subdomain.",
-                        remediation="Implement DMARC policy (start with p=none for monitoring).",
-                        remediation_cost="Low",
-                        remediation_effort="Medium",
-                        compliance_article="Art. 21.2.j (Secured Communications)"
-                    )
-                    host_findings.append(f)
-
-            # ========== PHASE 5: ADVANCED CHECKS ==========
-
-            # 1. Secrets Detection
-            for port, http_data in host.http_info.items():
-                if 'secrets' in http_data and http_data['secrets']:
-                    for secret in http_data['secrets']:
-                        f = ComplianceFinding(
-                            severity="CRITICAL",
-                            category="DATA PROTECTION",
-                            message=f"Leaked Secret Detected: {secret['type']}",
-                            rationale=(
-                                "A credential is readable by anyone who requests the page. Scored "
-                                "for the disclosure that was actually observed (C:H); the previous "
-                                "9.8 additionally claimed integrity and availability impact, which "
-                                "would require knowing what the key is authorised to do — the scan "
-                                "cannot see that, and the true impact may be higher."
-                            ),
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.h (Cryptography)",
-                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                            technical_detail=f"Found {secret['type']} at position {secret['position']}",
-                            remediation="Immediately rotate exposed credentials. Remove secrets from code/responses. Use environment variables or secret management systems.",
-                            remediation_cost="High",
-                            remediation_effort="High",
-                            compliance_article="Art. 21.2.h (Cryptography & Encryption)"
-                        )
-                        host_findings.append(f)
-
-            # 2. WHOIS Domain Expiry & Data Accuracy (Art. 28)
-            if host.whois_info:
-                # Expiry Check
-                if host.whois_info.get('warning'):
-                    days_left = host.whois_info.get('days_remaining', 0)
-                    f = ComplianceFinding(
-                        severity="HIGH",
-                        category="BUSINESS CONTINUITY",
-                        message=f"Domain Expiring Soon ({days_left} days)",
-                        rationale="Domain expiration can cause service disruption and loss of control.",
-                        target=host.ip,
-                        reference="NIS2 Art. 21.2.c (Business Continuity)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L",
-                        technical_detail=f"Domain expires: {host.whois_info.get('expiry_date', 'Unknown')}",
-                        remediation="Renew domain registration immediately. Enable auto-renewal.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.c (Business Continuity)"
-                    )
-                    host_findings.append(f)
-
-                # Data Availability Check (Art. 28)
-                # If we have WHOIS info but critical fields are missing/empty (beyond redaction)
-                # This is a heuristic. If 'registrar' is missing, it's suspicious.
-                if not host.whois_info.get('registrar') and not host.whois_info.get('org'):
-                     f = ComplianceFinding(
-                        severity="LOW",
-                        category="DOMAIN DATA",
-                        message="Incomplete Domain Registration Data",
-                        rationale="Entities must ensure domain registration data is accurate and complete.",
-                        target=host.ip,
-                        reference="NIS2 Art. 28 (Domain Registration Data)",
-                        technical_detail="Registrar or Organization field missing in WHOIS data.",
-                        remediation="Verify domain registration details with your registrar.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 28 (Domain Data)"
-                    )
-                     host_findings.append(f)
-            else:
-                # WHOIS Lookup Failed or Empty
-                pass # Already handled by scanner errors or just ignored
-
-            # 3. WAF/CDN Protection (Positive finding - reduces risk)
-            for port, http_data in host.http_info.items():
-                if 'waf_cdn' in http_data and http_data['waf_cdn'].get('protected'):
-                    # This is a POSITIVE finding - we note it but don't penalize
-                    # We could add an INFO level finding or just track in stats
-                    pass  # No penalty for having protection
-
-            # 4. Italian Legal Compliance
-            for port, http_data in host.http_info.items():
-                if 'legal' in http_data:
-                    legal = http_data['legal']
-                    # A check that could not run is not a check that failed.
-                    # The browser launch returns an explicit marker now; without
-                    # this guard an empty result read as three confirmed
-                    # violations against the scanned business.
-                    if legal.get('unavailable'):
-                        f = ComplianceFinding(
-                            severity="INFO",
-                            category="LEGAL COMPLIANCE",
-                            message="Italian legal checks not assessed",
-                            rationale=(
-                                legal.get('unavailable_reason')
-                                or "The legal checks could not be performed on this host."
-                            ),
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.f (Effectiveness assessment)",
-                            technical_detail="P.IVA, privacy policy and cookie banner were not evaluated.",
-                            remediation="Install the headless browser on the scanner host and re-run the scan.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                        )
-                        host_findings.append(f)
-                        continue
-                    italian = legal.get('italian_compliance', {})
-
-                    # P.IVA check (for Italian sites)
-                    if not italian.get('piva_found'):
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="LEGAL COMPLIANCE",
-                            message="Italian P.IVA Not Found",
-                            rationale="Italian companies must display VAT number (P.IVA) on their website.",
-                            target=f"{host.ip}:{port}",
-                            reference="Italian D.Lgs 138/2024",
-                            technical_detail="P.IVA pattern not detected in HTML",
-                            remediation="Add P.IVA to website footer or legal notice section.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Italian Legal Requirements"
-                        )
-                        host_findings.append(f)
-
-                    # Privacy Policy check
-                    if not italian.get('privacy_policy_found'):
-                        f = ComplianceFinding(
-                            severity="MEDIUM",
-                            category="LEGAL COMPLIANCE",
-                            message="Privacy Policy Link Not Found",
-                            rationale="GDPR and Italian law require accessible privacy policy.",
-                            target=f"{host.ip}:{port}",
-                            reference="GDPR Art. 13, D.Lgs 196/2003",
-                            technical_detail="Privacy policy keywords not detected",
-                            remediation="Add visible Privacy Policy link to website.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="GDPR Compliance"
-                        )
-                        host_findings.append(f)
-
-                    # Cookie Banner check
-                    cookie_banner = legal.get('cookie_banner', {})
-                    if not cookie_banner.get('banner_detected'):
-                        f = ComplianceFinding(
-                            severity="MEDIUM",
-                            category="LEGAL COMPLIANCE",
-                            message="Cookie Consent Banner Not Detected",
-                            rationale="GDPR requires explicit consent for non-essential cookies.",
-                            target=f"{host.ip}:{port}",
-                            reference="GDPR Art. 7, ePrivacy Directive",
-                            technical_detail="Cookie consent keywords not found",
-                            remediation="Implement cookie consent banner (e.g., Cookiebot, OneTrust).",
-                            remediation_cost="Medium",
-                            remediation_effort="Medium",
-                            compliance_article="GDPR Compliance"
-                        )
-                        host_findings.append(f)
-
-                # Security.txt Check
-                if http_data.get('security_txt_found'):
-                    # Positive finding (optional to report, but good to track)
-                    pass
-                else:
-                    # Only report if it's a main web port to avoid noise
-                    if port in [80, 443]:
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="VULNERABILITY HANDLING",
-                            message="Security.txt Missing",
-                            rationale="A security.txt file helps security researchers report vulnerabilities safely and supports incident reporting obligations.",
-                            target=f"{host.ip}:{port}",
-                            reference="RFC 9116, NIS2 Art. 21.2.e & Art. 23 (Reporting)",
-                            technical_detail="File not found at /.well-known/security.txt or /security.txt",
-                            remediation="Publish a security.txt file with contact details.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.e (Vulnerability Handling)"
-                        )
-                        host_findings.append(f)
-
-                # Sensitive Files Check (Git/Env)
-                if 'sensitive_files' in http_data and http_data['sensitive_files']:
-                    for sfile in http_data['sensitive_files']:
-                        f = ComplianceFinding(
-                            severity="CRITICAL",
-                            category="SUPPLY CHAIN SECURITY",
-                            message=f"Sensitive File Exposed ({sfile})",
-                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-                            rationale="Exposed configuration or version control files can lead to full system compromise.",
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.d (Supply Chain Security)",
-                            technical_detail=f"Found accessible {sfile}",
-                            remediation=f"Immediately remove or deny access to {sfile}.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.d (Supply Chain Security)"
-                        )
-                        host_findings.append(f)
-
-                # Server Header Information Leakage
-                headers = http_data.get('headers', {})
-                for h_name in ['Server', 'X-Powered-By']:
-                    # Case insensitive lookup
-                    h_val = next((v for k, v in headers.items() if k.lower() == h_name.lower()), None)
-                    if h_val:
-                        f = ComplianceFinding(
-                            severity="LOW",
-                            category="CYBER HYGIENE",
-                            message=f"Information Leakage ({h_name})",
-                            rationale="Revealing server versions helps attackers target specific vulnerabilities.",
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.g (Cyber Hygiene)",
-                            technical_detail=f"Header {h_name}: {h_val}",
-                            remediation="Configure server to suppress version banners.",
-                            remediation_cost="Low",
-                            remediation_effort="Low",
-                            compliance_article="Art. 21.2.g (Cyber Hygiene)"
-                        )
-                        host_findings.append(f)
-
-            # 5. Obsolete Software & Information Disclosure (Passive)
-            for port, http_data in host.http_info.items():
-                # Check for Information Disclosure (Tech Stack)
-                if 'tech_stack' in http_data and http_data['tech_stack']:
-                    f = ComplianceFinding(
-                        severity="LOW",
-                        category="INFO DISCLOSURE",
-                        message="Technology Stack Exposed",
-                        rationale="Exposing detailed version information aids attackers in targeting specific vulnerabilities.",
-                        target=f"{host.ip}:{port}",
-                        reference="NIS2 Art. 21.2.e (Security in Acquisition)",
-                        cvss_vector="CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
-                        technical_detail=f"Headers found: {', '.join(http_data['tech_stack'])}",
-                        remediation="Configure web server to suppress 'X-Powered-By', 'X-AspNet-Version' and similar headers.",
-                        remediation_cost="Low",
-                        remediation_effort="Low",
-                        compliance_article="Art. 21.2.e (Security in Acquisition)"
-                    )
-                    host_findings.append(f)
-
-                # Check for Obsolete/Vulnerable Software (Basic Banner Matching)
-                # This is a simplified check. In a real scenario, this would query a CVE database.
-                server_header = http_data.get('headers', {}).get('Server', '').lower()
-
-                # Example: Apache 2.2 (EOL 2017), PHP 5.x (EOL 2018), IIS 6.0 (EOL 2015)
-                obsolete_signatures = [
-                    ('apache/2.2', 'Apache 2.2 is EOL since 2017'),
-                    ('apache/2.0', 'Apache 2.0 is EOL since 2013'),
-                    ('nginx/1.0', 'Nginx 1.0 is severely outdated'),
-                    ('php/5.', 'PHP 5.x is EOL since 2018'),
-                    ('php/7.0', 'PHP 7.0 is EOL since 2019'),
-                    ('microsoft-iis/6.0', 'IIS 6.0 is EOL since 2015'),
-                    ('microsoft-iis/7.0', 'IIS 7.0 is EOL since 2020')
-                ]
-
-                for sig, reason in obsolete_signatures:
-                    if sig in server_header or any(sig in ts.lower() for ts in http_data.get('tech_stack', [])):
-                        f = ComplianceFinding(
-                            severity="HIGH",
-                            category="VULNERABILITY",
-                            message="Obsolete/EOL Software Detected",
-                            rationale=(
-                                "End-of-life software receives no security patches. This is a "
-                                "vulnerability-management failure, not an observed vulnerability: "
-                                "no CVSS score is published because none can be computed. The "
-                                "previous 9.8 was annotated in the source as 'assuming critical "
-                                "CVEs exist' — CVSS scores a specific vulnerability, and a banner "
-                                "match is not one. Banners are also spoofable and routinely stale "
-                                "where a distribution backports fixes without changing the version "
-                                "string, so the evidence here is the banner and nothing more."
-                            ),
-                            target=f"{host.ip}:{port}",
-                            reference="NIS2 Art. 21.2.e (Vulnerability Handling)",
-                            technical_detail=f"Banner matched: {reason} (Source: {server_header})",
-                            remediation="Upgrade to a supported version immediately.",
-                            remediation_cost="High",
-                            remediation_effort="High",
-                            compliance_article="Art. 21.2.e (Vulnerability Handling)"
-                        )
-                        host_findings.append(f)
-                        break # Report once per host/port
-
             # Aggregate Host Stats
             if any(f.severity == 'CRITICAL' for f in host_findings):
                 stats['critical_risk_hosts'] += 1

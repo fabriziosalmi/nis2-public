@@ -11,9 +11,9 @@ Celery deadline task (`app.tasks.incident_tasks`). Until now it had NO REST
 surface: the countdown that drives the whole CSIRT obligation was invisible in
 the product. This router exposes it read-only so the dashboard can render the
 live deadline clocks.
-
-Distinct from `app.routers.incidents` (the `IncidentReport` CSIRT submission
-form, table `incident_reports`) — different model, different purpose.
+Art. 23 statutory incident tracking is separated from regulatory CSIRT filings:
+`Incident` (table `incidents`) tracks the statutory timeline and legal clocks, whereas
+CSIRT submission reports represent external regulatory transmission dossiers.
 
 That split had a hole in it. `Incident` (table `incidents`) is what carries the
 Art. 23 deadlines, and it is what this router, the Celery alerting task
