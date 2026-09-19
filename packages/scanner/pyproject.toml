@@ -13,7 +13,7 @@ dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
     "rich>=13.7",
-    "dnspython>=2.6",
+    "dnspython>=2.8.0",
     # scapy removed in v2.4.10 — never imported in the codebase, dragged in
     # GHSA-pq98-w3cw-pgcr (untrusted-pickle session deserialization, no
     # patched release as of 2026-04). Re-add only with a justified use.
