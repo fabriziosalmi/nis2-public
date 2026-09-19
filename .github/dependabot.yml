@@ -1,4 +1,10 @@
 version: 2
+
+# Every entry groups its minor and patch updates into one pull request per
+# directory. With auto-merge and "require branches to be up to date", many
+# single-dependency pull requests stall behind main (Dependabot rebases on
+# conflicts, not on "behind"); a few grouped ones touch the same lockfile and get
+# rebased. Majors are not in any group: they stay separate and are merged by hand.
 updates:
   - package-ecosystem: "pip"
     directory: "/"
@@ -8,6 +14,11 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    groups:
+      pip-root-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/packages/api"
@@ -17,6 +28,11 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    groups:
+      pip-api-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/packages/scanner"
@@ -26,6 +42,11 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    groups:
+      pip-scanner-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "npm"
     directory: "/packages/web"
@@ -35,6 +56,11 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
+    groups:
+      npm-web-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -43,6 +69,11 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      docker-root-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/packages/api"
@@ -51,6 +82,11 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      docker-api-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/packages/web"
@@ -59,6 +95,11 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      docker-web-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -67,3 +108,8 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+    groups:
+      github-actions-root-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
