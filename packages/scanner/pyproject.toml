@@ -25,7 +25,7 @@ dependencies = [
     "cryptography>=42.0",
     "prometheus_client>=0.26.0",
     "python-whois>=0.9",
-    "Jinja2>=3.1",
+    "Jinja2>=3.1.6",
     "watchdog>=4.0",
     "playwright>=1.49",
 ]
