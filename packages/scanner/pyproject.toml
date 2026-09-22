@@ -30,6 +30,14 @@ dependencies = [
     "playwright>=1.63.0",
 ]
 
+[project.optional-dependencies]
+# Revocation is asked of a CertMate instance rather than reimplemented here:
+# a verified OCSP/CRL answer needs a signature check, a CertID match and a
+# freshness check, and CertMate already carries that client. Optional, because
+# a scan without a CertMate configured still runs — it reports revocation as
+# UNKNOWN and says why, which is the honest answer and what this replaced.
+certmate = ["certmate-sdk>=0.1.5"]
+
 [project.scripts]
 nis2scan = "nis2scan.cli:cli"
 

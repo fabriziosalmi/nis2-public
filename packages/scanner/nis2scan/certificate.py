@@ -17,6 +17,7 @@ Goes far beyond basic TLS checks:
 import asyncio
 import hashlib
 import logging
+import os
 import socket
 import ssl
 from dataclasses import dataclass, field
@@ -26,6 +27,51 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 logger = logging.getLogger("nis2scan.certificate")
+
+
+def _certmate_config():
+    """``(url, token)`` when a CertMate is configured, else None.
+
+    Both halves are required. A URL with no token is not a configuration: the
+    scanner would build a client that gets 401 on every probe and report
+    UNKNOWN for a reason nobody can see from the outside. Separate from
+    _certmate_client so the rule is testable without the SDK installed.
+    """
+    url = os.environ.get("CERTMATE_URL", "").strip()
+    token = os.environ.get("CERTMATE_TOKEN", "").strip()
+    if not url or not token:
+        return None
+    return url, token
+
+
+def _certmate_client():
+    """The CertMate this scanner asks about revocation, or None.
+
+    Configured with CERTMATE_URL and CERTMATE_TOKEN. CertMate is where the
+    verified OCSP/CRL client lives; nis2 reads certificates, it does not
+    reimplement PKI. Absent configuration — or an SDK that is not installed —
+    is not an error: the check reports UNKNOWN and says so.
+
+    certmate-sdk is an optional extra (`pip install nis2scan[certmate]`) so a
+    scanner run that does not use this keeps its dependency set.
+    """
+    config = _certmate_config()
+    if config is None:
+        return None
+    url, token = config
+    try:
+        from certmate import Client
+    except ImportError:
+        logger.warning(
+            "CERTMATE_URL is set but certmate-sdk is not installed; "
+            "revocation will be reported as UNKNOWN. pip install certmate-sdk"
+        )
+        return None
+    try:
+        return Client(url, token, timeout=float(os.environ.get("CERTMATE_TIMEOUT", "15")))
+    except Exception as e:
+        logger.warning("CertMate client could not be built: %s", e)
+        return None
 
 
 @dataclass
@@ -90,6 +136,11 @@ class CertificateInfo:
 
     # OCSP
     ocsp_status: str = "UNKNOWN"  # GOOD, REVOKED, UNKNOWN
+    # Where the answer came from (ocsp / crl / certmate), and why it is not a
+    # verdict when it is not one. An unchecked "GOOD" is worse than no answer,
+    # so both of these travel with the status into the report.
+    revocation_source: str = ""
+    revocation_detail: str = ""
     ocsp_url: str = ""
 
     # CT Logs
@@ -167,8 +218,8 @@ class CertificateAnalyzer:
         # 5. Detect CA type
         self._detect_ca_type(info)
 
-        # 6. Check OCSP
-        await self._check_ocsp(info)
+        # 6. Ask whether the issuer has revoked it
+        await self._check_revocation(info)
 
         # 7. Query CT logs
         await self._query_ct_logs(info)
@@ -450,36 +501,72 @@ class CertificateAnalyzer:
         info.ca_type = "commercial"
         info.ca_organization = issuer_org or issuer_cn
 
-    async def _check_ocsp(self, info: CertificateInfo) -> None:
-        """Check OCSP responder status."""
-        try:
-            context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_OPTIONAL
-            conn = asyncio.open_connection(
-                info.connect_ip or info.domain,
-                info.port,
-                ssl=context,
-                server_hostname=info.domain,
+    async def _check_revocation(self, info: CertificateInfo) -> None:
+        """Has the issuer revoked this certificate?
+
+        This used to answer GOOD whenever the certificate named an OCSP
+        responder — the presence of a URL was read as the answer that URL
+        would have given. Nothing was asked, nothing was verified, and a
+        revoked certificate was reported as good in a compliance report.
+
+        A revocation answer is only worth having if it was checked: the
+        response must be signed by the issuer (or a delegate it authorised),
+        must name this certificate, and must be current. That is a small PKI
+        client, and CertMate already carries one. So this asks CertMate when
+        one is configured, and otherwise reports UNKNOWN and says why. It
+        never infers.
+        """
+        info.ocsp_url = self._responder_url(info)
+        client = _certmate_client()
+        if client is None:
+            info.revocation_detail = (
+                "not checked: no CertMate configured. Set CERTMATE_URL and "
+                "CERTMATE_TOKEN so revocation is verified rather than assumed."
             )
-            reader, writer = await asyncio.wait_for(conn, timeout=self.timeout)
-            ssl_obj = writer.get_extra_info("ssl_object")
-            cert = ssl_obj.getpeercert()
-            writer.close()
-            await writer.wait_closed()
-
-            # Extract OCSP URL from cert extensions
-            for ext_name in ("OCSP",):
-                ocsp_urls = cert.get("OCSP", ()) if cert else ()
-                if ocsp_urls:
-                    info.ocsp_url = ocsp_urls[0] if isinstance(ocsp_urls, (list, tuple)) else str(ocsp_urls)
-                    info.ocsp_status = "GOOD"  # Simplified: if OCSP URL exists and cert is valid
-                    return
-
-            # Fallback: check Authority Information Access
             info.ocsp_status = "UNKNOWN"
+            return
+
+        try:
+            answer = await asyncio.to_thread(
+                client.probe, info.domain, port=info.port, check_revocation=True
+            )
+        except Exception as e:                      # network, auth, anything
+            info.revocation_detail = f"CertMate could not be asked: {e.__class__.__name__}"
+            info.ocsp_status = "UNKNOWN"
+            return
+
+        revocation = (answer or {}).get("revocation") or {}
+        status = revocation.get("status")
+        info.revocation_source = revocation.get("method") or "certmate"
+        info.revocation_detail = revocation.get("error") or ""
+        if status == "revoked":
+            info.ocsp_status = "REVOKED"
+            info.revocation_detail = "revoked by the issuer" + (
+                f" ({revocation['reason']})" if revocation.get("reason") else "")
+        elif status == "good":
+            info.ocsp_status = "GOOD"
+        else:
+            # unknown / unavailable / not_applicable: an answer nobody verified
+            # is not an answer.
+            info.ocsp_status = "UNKNOWN"
+
+    @staticmethod
+    def _responder_url(info: CertificateInfo) -> str:
+        if not info.der:
+            return info.ocsp_url
+        try:
+            from cryptography import x509
+            from cryptography.x509.oid import AuthorityInformationAccessOID, ExtensionOID
+
+            cert = x509.load_der_x509_certificate(info.der)
+            aia = cert.extensions.get_extension_for_oid(
+                ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+            for description in aia:
+                if description.access_method == AuthorityInformationAccessOID.OCSP:
+                    return str(description.access_location.value)
         except Exception:
-            info.ocsp_status = "UNKNOWN"
+            pass
+        return info.ocsp_url
 
     async def _query_ct_logs(self, info: CertificateInfo) -> None:
         """Query Certificate Transparency logs via crt.sh.
@@ -670,6 +757,8 @@ class CertificateAnalyzer:
             "ocsp": {
                 "status": info.ocsp_status,
                 "url": info.ocsp_url,
+                "source": info.revocation_source,
+                "detail": info.revocation_detail,
             },
             "ct": {
                 "logged": info.ct_logged,
