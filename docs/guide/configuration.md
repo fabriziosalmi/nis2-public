@@ -96,6 +96,20 @@ Generated reports (PDF / HTML / Markdown / JSON / CSV / JUnit XML) live under `/
 |---|---|---|
 | `REPORT_TTL_DAYS` | `30` | Days to keep generated report files before the daily cleanup task deletes them. Long enough for a compliance team to download last week's report after a holiday; short enough that a deploy generating 100s of scans/day doesn't fill the disk in weeks. The cleanup task always runs at the schedule's wall-clock cadence regardless of this value (it just changes the cutoff age). |
 
+## Certificate revocation (CertMate)
+
+Whether a certificate has been revoked is asked of a [CertMate](https://github.com/fabriziosalmi/certmate) instance rather than answered here. A revocation answer is only worth having if it was verified — the OCSP response signed by the issuer or a delegate it authorised, naming this certificate, and current; or a CRL issued and signed by that issuer and not past its `nextUpdate` — and CertMate carries that client.
+
+Without this configured, a scan still runs and reports revocation as `UNKNOWN`, with the reason in the report. It never infers: a certificate that merely names an OCSP responder is not a certificate that was checked.
+
+| Variable | Default | Description |
+|---|---|---|
+| `CERTMATE_URL` | *(unset)* | Base URL of the CertMate instance, e.g. `https://certmate.example.com`. Both this and the token are required; a URL alone is not a configuration. |
+| `CERTMATE_TOKEN` | *(unset)* | An API key for that instance. A `viewer` key scoped to the domains this scanner is allowed to look at is enough — the scanner only reads. |
+| `CERTMATE_TIMEOUT` | `15` | Seconds to wait for an answer before reporting `UNKNOWN`. |
+
+Install the client with the optional extra: `pip install nis2scan[certmate]`.
+
 ## Celery
 
 | Variable | Default | Description |

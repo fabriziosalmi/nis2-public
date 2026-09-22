@@ -96,6 +96,20 @@ I report generati (PDF / HTML / Markdown / JSON / CSV / JUnit XML) vengono salva
 |---|---|---|
 | `REPORT_TTL_DAYS` | `30` | Giorni di conservazione per i file di report prima che il task di pulizia giornaliera li elimini. Un tempo sufficiente per permettere a un team di compliance di scaricare il report della settimana precedente dopo le ferie, ma abbastanza breve da evitare che un'installazione con centinaia di scansioni al giorno riempia il disco in poche settimane. Il task di pulizia viene eseguito indipendentemente da questo valore, che si limita a stabilire l'età limite dei file da cancellare. |
 
+## Revoca dei certificati (CertMate)
+
+La revoca di un certificato viene chiesta a un'istanza [CertMate](https://github.com/fabriziosalmi/certmate), invece di essere stabilita qui. Una risposta sulla revoca vale solo se è stata verificata — la risposta OCSP firmata dall'emittente o da un delegato autorizzato, riferita proprio a quel certificato e ancora valida nel tempo; oppure una CRL emessa e firmata da quell'emittente e non scaduta — e quel client ce l'ha già CertMate.
+
+Senza questa configurazione la scansione funziona lo stesso e riporta la revoca come `UNKNOWN`, indicando il motivo nel report. Non deduce mai: un certificato che si limita a indicare un responder OCSP non è un certificato che è stato verificato.
+
+| Variabile | Default | Descrizione |
+|---|---|---|
+| `CERTMATE_URL` | *(non impostata)* | URL base dell'istanza CertMate, ad esempio `https://certmate.example.com`. Servono sia questa sia il token: il solo URL non è una configurazione. |
+| `CERTMATE_TOKEN` | *(non impostata)* | Una chiave API di quell'istanza. È sufficiente una chiave `viewer` limitata ai domini che questo scanner può esaminare, perché lo scanner si limita a leggere. |
+| `CERTMATE_TIMEOUT` | `15` | Secondi di attesa per una risposta prima di riportare `UNKNOWN`. |
+
+Il client si installa con l'extra opzionale: `pip install nis2scan[certmate]`.
+
 ## Celery
 
 | Variabile | Default | Descrizione |
