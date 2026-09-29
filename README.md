@@ -383,7 +383,7 @@ Designed for NIS2 consultants and DPO-as-a-service managing multiple clients:
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js 15, React 19, shadcn/ui, Tailwind v4, Zustand, TanStack Query, Recharts, next-intl |
+| **Frontend** | Next.js 16, React 19, shadcn/ui, Tailwind v4, Zustand, TanStack Query, Recharts, next-intl |
 | **Backend** | FastAPI, SQLAlchemy (async), Pydantic v2, Celery, Redis, slowapi |
 | **Database** | PostgreSQL 16 |
 | **Scanner** | Python asyncio, aiohttp, dnspython, Playwright, python-whois |

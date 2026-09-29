@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.6.23] - 2026-09-29
+
+### Added
+
+- **Interactive Art. 21 Governance measure editing**: Integrated editing modal (`EntityFormDialog`) directly into the governance dashboard (`/dashboard/governance`), allowing compliance officers to update implementation status, assigned owner, and audit evidence notes in real-time (`PATCH /api/v1/governance/{id}`) with visual assignee indicators.
+- **Scan asset verification badging & validation**: Added ownership verification status badges (`ShieldCheck` / `ShieldAlert`) and an advisory warning in `/dashboard/scans/new`, with pre-submission validation preventing 403 Forbidden errors when launching scans on unverified domains.
+- **Full NIS2 domain live E2E test coverage**: Expanded the integration and live E2E test suite to 67 comprehensive test cases covering:
+  - Art. 21 asset verification gates (enforcement of scan restrictions on unverified assets).
+  - Art. 21.2 governance compliance scoring across all 10 sub-paragraphs (a–j).
+  - Art. 23 regulatory incident notification deadlines (24h early warning, 72h incident notification, 1-month final report) and state transition integrity.
+  - Italian ACN/CSIRT regulatory export schema and endpoint validation.
+  - Business Impact Analysis (BIA) 5-tier critical function scoring matrix.
+  - Multi-tier supply chain vendor risk 5-factor scoring model.
+  - Security notification channels (Email, Webhook, Slack) with payload verification.
+  - Incident remediation playbooks and CVE tracking.
+
+### Fixed
+
+- **WCAG accessibility & contrast compliance**: Remedied contrast ratio violations on `Badge` components (fixed failing `1.62:1` ratio on `medium` yellow and `high` amber variants to achieve WCAG AAA compliance).
+- **Theme-adaptive dashboard visualizations**: Dynamic theme token integration for Recharts Bar and Line charts and Tooltip popovers, ensuring sharp readability in dark and light modes without hardcoded color clashes.
+- **Table accessibility and dark mode consistency**: Added proper `aria-label` attributes to asset table selection controls and ensured consistent dark mode background tokens for target type badges.
+
+### Changed
+
+- **Documentation & tech stack alignment**: Updated Next.js references to Next.js 16 across landing page highlights and documentation tables.
+
 ## [2.6.22] - 2026-09-29
 
 ### Security
