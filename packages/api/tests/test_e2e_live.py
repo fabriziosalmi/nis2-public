@@ -1120,6 +1120,451 @@ class TestAuditLogs:
 
 
 # ---------------------------------------------------------------------------
+# NIS2 Domain Suites: Asset Verification, Scans, Governance, Incidents,
+# BIA, Supply Chain, ACN Reporting, Notifications, Remediation
+# ---------------------------------------------------------------------------
+
+
+class TestAssetsVerificationAndScanLifecycle:
+    """Covers Art. 21.2.i & 21.2.e: verifying asset ownership prior to scanning,
+    attesting authority, and the scan creation lifecycle."""
+
+    def test_unverified_asset_cannot_be_scanned_403(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        create_resp = client.post(
+            "/api/v1/assets",
+            json={
+                "name": f"E2E Unverified Target {suffix}",
+                "target_type": "ip",
+                "target_value": "93.184.216.34",
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        asset_id = create_resp.json()["id"]
+
+        try:
+            # Unverified asset must be rejected by the scan creator
+            scan_resp = client.post(
+                "/api/v1/scans",
+                json={"name": "E2E Blocked Scan", "asset_ids": [asset_id]},
+                headers=_csrf_headers(auth),
+            )
+            assert scan_resp.status_code == 403, (
+                f"expected 403 on unverified asset, got {scan_resp.status_code}: {scan_resp.text}"
+            )
+            assert "Ownership is not established" in scan_resp.json().get("detail", "")
+        finally:
+            client.delete(f"/api/v1/assets/{asset_id}", headers=_csrf_headers(auth))
+
+    def test_ip_attestation_and_scan_creation_flow(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        create_resp = client.post(
+            "/api/v1/assets",
+            json={
+                "name": f"E2E Attested Target {suffix}",
+                "target_type": "ip",
+                "target_value": "93.184.216.35",
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert create_resp.status_code == 201
+        asset_id = create_resp.json()["id"]
+
+        try:
+            # Attest authority over IP
+            attest_resp = client.post(
+                f"/api/v1/assets/{asset_id}/attest",
+                json={
+                    "statement": "E2E automated suite attesting regulatory authority over this address."
+                },
+                headers=_csrf_headers(auth),
+            )
+            assert attest_resp.status_code == 200, attest_resp.text
+            assert attest_resp.json()["status"] == "attested"
+
+            # Verify asset reflects attested state
+            get_resp = client.get(f"/api/v1/assets/{asset_id}")
+            assert get_resp.status_code == 200
+            assert get_resp.json()["verification_status"] == "attested"
+
+            # Create scan now succeeds
+            scan_resp = client.post(
+                "/api/v1/scans",
+                json={"name": f"E2E Live Scan {suffix}", "asset_ids": [asset_id]},
+                headers=_csrf_headers(auth),
+            )
+            assert scan_resp.status_code == 201, scan_resp.text
+            scan_id = scan_resp.json()["id"]
+            assert scan_resp.json()["status"] in ("pending", "running")
+
+            # Retrieve scan detail
+            scan_detail = client.get(f"/api/v1/scans/{scan_id}")
+            assert scan_detail.status_code == 200
+            assert scan_detail.json()["id"] == scan_id
+
+            # Verify scan in list
+            scans_list = client.get("/api/v1/scans")
+            assert scans_list.status_code == 200
+            assert any(s["id"] == scan_id for s in scans_list.json()["items"])
+        finally:
+            client.delete(f"/api/v1/assets/{asset_id}", headers=_csrf_headers(auth))
+
+
+class TestGovernanceArt21Checklist:
+    """Covers Art. 21.2 governance measures checklist, scoring, and breakdown."""
+
+    def test_governance_seed_creates_canonical_items(
+        self, client: httpx.Client, auth: dict
+    ):
+        seed_resp = client.post("/api/v1/governance/seed", headers=_csrf_headers(auth))
+        assert seed_resp.status_code in (200, 400)
+        if seed_resp.status_code == 400:
+            assert "already initialized" in seed_resp.text
+        else:
+            assert seed_resp.json().get("created", 0) >= 30
+
+        gov_resp = client.get("/api/v1/governance")
+        assert gov_resp.status_code == 200
+        data = gov_resp.json()
+        assert data["total"] >= 30
+        assert "stats" in data
+        assert data["stats"]["total"] >= 30
+
+        # Verify items carry required NIS2 metadata
+        sample = data["items"][0]
+        assert "item_id" in sample
+        assert "priority" in sample
+        assert "subparagraph" in sample
+        assert "status" in sample
+
+    def test_patch_governance_item_and_score_evaluation(
+        self, client: httpx.Client, auth: dict
+    ):
+        gov_resp = client.get("/api/v1/governance")
+        items = gov_resp.json()["items"]
+        assert len(items) > 0
+        first_item = items[0]
+        item_uuid = first_item["id"]
+
+        patch_resp = client.patch(
+            f"/api/v1/governance/{item_uuid}",
+            json={
+                "status": "done",
+                "assigned_to_name": "CISO Team",
+                "evidence_notes": "Implemented and verified under E2E testing",
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["status"] == "done"
+        assert patch_resp.json()["assigned_to_name"] == "CISO Team"
+
+        # Verify compliance score reflects the implementation
+        score_resp = client.get("/api/v1/governance/score")
+        assert score_resp.status_code == 200
+        score_data = score_resp.json()
+        assert "score" in score_data
+        assert score_data["score"] > 0
+        assert "by_priority" in score_data
+
+    def test_governance_by_subparagraph_and_risk_summary(
+        self, client: httpx.Client, auth: dict
+    ):
+        subp_resp = client.get("/api/v1/governance/by-subparagraph")
+        assert subp_resp.status_code == 200
+        subp_data = subp_resp.json()
+        assert "by_subparagraph" in subp_data
+        # Ensure Art. 21.2 subparagraphs are present
+        assert "21.2.a" in subp_data["by_subparagraph"]
+        assert "21.2.b" in subp_data["by_subparagraph"]
+
+        risk_resp = client.get("/api/v1/governance/risk-summary")
+        assert risk_resp.status_code == 200
+
+
+class TestIncidentArt23RegulatoryMonitoring:
+    """Covers Art. 23 mandatory regulatory countdowns (24h early warning, 72h
+    notification, 1 month final report) and CSIRT submission recording."""
+
+    def test_declare_incident_tracks_statutory_deadlines(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        inc_resp = client.post(
+            "/api/v1/incident-monitor",
+            json={
+                "title": f"Critical Ransomware Detection {suffix}",
+                "incident_type": "ransomware",
+                "severity": "critical",
+                "description": "Critical storage cluster inaccessible due to encryption.",
+                "impact_category": "availability",
+                "estimated_impact_level": 4,
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert inc_resp.status_code == 201, inc_resp.text
+        inc_data = inc_resp.json()
+        inc_id = inc_data["id"]
+
+        try:
+            assert inc_data["early_warning_deadline"] is not None
+            assert inc_data["notification_deadline"] is not None
+            assert inc_data["final_report_deadline"] is not None
+
+            # Deadlines must match 24h, 72h, and ~1 month
+            deadlines = {d["label"]: d for d in inc_data["deadlines"]}
+            assert "early_warning" in deadlines
+            assert "notification" in deadlines
+            assert "final_report" in deadlines
+            assert deadlines["early_warning"]["seconds_remaining"] > 0
+            assert deadlines["early_warning"]["seconds_remaining"] <= 86400
+
+            # Record regulatory early warning milestone with CSIRT
+            subm_resp = client.post(
+                f"/api/v1/incident-monitor/{inc_id}/submissions",
+                json={
+                    "obligation": "early_warning",
+                    "csirt_reference_id": f"CSIRT-IT-2026-{suffix}",
+                },
+                headers=_csrf_headers(auth),
+            )
+            assert subm_resp.status_code == 200, subm_resp.text
+            assert subm_resp.json()["early_warning_sent_at"] is not None
+
+            # Update status to contained
+            patch_resp = client.patch(
+                f"/api/v1/incident-monitor/{inc_id}",
+                json={"status": "contained"},
+                headers=_csrf_headers(auth),
+            )
+            assert patch_resp.status_code == 200
+            assert patch_resp.json()["status"] == "contained"
+        finally:
+            client.delete(
+                f"/api/v1/incident-monitor/{inc_id}", headers=_csrf_headers(auth)
+            )
+
+
+class TestACNNationalFramework:
+    """Covers Italian National Cybersecurity Agency (ACN) compliance timelines
+    (D.Lgs 138/2024) and regulatory export payload schemas."""
+
+    def test_acn_deadlines_timeline(self, client: httpx.Client):
+        resp = client.get("/api/v1/deadlines")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "reference_date" in data
+        assert "deadlines" in data
+        items = data["deadlines"]
+        assert len(items) > 0
+        first = items[0]
+        assert "title" in first
+        assert "deadline" in first
+        assert "days_remaining" in first
+        assert "urgency" in first
+
+    def test_acn_export_art18_and_bia_payloads(
+        self, client: httpx.Client, auth: dict
+    ):
+        art18_resp = client.get("/api/v1/acn-export/art18", headers=_csrf_headers(auth))
+        assert art18_resp.status_code == 200
+        art18_data = art18_resp.json()
+        assert art18_data["document_type"] == "acn_art18_vendor_inventory"
+        assert "reporting_entity" in art18_data
+        assert "vendor_inventory" in art18_data
+
+        bia_resp = client.get("/api/v1/acn-export/bia", headers=_csrf_headers(auth))
+        assert bia_resp.status_code == 200
+        bia_data = bia_resp.json()
+        assert bia_data["document_type"] == "acn_bia_export"
+        assert "business_processes" in bia_data
+        assert "summary" in bia_data
+
+
+class TestBIAContinuityLifecycle:
+    """Covers Art. 21.2.c Business Continuity and BIA process impact evaluation."""
+
+    def test_create_and_evaluate_bia_process(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        create_resp = client.post(
+            "/api/v1/bia",
+            json={
+                "name": f"Core Transaction Processing {suffix}",
+                "department": "Finance",
+                "criticality_level": 1,
+                "rto_hours": 4,
+                "rpo_hours": 1,
+                "impact_financial": 4,
+                "impact_operational": 3,
+                "acn_servizio_essenziale": True,
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        proc_id = create_resp.json()["id"]
+
+        try:
+            # Query BIA matrix
+            matrix_resp = client.get("/api/v1/bia/matrix")
+            assert matrix_resp.status_code == 200
+            matrix_data = matrix_resp.json()
+            assert matrix_data["stats"]["total_processes"] >= 1
+            matching = [p for p in matrix_data["matrix"] if p["id"] == str(proc_id)]
+            assert len(matching) == 1
+            assert matching[0]["max_impact_score"] == 4
+            assert matching[0]["acn_servizio_essenziale"] is True
+
+            # Partial update
+            patch_resp = client.patch(
+                f"/api/v1/bia/{proc_id}",
+                json={"rto_hours": 2, "notes": "E2E adjusted target"},
+                headers=_csrf_headers(auth),
+            )
+            assert patch_resp.status_code == 200
+            assert patch_resp.json()["rto_hours"] == 2
+        finally:
+            client.delete(f"/api/v1/bia/{proc_id}", headers=_csrf_headers(auth))
+
+
+class TestVendorSupplyChainRisk:
+    """Covers Art. 21.2.d Supply Chain Security and five-factor scoring formula."""
+
+    def test_vendor_risk_scoring_and_stats(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        create_resp = client.post(
+            "/api/v1/vendors",
+            json={
+                "name": f"Cloud Infrastructure Provider {suffix}",
+                "vendor_type": "cloud_provider",
+                "criticality": 1,
+                "data_access_level": "confidential",
+                "geographic_location": "EU",
+                "has_security_certification": "ISO27001",
+                "acn_rilevanza_art18": True,
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        vendor_id = create_resp.json()["id"]
+
+        try:
+            # Fetch computed five-factor score
+            score_resp = client.get(f"/api/v1/vendors/{vendor_id}/score")
+            assert score_resp.status_code == 200
+            score_data = score_resp.json()
+            assert score_data["computed_score"] > 0
+            assert len(score_data["breakdown"]) == 5
+            factor_ids = {f["factor_id"] for f in score_data["breakdown"]}
+            assert factor_ids == {
+                "certification",
+                "data_access",
+                "audit_recency",
+                "geography",
+                "clauses",
+            }
+
+            # Query vendor statistics
+            stats_resp = client.get("/api/v1/vendors/stats")
+            assert stats_resp.status_code == 200
+            assert stats_resp.json()["total"] >= 1
+            assert stats_resp.json()["art18_relevant"] >= 1
+        finally:
+            client.delete(f"/api/v1/vendors/{vendor_id}", headers=_csrf_headers(auth))
+
+
+class TestNotificationChannelsLifecycle:
+    """Covers Art. 21.2.b Alerting channels and SSRF egress filtering."""
+
+    def test_ssrf_protection_rejects_unresolvable_webhook(
+        self, client: httpx.Client, auth: dict
+    ):
+        resp = client.post(
+            "/api/v1/notification-channels",
+            json={
+                "channel_type": "webhook",
+                "name": "Invalid Hook",
+                "config": {"url": "https://unresolvable-domain-e2e-test.invalid/alert"},
+                "events": ["critical_finding"],
+                "is_active": True,
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert resp.status_code == 422
+        assert "Blocked destination" in resp.json().get("detail", "")
+
+    def test_email_channel_crud_flow(
+        self, client: httpx.Client, auth: dict
+    ):
+        suffix = uuid.uuid4().hex[:6]
+        create_resp = client.post(
+            "/api/v1/notification-channels",
+            json={
+                "channel_type": "email",
+                "name": f"Security Dispatch {suffix}",
+                "config": {"email": "secops@nis2.local"},
+                "events": ["critical_finding", "incident_deadline"],
+                "is_active": True,
+            },
+            headers=_csrf_headers(auth),
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        channel_id = create_resp.json()["id"]
+
+        try:
+            # Verify channel listed
+            list_resp = client.get("/api/v1/notification-channels")
+            assert list_resp.status_code == 200
+            assert any(c["id"] == channel_id for c in list_resp.json())
+
+            # Update channel
+            patch_resp = client.patch(
+                f"/api/v1/notification-channels/{channel_id}",
+                json={"name": f"Updated Dispatch {suffix}"},
+                headers=_csrf_headers(auth),
+            )
+            assert patch_resp.status_code == 200
+            assert patch_resp.json()["name"] == f"Updated Dispatch {suffix}"
+        finally:
+            client.delete(
+                f"/api/v1/notification-channels/{channel_id}",
+                headers=_csrf_headers(auth),
+            )
+
+
+class TestRemediationPlaybooks:
+    """Covers Art. 21.2.f Technical vulnerability and configuration remediation playbooks."""
+
+    def test_list_playbooks_covers_nis2_remediation_guides(
+        self, client: httpx.Client
+    ):
+        resp = client.get("/api/v1/remediation/playbooks")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] > 0
+        playbooks = data["playbooks"]
+        assert "tls_obsolete_protocol" in playbooks
+        assert "tls_expired_cert" in playbooks
+
+        # Test single playbook retrieval
+        single_resp = client.get("/api/v1/remediation/playbooks/tls_obsolete_protocol")
+        assert single_resp.status_code == 200
+        single_data = single_resp.json()
+        assert "title" in single_data
+        assert "category" in single_data
+        assert "effort" in single_data
+        assert "time_minutes" in single_data
+
+
+# ---------------------------------------------------------------------------
 # Password change — kept LAST in the file because it stamps
 # `password_changed_at`, which invalidates every JWT issued earlier, including
 # the module-level `client` fixture's own cookies. Running this anywhere but
@@ -1524,3 +1969,5 @@ class TestResetPassword:
                         f"{restore.status_code} {restore.text}"
                     )
             a.close()
+
+
