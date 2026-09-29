@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.6.22] - 2026-09-29
+
+### Security
+
+- **Vulnerability remediation in `packages/web`**: Upgraded `sharp` to 0.35.4 to resolve [GHSA-rgj7-g3m4-5g8c](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c) (#260).
+
+### Fixed
+
+- **Scanner certificate revocation validation**: In `nis2scan`, certificate revocation status (CRL and OCSP) is strictly validated or reported as unknown, eliminating false assumptions of certificate validity (#270).
+- **E2E live test stability and rate limiting**: Resolved test flakiness under high login concurrency by introducing a rate limit reset endpoint in dev/test environments (`ENABLE_DEV_EMAIL_DEBUG=true`) and restoring initial test user credentials/MFA state prior to E2E runs.
+- **Database seed script idempotency**: Guarded `scripts/seed.py` against unique constraint crashes when `admin@nis2.local` already exists, allowing safe container restarts and re-seeding.
+- **Documentation and wiki alignment**: Executed `make wiki-sync` to ensure GitHub wiki pages accurately match the 25 source guides in `docs/`.
+
+### Changed
+
+- **Runtime & toolchain modernization**:
+  - Upgraded `packages/web/Dockerfile` to `node:22-alpine` pinned to immutable digest, resolving Vite 7 `EBADENGINE` warnings.
+  - Upgraded `packages/api/Dockerfile` base image digest to Python 3.14.6 bookworm update (#242).
+  - Modernized dependencies: `vitest` 5.0.2, `next` 16.3.4, `cryptography` >= 50.0.1, `aiodns` >= 4.0.4, `sonner` 2.0.8, and `setuptools` >= 84.0.0.
+  - Configured Dependabot auto-merge workflows with semantic version guards for non-breaking minor and patch bumps.
+
 ## [2.6.21] - 2026-09-17
 
 ### Fixed
