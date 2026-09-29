@@ -42,7 +42,16 @@ async def seed():
         admin_password = secrets.token_urlsafe(16)
         print(f"[WARNING] No ADMIN_PASSWORD env var set. Generated a secure random admin password: {admin_password}")
 
+    from sqlalchemy import select
+
     async with async_session_factory() as db:
+        existing_user = (
+            await db.execute(select(User).where(User.email == "admin@nis2.local"))
+        ).scalar_one_or_none()
+        if existing_user:
+            print("[INFO] Seed data already exists (admin@nis2.local found) — skipping seed.")
+            return
+
         # Demo user
         user = User(
             email="admin@nis2.local",

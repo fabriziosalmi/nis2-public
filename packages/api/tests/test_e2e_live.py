@@ -1133,6 +1133,14 @@ class TestChangePassword:
     audit-logs, and re-issues cookies for the active session.
     """
 
+    @pytest.fixture(autouse=True)
+    def _reset_limits(self):
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=3.0) as c:
+                c.post(f"/api/v1/auth/debug/reset-rate-limit?email={EMAIL}")
+        except Exception:
+            pass
+
     def test_wrong_current_password_rejected(self):
         with httpx.Client(base_url=BASE_URL, timeout=5.0) as c:
             login = c.post(
@@ -1296,6 +1304,14 @@ class TestResetPassword:
     POST /auth/change-password from the freshly-issued cookies. Same
     pattern as TestChangePassword.
     """
+
+    @pytest.fixture(autouse=True)
+    def _reset_limits(self):
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=3.0) as c:
+                c.post(f"/api/v1/auth/debug/reset-rate-limit?email={EMAIL}")
+        except Exception:
+            pass
 
     def test_invalid_token_rejected(self):
         # 30 chars, above the schema's min_length=20 floor — so we hit

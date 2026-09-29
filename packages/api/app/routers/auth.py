@@ -1682,3 +1682,18 @@ if settings.environment != "production" and settings.enable_dev_email_debug:
         if not outbox:
             raise HTTPException(status_code=404, detail="No emails captured")
         return outbox[-1]
+
+    @router.post(
+        "/debug/reset-rate-limit",
+        include_in_schema=False,
+    )
+    async def debug_reset_rate_limit(email: str | None = None) -> dict:
+        """Reset SlowAPI and login_throttle counters in dev/test environment.
+        Mounted strictly when environment != 'production' and ENABLE_DEV_EMAIL_DEBUG is true."""
+        try:
+            limiter.reset()
+        except Exception:
+            pass
+        if email:
+            await login_throttle.reset(email)
+        return {"status": "ok"}

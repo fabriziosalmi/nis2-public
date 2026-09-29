@@ -21,9 +21,19 @@ for _ in $(seq 1 30); do curl -sf "$BASE/api/v1/health" >/dev/null 2>&1 && break
 curl -sf "$BASE/api/v1/health" >/dev/null || { echo "API not healthy at $BASE — run 'make dev-up'"; exit 1; }
 
 echo "== ensure E2E user exists (201 created / 409 already there) =="
-curl -s -o /dev/null -w "  register: %{http_code}\n" -X POST "$BASE/api/v1/auth/register" \
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$EMAIL\",\"password\":\"$PW\",\"full_name\":\"E2E CI User\",\"org_name\":\"E2E CI Org\"}" || true
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PW\",\"full_name\":\"E2E CI User\",\"org_name\":\"E2E CI Org\"}" || true)
+echo "  register: $HTTP_CODE"
+
+# If running against the local docker stack, ensure canonical password/MFA state in case a prior run aborted mid-rotation
+if command -v docker >/dev/null 2>&1 && [ -f "$ROOT/infra/docker/docker-compose.dev.yml" ] && [ -f "$ROOT/.env" ]; then
+  docker compose --env-file "$ROOT/.env" -f "$ROOT/infra/docker/docker-compose.dev.yml" exec -T postgres \
+    psql -U nis2 -d nis2 -c "UPDATE users SET password_hash = '\$2b\$12\$PTjcP8rtc9.1RrpEd.f7cOauq90W1m0Emaonq6s3WnwhwUOiC5qoO', totp_enabled = false, totp_secret = NULL, password_changed_at = NULL WHERE email='$EMAIL';" >/dev/null 2>&1 || true
+fi
+
+# Reset rate limits & throttle state before running the live suite
+curl -sf -X POST "$BASE/api/v1/auth/debug/reset-rate-limit?email=$EMAIL" >/dev/null 2>&1 || true
 
 echo "== run E2E live suite =="
 cd packages/api
