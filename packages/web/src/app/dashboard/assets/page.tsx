@@ -38,9 +38,9 @@ const assetSchema = z.object({
 type AssetForm = z.infer<typeof assetSchema>
 
 const typeColors: Record<string, string> = {
-  domain: "bg-blue-100 text-blue-800",
-  ip: "bg-green-100 text-green-800",
-  cidr: "bg-orange-100 text-orange-800",
+  domain: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/40",
+  ip: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/40",
+  cidr: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/40",
 }
 
 export default function AssetsPage() {
@@ -291,6 +291,7 @@ export default function AssetsPage() {
                       className="rounded border-input"
                       checked={assets.length > 0 && selectedForBulk.length === assets.length}
                       onChange={toggleAll}
+                      aria-label="Select all assets"
                     />
                   </TableHead>
                   <TableHead>{t("name")}</TableHead>
@@ -311,6 +312,7 @@ export default function AssetsPage() {
                         className="rounded border-input"
                         checked={selectedForBulk.includes(asset.id)}
                         onChange={() => toggleBulkSelect(asset.id)}
+                        aria-label={`Select ${asset.name}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">{asset.name}</TableCell>

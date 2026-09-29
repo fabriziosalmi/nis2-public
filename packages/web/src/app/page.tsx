@@ -80,7 +80,7 @@ const Github = ({ className, "aria-hidden": ariaHidden }: { className?: string, 
 )
 
 const STACK = [
-  "Next.js 15",
+  "Next.js 16",
   "React 19",
   "FastAPI",
   "PostgreSQL 16",

@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { Loader2, ArrowLeft } from "lucide-react"
+import { Loader2, ArrowLeft, ShieldCheck, ShieldAlert } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -172,6 +172,20 @@ export default function NewScanPage() {
       toast.error(t("selectAssetError"))
       return
     }
+    const unverified = assets.filter(
+      (a: any) =>
+        selectedAssets.includes(a.id) &&
+        a.verification_status !== "verified" &&
+        a.verification_status !== "attested" &&
+        a.verification_status !== "legacy"
+    )
+    if (unverified.length > 0) {
+      toast.error(
+        `Asset "${unverified[0].name}" must be verified or attested before scanning.`,
+        { description: "Open Dashboard > Assets to complete DNS challenge or authority attestation." }
+      )
+      return
+    }
     try {
       const result = await createScan.mutateAsync({
         ...data,
@@ -316,43 +330,82 @@ export default function NewScanPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {assets.map((asset: any) => {
-                  const isSelected = selectedAssets.includes(asset.id);
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {assets.map((asset: any) => {
+                    const isSelected = selectedAssets.includes(asset.id);
+                    const isVerified =
+                      asset.verification_status === "verified" ||
+                      asset.verification_status === "attested" ||
+                      asset.verification_status === "legacy";
+                    return (
+                      <label
+                        key={asset.id}
+                        className={`relative flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                            : "border-input bg-card hover:border-primary/40 hover:bg-muted/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleAsset(asset.id)}
+                          className="sr-only"
+                        />
+                        <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                          isSelected ? "bg-primary border-primary" : "border-muted-foreground/30 bg-transparent"
+                        }`}>
+                          {isSelected && (
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{asset.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{asset.target_value}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge variant={isSelected ? "default" : "secondary"} className="text-[10px] px-1.5 h-5">
+                            {asset.target_type.toUpperCase()}
+                          </Badge>
+                          {isVerified ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 h-5 gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                              <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                              <span className="hidden sm:inline">Verified</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 h-5 gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400">
+                              <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+                              <span className="hidden sm:inline">Unverified</span>
+                            </Badge>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {selectedAssets.some((id) => {
+                  const a = assets.find((x: any) => x.id === id);
                   return (
-                    <label
-                      key={asset.id}
-                      className={`relative flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
-                          : "border-input bg-card hover:border-primary/40 hover:bg-muted/50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleAsset(asset.id)}
-                        className="sr-only"
-                      />
-                      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                        isSelected ? "bg-primary border-primary" : "border-muted-foreground/30 bg-transparent"
-                      }`}>
-                        {isSelected && (
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{asset.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{asset.target_value}</p>
-                      </div>
-                      <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0 text-[10px] px-1.5 h-5">
-                        {asset.target_type.toUpperCase()}
-                      </Badge>
-                    </label>
-                  )
-                })}
+                    a &&
+                    a.verification_status !== "verified" &&
+                    a.verification_status !== "attested" &&
+                    a.verification_status !== "legacy"
+                  );
+                }) && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                      <span>Selected asset requires ownership verification (Art. 21.2.i) before scanning can start.</span>
+                    </div>
+                    <Button asChild variant="outline" size="sm" className="h-7 text-xs border-amber-500/30 shrink-0">
+                      <Link href="/dashboard/assets">Verify in Assets</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

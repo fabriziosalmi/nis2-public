@@ -362,8 +362,8 @@ export default function DashboardPage() {
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis dataKey="severity" type="category" width={70} tick={{ fontSize: 12 }} />
-                        <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                        <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(222.2, 47.4%, 11.2%)" />
+                        <Tooltip contentStyle={{ borderRadius: "8px", backgroundColor: "var(--color-card)", borderColor: "var(--color-border)", color: "var(--color-foreground)" }} />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="var(--color-primary)" />
                       </BarChart>
                     </ResponsiveContainer>
                     <table className="sr-only">
@@ -405,8 +405,8 @@ export default function DashboardPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                        <Tooltip contentStyle={{ borderRadius: "8px" }} />
-                        <Line type="monotone" dataKey="score" stroke="hsl(222.2, 47.4%, 11.2%)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                        <Tooltip contentStyle={{ borderRadius: "8px", backgroundColor: "var(--color-card)", borderColor: "var(--color-border)", color: "var(--color-foreground)" }} />
+                        <Line type="monotone" dataKey="score" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                       </LineChart>
                     </ResponsiveContainer>
                     <table className="sr-only">

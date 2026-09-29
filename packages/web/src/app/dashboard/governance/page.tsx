@@ -3,14 +3,16 @@
 // NIS2 Compliance Platform — https://github.com/fabriziosalmi/nis2-public
 "use client"
 
+import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { ClipboardCheck, RefreshCw, Loader2, Radar, ListChecks } from "lucide-react"
+import { ClipboardCheck, RefreshCw, Loader2, Radar, ListChecks, Pencil, UserCheck } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useGovernance, useGovernanceScore, useSyncRisk, useSeedGovernance } from "@/hooks/use-governance"
+import { EntityFormDialog, type FieldSpec, type EntityValues } from "@/components/forms/entity-form-dialog"
+import { useGovernance, useGovernanceScore, useSyncRisk, useSeedGovernance, useUpdateGovernanceItem } from "@/hooks/use-governance"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { cn } from "@/lib/utils"
 
@@ -50,6 +52,9 @@ export default function GovernancePage() {
   const { data: score } = useGovernanceScore()
   const sync = useSyncRisk()
   const seed = useSeedGovernance()
+  const updateItem = useUpdateGovernanceItem()
+
+  const [editingItem, setEditingItem] = useState<any | null>(null)
 
   const items: any[] = list?.items ?? []
   const stats = list?.stats
@@ -70,6 +75,52 @@ export default function GovernancePage() {
       onError: (e: any) => toast.error(e?.message || "Init failed"),
     })
   }
+
+  const handleUpdate = async (values: EntityValues) => {
+    if (!editingItem) return
+    try {
+      await updateItem.mutateAsync({
+        id: editingItem.id,
+        data: {
+          status: values.status,
+          assigned_to_name: values.assigned_to_name || null,
+          evidence_notes: values.evidence_notes || null,
+        },
+      })
+      toast.success(t("updateSuccess", { defaultValue: "Governance measure updated" }))
+      setEditingItem(null)
+    } catch (err: any) {
+      toast.error(t("updateFailed", { defaultValue: "Failed to update governance measure" }), { description: err.message })
+    }
+  }
+
+  const fields: FieldSpec[] = [
+    {
+      name: "status",
+      label: t("status"),
+      type: "select",
+      required: true,
+      options: [
+        { value: "not_started", label: t("notStarted") },
+        { value: "in_progress", label: t("inProgress") },
+        { value: "done", label: t("done") },
+        { value: "not_applicable", label: t("notApplicable") },
+      ],
+    },
+    {
+      name: "assigned_to_name",
+      label: t("assignedTo", { defaultValue: "Assigned To" }),
+      type: "text",
+      placeholder: "e.g. CISO Team / External Consultant",
+    },
+    {
+      name: "evidence_notes",
+      label: t("evidenceNotes", { defaultValue: "Evidence & Notes" }),
+      type: "textarea",
+      placeholder: "Document policy approval, audit links, or implementation notes...",
+      full: true,
+    },
+  ]
 
   const notSeeded = !isLoading && items.length === 0
 
@@ -155,7 +206,8 @@ export default function GovernancePage() {
                       <TableHead>{t("checklist")}</TableHead>
                       <TableHead className="w-28">{t("priority")}</TableHead>
                       <TableHead className="w-40">{t("referenceCol")}</TableHead>
-                      <TableHead className="w-40">{t("status")}</TableHead>
+                      <TableHead className="w-36">{t("status")}</TableHead>
+                      <TableHead className="w-16 text-right"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -178,6 +230,12 @@ export default function GovernancePage() {
                             {it.description && (
                               <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{it.description}</p>
                             )}
+                            {it.assigned_to_name && (
+                              <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                                <UserCheck className="h-3 w-3 text-primary/70" aria-hidden="true" />
+                                {it.assigned_to_name}
+                              </p>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant={priorityVariant[it.priority] ?? "medium"}>{it.priority}</Badge>
@@ -189,6 +247,17 @@ export default function GovernancePage() {
                               {t(st.key)}
                             </span>
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => setEditingItem(it)}
+                              aria-label={`Edit ${it.item_id}`}
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -197,6 +266,22 @@ export default function GovernancePage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Edit Dialog */}
+          <EntityFormDialog
+            open={!!editingItem}
+            onOpenChange={(open) => !open && setEditingItem(null)}
+            title={`${editingItem?.item_id}: ${editingItem?.title ?? ""}`}
+            description={editingItem?.description || editingItem?.nis2_reference}
+            fields={fields}
+            initialValues={editingItem ? {
+              status: editingItem.status,
+              assigned_to_name: editingItem.assigned_to_name ?? "",
+              evidence_notes: editingItem.evidence_notes ?? "",
+            } : undefined}
+            submitting={updateItem.isPending}
+            onSubmit={handleUpdate}
+          />
         </>
       )}
     </div>
