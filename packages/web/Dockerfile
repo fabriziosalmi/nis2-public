@@ -6,7 +6,7 @@
 # Development stage: hot reload with volume mounts. Stays root so the
 # bind-mounted host source is always readable inside the container.
 # ----------------------------------------------------------------------
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS dev
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS dev
 WORKDIR /app
 COPY package*.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -17,7 +17,7 @@ CMD ["npm", "run", "dev"]
 # ----------------------------------------------------------------------
 # Builder stage: compile the Next.js standalone bundle.
 # ----------------------------------------------------------------------
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS builder
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS builder
 WORKDIR /app
 COPY package*.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -28,7 +28,7 @@ RUN npm run build
 # Production stage: minimal runtime, drops privileges to a dedicated
 # non-root user.
 # ----------------------------------------------------------------------
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS production
+FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS production
 
 ARG GIT_COMMIT=unknown
 ARG APP_VERSION=unknown
