@@ -1,7 +1,7 @@
 # Pinned to the immutable manifest digest of python:3.14.5-slim-bookworm.
 # Refresh with: docker pull python:3.14.5-slim-bookworm && \
 #               docker inspect --format='{{index .RepoDigests 0}}' python:3.14.5-slim-bookworm
-FROM python:3.14.8-slim-bookworm@sha256:c8137f4c460908c8763f281c8f22c431eb5c538514ba9553fc3a89c06b7cfb88
+FROM python:3.15.0-slim-bookworm@sha256:0e019bbdfb5d9874cb2389f1c2884b64aa2ac97c99960b5bc521cef978c0617d
 
 # Traceability from a running container back to its source.
 #
