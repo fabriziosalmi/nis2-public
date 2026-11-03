@@ -152,7 +152,7 @@ async def list_incidents(
     page_size: int = Query(20, ge=1, le=100),
     submission_status: Optional[str] = Query(None),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentListResponse:
     user, membership = current_org
     org_id = membership.organization_id
@@ -187,7 +187,7 @@ async def list_incidents(
 async def create_incident(
     payload: IncidentCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentResponse:
     user, membership = current_org
     incident = IncidentReport(
@@ -216,7 +216,7 @@ async def create_incident(
 async def get_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentResponse:
     user, membership = current_org
     incident = await db.get(IncidentReport, incident_id)
@@ -234,7 +234,7 @@ async def update_incident(
     incident_id: uuid.UUID,
     payload: IncidentUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentResponse:
     user, membership = current_org
     incident = await db.get(IncidentReport, incident_id)
@@ -264,7 +264,7 @@ async def update_incident(
 async def delete_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
     incident = await db.get(IncidentReport, incident_id)
@@ -282,7 +282,7 @@ async def delete_incident(
 async def export_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Export incident report as structured JSON for CSIRT submission."""
     user, membership = current_org

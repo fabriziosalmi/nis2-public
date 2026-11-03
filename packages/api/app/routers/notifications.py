@@ -155,7 +155,7 @@ async def _validate_config(channel_type: str, config: dict[str, Any]) -> None:
 
 @router.get("", response_model=list[ChannelResponse])
 async def list_channels(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ) -> list[dict[str, Any]]:
     _, org_id = auth
@@ -175,7 +175,7 @@ async def list_channels(
 )
 async def create_channel(
     payload: ChannelCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ) -> dict[str, Any]:
     # admin only: a channel is an egress destination for incident data, and a
@@ -204,7 +204,7 @@ async def create_channel(
 async def update_channel(
     channel_id: uuid.UUID,
     payload: ChannelUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ) -> dict[str, Any]:
     _, org_id = auth
@@ -232,7 +232,7 @@ async def update_channel(
 )
 async def delete_channel(
     channel_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ) -> None:
     _, org_id = auth
@@ -248,7 +248,7 @@ async def delete_channel(
 )
 async def test_channel(
     channel_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ) -> dict[str, Any]:
     """Send a sample alert through this channel.

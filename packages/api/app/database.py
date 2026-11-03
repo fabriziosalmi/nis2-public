@@ -183,6 +183,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     see the right value of `app.current_org_id`. SET LOCAL is bound to
     the transaction, so connection pool reuse is safe — the next
     transaction starts with the setting cleared.
+
+    Declare it as Depends(get_db, scope="function"). With FastAPI's default
+    scope ("request") the code after `yield`, the commit included, runs after
+    the response has been sent, so a client can get a 2xx for a write and read
+    the old state on its next request. tests/test_get_db_commit_scope.py
+    enforces this on every route.
     """
     # Imported lazily to avoid a circular import (middleware/identity ->
     # app.utils.jwt -> app.config -> app.database -> ...).

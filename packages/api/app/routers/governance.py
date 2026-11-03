@@ -409,7 +409,7 @@ async def list_governance_items(
     status_filter: Optional[str] = Query(None, alias="status"),
     subparagraph: Optional[str] = Query(None, description="e.g. 21.2.a"),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> GovernanceListResponse:
     """List all governance checklist items for the organization."""
     user, membership = current_org
@@ -455,7 +455,7 @@ async def list_governance_items(
 )
 async def seed_governance(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> GovernanceSeedResponse:
     """Initialize the 30-item governance checklist for this organization."""
     user, membership = current_org
@@ -503,7 +503,7 @@ async def update_governance_item(
     item_id: uuid.UUID,
     payload: GovernanceItemUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> GovernanceItemResponse:
     """Update a governance item's status, assignee, or evidence."""
     user, membership = current_org
@@ -525,7 +525,7 @@ async def update_governance_item(
 async def bulk_update_governance(
     payload: GovernanceBulkUpdateRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Bulk update multiple governance items at once.
 
@@ -552,7 +552,7 @@ async def bulk_update_governance(
 @router.get("/score")
 async def governance_score(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Calculate governance compliance score (0-100) with weighted priorities."""
     user, membership = current_org
@@ -593,7 +593,7 @@ async def governance_score(
 @router.get("/by-subparagraph")
 async def governance_by_subparagraph(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Group governance items by NIS2 sub-paragraph.
 
@@ -721,7 +721,7 @@ def _category_to_subparagraphs(category: str) -> list[str]:
 @router.get("/risk-summary")
 async def risk_summary(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Computed risk picture derived from scanner findings.
 
@@ -830,7 +830,7 @@ async def risk_summary(
 @router.post("/sync-risk", dependencies=[Depends(require_role("admin", "auditor"))])
 async def sync_risk(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Apply scanner findings as evidence to the governance checklist.
 

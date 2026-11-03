@@ -43,7 +43,7 @@ async def list_assets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     org_id: uuid.UUID = Depends(dual_auth_with_scope("asset:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> AssetListResponse:
     # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
     # endpoints below stay on get_current_org because they want a user
@@ -82,7 +82,7 @@ async def create_asset(
     request: Request,
     payload: AssetCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> AssetResponse:
     user, membership = current_org
     org_id = membership.organization_id
@@ -143,7 +143,7 @@ async def create_asset(
 async def get_asset(
     asset_id: uuid.UUID,
     org_id: uuid.UUID = Depends(dual_auth_with_scope("asset:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> AssetResponse:
     # Dual-auth read — see list_assets for the wiring note.
     asset = await db.get(Asset, asset_id)
@@ -164,7 +164,7 @@ async def update_asset(
     asset_id: uuid.UUID,
     payload: AssetUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> AssetResponse:
     user, membership = current_org
 
@@ -240,7 +240,7 @@ async def update_asset(
 async def delete_asset(
     asset_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
 
@@ -279,7 +279,7 @@ async def import_assets_csv(
     request: Request,
     file: UploadFile = File(...),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> dict:
     """Import assets from a CSV file.
     Expected columns: name, target_type, target_value, tags (optional, semicolon-separated)
@@ -437,7 +437,7 @@ class AttestationRequest(BaseModel):
 async def start_verification(
     asset_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> VerificationChallenge:
     """Issue a DNS challenge for a domain asset."""
     _, membership = current_org
@@ -480,7 +480,7 @@ async def start_verification(
 async def check_verification(
     asset_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> VerificationState:
     """Resolve the challenge record and record the outcome."""
     user, membership = current_org
@@ -517,7 +517,7 @@ async def attest_authority(
     asset_id: uuid.UUID,
     payload: AttestationRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> VerificationState:
     """Record a named assertion of authority over an IP or CIDR target.
 

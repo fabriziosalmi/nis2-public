@@ -522,7 +522,7 @@ async def call_tool(
     request: Request,
     payload: dict,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Execute an MCP tool call via HTTP.
 

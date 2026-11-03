@@ -17,7 +17,7 @@ def require_role(roles: list[str]) -> Callable:
 
     async def _check_role(
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not current_user.memberships:
             raise HTTPException(
@@ -45,7 +45,7 @@ def require_org_role(
 
     async def _check_org_role(
         current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         # This is a simpler version; the router should pass org_id explicitly
         if roles:

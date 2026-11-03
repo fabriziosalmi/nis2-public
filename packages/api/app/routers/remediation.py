@@ -72,7 +72,7 @@ async def get_playbook_detail(playbook_id: str):
 async def get_remediation_for_finding(
     finding_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Get matching remediation playbook for a specific finding."""
     user, membership = current_org
@@ -101,7 +101,7 @@ async def get_remediation_for_finding(
 async def estimate_scan_remediation(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Calculate remediation effort and cost for all findings in a scan."""
     user, membership = current_org
@@ -265,7 +265,7 @@ async def explain_finding(
     request: Request,
     payload: ExplainRequest = ExplainRequest(),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """AI-powered finding explanation with personalized remediation commands.
     Connects to local LLM (Ollama/LM Studio) or OpenAI."""

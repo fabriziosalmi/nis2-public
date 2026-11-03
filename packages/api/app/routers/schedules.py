@@ -55,7 +55,7 @@ router = APIRouter(prefix="/schedules", tags=["schedules"])
 @router.get("", response_model=list[ScheduleResponse])
 async def list_schedules(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> list[ScheduleResponse]:
     user, membership = current_org
     result = await db.execute(
@@ -71,7 +71,7 @@ async def list_schedules(
 async def create_schedule(
     payload: ScheduleCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScheduleResponse:
     user, membership = current_org
 
@@ -123,7 +123,7 @@ async def update_schedule(
     schedule_id: uuid.UUID,
     payload: ScheduleUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScheduleResponse:
     user, membership = current_org
 
@@ -167,7 +167,7 @@ async def update_schedule(
 async def delete_schedule(
     schedule_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
 
@@ -187,7 +187,7 @@ async def delete_schedule(
 async def trigger_schedule(
     schedule_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Trigger an immediate run of a scheduled scan."""
     user, membership = current_org

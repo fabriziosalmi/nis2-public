@@ -40,7 +40,7 @@ async def create_organization(
     request: Request,
     payload: CreateOrgRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> OrgResponse:
     """v2.4.18 audit follow-up: self-serve organization creation.
 
@@ -136,7 +136,7 @@ async def create_organization(
 @router.get("", response_model=list[OrgResponse])
 async def list_organizations(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> list[OrgResponse]:
     result = await db.execute(
         select(Organization)
@@ -152,7 +152,7 @@ async def list_organizations(
 async def get_organization(
     org_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> OrgResponse:
     # Verify membership
     membership = await _get_membership(db, current_user.id, org_id)
@@ -175,7 +175,7 @@ async def update_organization(
     org_id: uuid.UUID,
     payload: OrgUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> OrgResponse:
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership:
@@ -214,7 +214,7 @@ async def update_organization(
 async def list_members(
     org_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> list[MemberResponse]:
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership:
@@ -242,7 +242,7 @@ async def invite_member(
     org_id: uuid.UUID,
     payload: InviteMemberRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> MemberResponse:
     membership = await _get_membership(db, current_user.id, org_id)
     if not membership or membership.role != "admin":
@@ -345,7 +345,7 @@ async def update_member_role(
     member_id: uuid.UUID,
     payload: RoleUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> MemberResponse:
     """Change a member's role.
 
@@ -437,7 +437,7 @@ async def remove_member(
     org_id: uuid.UUID,
     member_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     my_membership = await _get_membership(db, current_user.id, org_id)
     if not my_membership or my_membership.role != "admin":

@@ -232,7 +232,7 @@ async def register(
     response: Response,
     payload: RegisterRequest,
     slim: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TokenResponse:
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
@@ -328,7 +328,7 @@ async def accept_invite(
     request: Request,
     response: Response,
     payload: AcceptInviteRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TokenResponse:
     """Activate an invited user's account by setting their password.
 
@@ -437,7 +437,7 @@ async def login(
     response: Response,
     payload: LoginRequest,
     slim: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TokenResponse | MFARequiredResponse:
     # Per-account lockout (M3): IP-independent brute-force / credential-stuffing
     # defense, complementing the per-IP slowapi limit on this route.
@@ -535,7 +535,7 @@ async def refresh(
     response: Response,
     payload: RefreshRequest | None = None,
     slim: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TokenResponse:
     # Prefer the httpOnly cookie (web flow); fall back to body (SDK flow).
     refresh_token = request.cookies.get(REFRESH_COOKIE)
@@ -655,7 +655,7 @@ async def refresh(
 async def logout(
     request: Request,
     response: Response,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> Response:
     """Clear all auth cookies and revoke the current refresh token, if any.
 
@@ -699,7 +699,7 @@ async def get_me(current_user: User = Depends(get_current_user)) -> UserResponse
 async def update_me(
     payload: UserUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> UserResponse:
     update_data = payload.model_dump(exclude_unset=True)
     allowed_fields = {"full_name", "locale", "avatar_url"}
@@ -753,7 +753,7 @@ async def delete_me(
     response: Response,
     payload: ChangePasswordRequest,  # reuse: it's {current_password, new_password}
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     """GDPR Art. 17 — right to erasure.
 
@@ -923,7 +923,7 @@ async def delete_me(
 @router.get("/me/export")
 async def export_me(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> dict:
     """GDPR Art. 20 — right to data portability.
 
@@ -1049,7 +1049,7 @@ async def change_password(
     response: Response,
     payload: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     """Audit B04: a real password change.
 
@@ -1163,7 +1163,7 @@ async def switch_org(
     payload: SwitchOrgRequest,
     slim: bool = Query(False),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TokenResponse:
     """Switch the active organization for this session.
 
@@ -1292,7 +1292,7 @@ def _reset_email_text(reset_url: str, ttl_minutes: int) -> tuple[str, str]:
 async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     """Audit B05 (entry-point).
 
@@ -1433,7 +1433,7 @@ async def forgot_password(
 async def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     """Audit B05 (completion).
 
@@ -1550,7 +1550,7 @@ async def reset_password(
 @router.post("/totp/setup", response_model=TOTPSetupResponse)
 async def totp_setup(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TOTPSetupResponse:
     """Generate a TOTP secret and provisioning URI (step 1 of MFA setup).
 
@@ -1575,7 +1575,7 @@ async def totp_setup(
 async def totp_verify(
     payload: TOTPVerifyRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TOTPVerifyResponse:
     """Verify a TOTP code and enable MFA on the account (step 2 of MFA setup)."""
     if current_user.totp_enabled:
@@ -1612,7 +1612,7 @@ async def totp_verify(
 async def totp_disable(
     payload: TOTPDisableRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> TOTPVerifyResponse:
     """Disable MFA. Requires re-authentication via current password."""
     if not current_user.password_hash or not pwd_context.verify(
