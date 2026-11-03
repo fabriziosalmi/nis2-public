@@ -11,10 +11,10 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  # Node 22 LTS (Active until 2027-10). The lockfile is generated
-  # with npm 11 (Node 22+); npm 10 (Node 20) reads it as out-of-sync.
-  # GitHub Actions also deprecated Node 20 runners (Sept 2025).
-  NODE_VERSION: "22"
+  # Node 26 LTS (Active LTS since 2026-10, end of life 2029-04), the same
+  # major as packages/web/Dockerfile: keep the two in step. The lockfile is
+  # generated with npm 11; npm 10 (Node 20) reads it as out-of-sync.
+  NODE_VERSION: "26"
 
 jobs:
   # -----------------------------------------------------------------------

@@ -95,6 +95,11 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    ignore:
+      # Odd Node majors are never LTS and reach end of life within months
+      # (Node 25 ended 2026-06-01). Move between even LTS lines by hand.
+      - dependency-name: "node"
+        versions: [">=25, <26", ">=27, <28", ">=29, <30", ">=31, <32"]
     groups:
       docker-web-minor-patch:
         update-types:
