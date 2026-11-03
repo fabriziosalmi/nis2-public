@@ -34,7 +34,7 @@ async def list_findings(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> FindingListResponse:
     # Dual-auth read — JWT cookie/Bearer OR `nis2_*` API key. Mutation
     # endpoints below stay on get_current_org because they want a user
@@ -75,7 +75,7 @@ async def list_findings(
 @router.get("/stats", response_model=FindingStats)
 async def findings_stats(
     org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> FindingStats:
     # Dual-auth read — see list_findings for the wiring note.
     select(Finding).where(Finding.organization_id == org_id)
@@ -123,7 +123,7 @@ async def findings_stats(
 async def get_finding(
     finding_id: uuid.UUID,
     org_id: uuid.UUID = Depends(dual_auth_with_scope("finding:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> FindingResponse:
     # Dual-auth read — see list_findings for the wiring note.
     finding = await db.get(Finding, finding_id)
@@ -144,7 +144,7 @@ async def update_finding(
     finding_id: uuid.UUID,
     payload: FindingUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> FindingResponse:
     user, membership = current_org
 
@@ -202,7 +202,7 @@ async def update_finding(
 async def bulk_update_findings(
     payload: BulkFindingUpdate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> dict:
     user, membership = current_org
     org_id = membership.organization_id

@@ -68,7 +68,7 @@ async def _decode_access_token(token: str) -> dict:
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     """Extract and validate the current user from cookie or Bearer token."""
     token = _extract_access_token(request, credentials)
@@ -293,7 +293,7 @@ def require_role(*allowed: str):
 
 
 async def get_api_key_org(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> tuple[ApiKey, uuid.UUID]:
     """Authenticate via API key (Bearer token starting with 'nis2_').
@@ -401,7 +401,7 @@ def dual_auth_with_scope(required_scope: str):
     async def _dep(
         request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> uuid.UUID:
         return await _resolve_dual_auth(request, credentials, db, required_scope)
 
@@ -411,7 +411,7 @@ def dual_auth_with_scope(required_scope: str):
 async def get_org_id_dual_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> uuid.UUID:
     """Resolve the active organization_id via either a JWT session OR
     an API key — whichever the caller presented.

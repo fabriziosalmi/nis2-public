@@ -115,7 +115,7 @@ class ProcessOut(BaseModel):
 
 @router.get("")
 async def list_processes(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """List all business processes for the organization."""
@@ -137,7 +137,7 @@ async def list_processes(
 )
 async def create_process(
     data: ProcessCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Register a business process for BIA."""
@@ -151,7 +151,7 @@ async def create_process(
 
 @router.get("/matrix")
 async def bia_matrix(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """BIA impact matrix: overview of all processes with their impact scores."""
@@ -213,7 +213,7 @@ async def bia_matrix(
 @router.get("/{process_id}")
 async def get_process(
     process_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Get business process details."""
@@ -237,7 +237,7 @@ async def get_process(
 async def update_process(
     process_id: uuid.UUID,
     payload: ProcessUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Revise a business process in place."""
@@ -263,7 +263,7 @@ async def update_process(
 )
 async def delete_process(
     process_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Remove a business process."""

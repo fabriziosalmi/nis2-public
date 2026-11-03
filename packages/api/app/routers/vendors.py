@@ -392,7 +392,7 @@ async def get_score_formula():
 @router.get("/{vendor_id}/score", response_model=VendorScoreResponse)
 async def get_vendor_score(
     vendor_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Compute and return the vendor risk score with a full factor breakdown.
@@ -423,7 +423,7 @@ async def get_vendor_score(
 )
 async def apply_vendor_score(
     vendor_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Compute the vendor risk score and persist it to security_score.
@@ -467,7 +467,7 @@ async def apply_vendor_score(
 
 @router.get("")
 async def list_vendors(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """List all vendors for the organization."""
@@ -489,7 +489,7 @@ async def list_vendors(
 )
 async def create_vendor(
     data: VendorCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Register a new vendor/supplier.
@@ -523,7 +523,7 @@ async def create_vendor(
 
 @router.get("/stats")
 async def vendor_stats(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Supply chain risk overview: distribution by criticality, type, location."""
@@ -564,7 +564,7 @@ async def vendor_stats(
 @router.get("/{vendor_id}")
 async def get_vendor(
     vendor_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Get vendor details."""
@@ -582,7 +582,7 @@ async def get_vendor(
 async def update_vendor(
     vendor_id: uuid.UUID,
     data: VendorUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Update vendor details."""
@@ -607,7 +607,7 @@ async def update_vendor(
 )
 async def delete_vendor(
     vendor_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """Remove a vendor."""

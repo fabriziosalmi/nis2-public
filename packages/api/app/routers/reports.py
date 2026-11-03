@@ -74,7 +74,7 @@ async def generate_report(
     scan_id: uuid.UUID,
     format: str = Query("pdf", pattern="^(pdf|json|csv|markdown|md|junit|xml|html)$"),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Queue a report generation task. Returns task_id to poll status.
 

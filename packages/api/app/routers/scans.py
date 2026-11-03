@@ -39,7 +39,7 @@ async def list_scans(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScanListResponse:
     # Read endpoint — accept either a JWT cookie session or a `nis2_*`
     # API key Bearer token. Audit B11 wired the API-key dependency; this
@@ -80,7 +80,7 @@ async def create_scan(
     request: Request,
     payload: ScanCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScanResponse:
     user, membership = current_org
     org_id = membership.organization_id
@@ -228,7 +228,7 @@ async def create_scan(
 async def get_scan(
     scan_id: uuid.UUID,
     org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScanResponse:
     # Dual-auth read — see list_scans for the rationale.
     scan = await db.get(Scan, scan_id)
@@ -247,7 +247,7 @@ async def get_scan_results(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScanResultListResponse:
     # Dual-auth read — primary CI/CD use case (poll a scan's per-host
     # results once it completes). See list_scans for the wiring note.
@@ -285,7 +285,7 @@ async def get_scan_findings(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> FindingListResponse:
     # Dual-auth read — see list_scans for the wiring note.
     scan = await db.get(Scan, scan_id)
@@ -324,7 +324,7 @@ async def get_scan_findings(
 async def cancel_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ScanResponse:
     user, membership = current_org
 
@@ -379,7 +379,7 @@ async def cancel_scan(
 async def delete_scan(
     scan_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
 
@@ -398,7 +398,7 @@ async def compare_scans(
     scan_id: uuid.UUID,
     other_id: uuid.UUID,
     org_id: uuid.UUID = Depends(dual_auth_with_scope("scan:read")),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Compare two scans: score delta, new/resolved/persistent findings.
     Dual-auth read — see list_scans for the wiring note."""

@@ -172,7 +172,7 @@ def _to_response(inc: Incident, now: datetime) -> IncidentMonitorResponse:
 async def list_incident_monitor(
     only_open: bool = Query(False, description="Return only incidents with a live Art. 23 clock"),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentMonitorListResponse:
     """List Art. 23 incidents for the active org, most recently detected first,
     with live countdowns to each deadline computed server-side."""
@@ -201,7 +201,7 @@ async def list_incident_monitor(
 async def get_incident_monitor(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentMonitorResponse:
     _user, membership = current_org
     now = datetime.now(timezone.utc)
@@ -297,7 +297,7 @@ class IncidentPatchRequest(BaseModel):
 async def declare_incident(
     payload: IncidentCreateRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentMonitorResponse:
     """Open an incident and start its Art. 23 clocks."""
     user, membership = current_org
@@ -340,7 +340,7 @@ async def update_incident_lifecycle(
     incident_id: uuid.UUID,
     payload: IncidentPatchRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentMonitorResponse:
     """Revise an incident. Deadlines are not recomputed.
 
@@ -371,7 +371,7 @@ async def update_incident_lifecycle(
 async def delete_incident(
     incident_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
     incident = await db.get(Incident, incident_id)
@@ -432,7 +432,7 @@ async def record_submission(
     incident_id: uuid.UUID,
     payload: RecordSubmissionRequest,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> IncidentMonitorResponse:
     """Record that an Art. 23 obligation was submitted to the CSIRT."""
     user, membership = current_org

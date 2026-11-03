@@ -147,7 +147,7 @@ class ApiKeyListResponse(BaseModel):
 )
 async def list_api_keys(
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ApiKeyListResponse:
     user, membership = current_org
     org_id = membership.organization_id
@@ -172,7 +172,7 @@ async def list_api_keys(
 async def create_api_key(
     payload: ApiKeyCreate,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> ApiKeyCreated:
     user, membership = current_org
 
@@ -227,7 +227,7 @@ async def create_api_key(
 async def revoke_api_key(
     key_id: uuid.UUID,
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> None:
     user, membership = current_org
 

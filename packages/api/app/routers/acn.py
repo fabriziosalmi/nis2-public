@@ -156,7 +156,7 @@ class EmergencyIncidentRequest(BaseModel):
 )
 async def csirt_emergency_payload(
     data: EmergencyIncidentRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """CSIRT "Red Button" — declare the incident and generate its Early Warning.
@@ -298,7 +298,7 @@ async def csirt_emergency_payload(
 
 @router.get("/acn-export/art18")
 async def export_art18_vendors(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """
@@ -369,7 +369,7 @@ async def export_art18_vendors(
 
 @router.get("/acn-export/bia")
 async def export_bia(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth: tuple = Depends(get_current_user_org),
 ):
     """

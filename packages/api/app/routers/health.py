@@ -70,7 +70,7 @@ async def liveness() -> dict:
 @router.get("/ready")
 async def readiness(
     response: Response,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> dict:
     """Readiness probe — checks database, Redis, and Celery workers.
 

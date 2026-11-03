@@ -77,7 +77,7 @@ async def list_audit_logs(
     resource_type: Optional[str] = Query(None),
     user_id: Optional[uuid.UUID] = Query(None, description="Filter by actor user id"),
     current_org: tuple[User, Membership] = Depends(get_current_org),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> AuditLogListResponse:
     user, membership = current_org
     org_id = membership.organization_id
