@@ -1566,7 +1566,7 @@ async def totp_setup(
     current_user.totp_secret = secret
     await db.flush()
     provisioning_uri = pyotp.totp.TOTP(secret).provisioning_uri(
-        current_user.email, issuer_name="NIS2 Platform"
+        name=current_user.email, issuer_name="NIS2 Platform"
     )
     return TOTPSetupResponse(secret=secret, provisioning_uri=provisioning_uri)
 

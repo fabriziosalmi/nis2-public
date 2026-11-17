@@ -36,7 +36,7 @@ def test_wrong_totp_code_rejected():
 def test_provisioning_uri_contains_email():
     secret = pyotp.random_base32()
     email = "alice@example.com"
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(email, issuer_name="NIS2 Platform")
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=email, issuer_name="NIS2 Platform")
     # The URI is URL-encoded so @ becomes %40; check for the local-part instead.
     assert "alice" in uri
     assert "example.com" in uri or "example" in uri
