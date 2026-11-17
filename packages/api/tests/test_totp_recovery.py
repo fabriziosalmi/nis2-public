@@ -5,6 +5,8 @@
 import uuid
 import pytest
 import hashlib
+
+import pyotp
 from fastapi.testclient import TestClient
 from passlib.context import CryptContext
 
@@ -26,7 +28,10 @@ class FakeUser:
         self.email_verified = False
         self.password_hash = pwd_context.hash("securepassword")
         self.totp_enabled = False
-        self.totp_secret = "JBSWY3DPEHPK3PXP"
+        # pyotp >= 2.12 refuses secrets under 112 bits; the 16-character
+        # literal used here before was 80 bits. Same generator as the setup
+        # endpoint (32 base32 characters, 160 bits).
+        self.totp_secret = pyotp.random_base32()
         self.totp_recovery_codes = None
         self.memberships = []
 

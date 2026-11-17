@@ -58,10 +58,16 @@ WORKDIR /app
 # found". That is the intended signal, not a defect. To refresh, run
 # `docker compose exec api dpkg-query -W -f='${Package}=${Version}\n' <pkg>`
 # against a freshly built image and update the list below in one commit.
+#
+# libpq-dev is served from bookworm-security, which keeps only the newest
+# build: 15.19-0+deb12u1 left the archive when 15.20-0+deb12u1 was published
+# (build failure of 2026-11-16). A Debian point release moves 15.20 into
+# bookworm proper and keeps it installable; the next PostgreSQL security
+# update will fail this build again, as intended above.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc=4:12.2.0-3 \
-        libpq-dev=15.19-0+deb12u1 \
+        libpq-dev=15.20-0+deb12u1 \
         libglib2.0-0=2.74.6-2+deb12u9 \
         libpango-1.0-0=1.50.12+ds-1 \
         libpangoft2-1.0-0=1.50.12+ds-1 \
