@@ -5,21 +5,11 @@ version: 2
 # single-dependency pull requests stall behind main (Dependabot rebases on
 # conflicts, not on "behind"); a few grouped ones touch the same lockfile and get
 # rebased. Majors are not in any group: they stay separate and are merged by hand.
+#
+# There is no pip manifest and no Dockerfile at the repository root: the Python
+# packages and the images live under packages/, so only those directories are
+# listed for pip and docker.
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "python"
-    groups:
-      pip-root-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
   - package-ecosystem: "pip"
     directory: "/packages/api"
     schedule:
@@ -58,19 +48,6 @@ updates:
       - "javascript"
     groups:
       npm-web-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "docker"
-    groups:
-      docker-root-minor-patch:
         update-types:
           - "minor"
           - "patch"
