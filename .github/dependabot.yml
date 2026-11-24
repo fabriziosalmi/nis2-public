@@ -11,6 +11,8 @@ version: 2
 # listed for pip and docker.
 updates:
   - package-ecosystem: "pip"
+    cooldown:
+      default-days: 7
     directory: "/packages/api"
     schedule:
       interval: "weekly"
@@ -25,6 +27,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "pip"
+    cooldown:
+      default-days: 7
     directory: "/packages/scanner"
     schedule:
       interval: "weekly"
@@ -39,6 +43,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "npm"
+    cooldown:
+      default-days: 7
     directory: "/packages/web"
     schedule:
       interval: "weekly"
@@ -53,6 +59,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "docker"
+    cooldown:
+      default-days: 7
     directory: "/packages/api"
     schedule:
       interval: "weekly"
@@ -66,6 +74,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "docker"
+    cooldown:
+      default-days: 7
     directory: "/packages/web"
     schedule:
       interval: "weekly"
@@ -84,6 +94,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "github-actions"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
